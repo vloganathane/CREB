@@ -23,7 +23,7 @@
   "license": "AGPL-3.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/creb-js.git"
+    "url": "https://github.com/vloganathane/CREB.git"
   },
   "files": [
     "dist"

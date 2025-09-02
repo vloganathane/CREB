@@ -1,5 +1,11 @@
 # CREB-JS: Chemical Reaction Equation Balancer
 
+[![CI](https://github.com/vloganathane/CREB/actions/workflows/ci.yml/badge.svg)](https://github.com/vloganathane/CREB/actions/workflows/ci.yml)
+[![npm version](https://badge.fury.io/js/creb-js.svg)](https://badge.fury.io/js/creb-js)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
+[![Demo](https://img.shields.io/badge/Demo-Live-green.svg)](https://vloganathane.github.io/CREB/demo.html)
+
 A TypeScript/JavaScript library for balancing chemical equations and performing stoichiometric calculations.
 
 ## Features
