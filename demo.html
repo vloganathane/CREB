@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CREB-JS Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .result {
+            background-color: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .error {
+            background-color: #e74c3c;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 CREB-JS: Chemical Reaction Equation Balancer</h1>
+        
+        <div class="section">
+            <h2>Balance Chemical Equations</h2>
+            <div class="input-group">
+                <label for="equation">Enter unbalanced equation:</label>
+                <input type="text" id="equation" placeholder="e.g., H2 + O2 = H2O" value="H2 + O2 = H2O">
+            </div>
+            <button onclick="balanceEquation()">Balance Equation</button>
+            <div id="balanceResult" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="section">
+            <h2>Stoichiometric Calculations</h2>
+            <div class="input-group">
+                <label for="stoichEquation">Equation:</label>
+                <input type="text" id="stoichEquation" placeholder="e.g., H2 + O2 = H2O" value="H2 + O2 = H2O">
+            </div>
+            <div class="input-group">
+                <label for="species">Species:</label>
+                <input type="text" id="species" placeholder="e.g., H2" value="H2">
+            </div>
+            <div class="input-group">
+                <label for="amount">Amount:</label>
+                <input type="number" id="amount" placeholder="Enter number" value="2" step="0.1">
+            </div>
+            <div class="input-group">
+                <label for="unit">Unit:</label>
+                <select id="unit">
+                    <option value="moles">Moles</option>
+                    <option value="grams">Grams</option>
+                </select>
+            </div>
+            <button onclick="calculateStoichiometry()">Calculate</button>
+            <div id="stoichResult" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="section">
+            <h2>Molar Weight Calculator</h2>
+            <div class="input-group">
+                <label for="formula">Chemical Formula:</label>
+                <input type="text" id="formula" placeholder="e.g., Ca(OH)2" value="Ca(OH)2">
+            </div>
+            <button onclick="calculateMolarWeight()">Calculate Molar Weight</button>
+            <div id="molarWeightResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { ChemicalEquationBalancer, Stoichiometry } from './dist/index.esm.js';
+
+        window.balancer = new ChemicalEquationBalancer();
+
+        window.balanceEquation = function() {
+            const equation = document.getElementById('equation').value;
+            const resultDiv = document.getElementById('balanceResult');
+            
+            try {
+                const balanced = window.balancer.balance(equation);
+                resultDiv.textContent = `Balanced: ${balanced}`;
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result';
+            } catch (error) {
+                resultDiv.textContent = `Error: ${error.message}`;
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'error';
+            }
+        };
+
+        window.calculateStoichiometry = function() {
+            const equation = document.getElementById('stoichEquation').value;
+            const species = document.getElementById('species').value;
+            const amount = parseFloat(document.getElementById('amount').value);
+            const unit = document.getElementById('unit').value;
+            const resultDiv = document.getElementById('stoichResult');
+            
+            try {
+                const stoich = new Stoichiometry(equation);
+                const result = unit === 'moles' 
+                    ? stoich.calculateFromMoles(species, amount)
+                    : stoich.calculateFromGrams(species, amount);
+                
+                let output = `Balanced equation: ${stoich.getBalancedEquation()}\\n\\n`;
+                output += `Reactants:\\n`;
+                Object.entries(result.reactants).forEach(([sp, data]) => {
+                    output += `  ${sp}: ${data.moles} mol (${data.grams} g)\\n`;
+                });
+                output += `\\nProducts:\\n`;
+                Object.entries(result.products).forEach(([sp, data]) => {
+                    output += `  ${sp}: ${data.moles} mol (${data.grams} g)\\n`;
+                });
+                
+                resultDiv.textContent = output;
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result';
+            } catch (error) {
+                resultDiv.textContent = `Error: ${error.message}`;
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'error';
+            }
+        };
+
+        window.calculateMolarWeight = function() {
+            const formula = document.getElementById('formula').value;
+            const resultDiv = document.getElementById('molarWeightResult');
+            
+            try {
+                const molarWeight = Stoichiometry.calculateMolarWeight(formula);
+                resultDiv.textContent = `Molar weight of ${formula}: ${molarWeight} g/mol`;
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result';
+            } catch (error) {
+                resultDiv.textContent = `Error: ${error.message}`;
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'error';
+            }
+        };
+    </script>
+</body>
+</html>
