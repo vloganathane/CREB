@@ -121,17 +121,36 @@
         </div>
     </div>
 
-    <script type="module">
-        import { ChemicalEquationBalancer, Stoichiometry } from './dist/index.esm.js';
+    <script src="./dist/index.umd.js"></script>
+    <script>
+        // The UMD build exposes the library on window.CREB
+        const { ChemicalEquationBalancer, Stoichiometry } = window.CREB || {};
 
-        window.balancer = new ChemicalEquationBalancer();
+        let balancer;
+        
+        // Initialize when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            if (ChemicalEquationBalancer && Stoichiometry) {
+                balancer = new ChemicalEquationBalancer();
+                console.log('CREB-JS library loaded successfully!');
+            } else {
+                console.error('Failed to load CREB-JS library');
+            }
+        });
 
         window.balanceEquation = function() {
             const equation = document.getElementById('equation').value;
             const resultDiv = document.getElementById('balanceResult');
             
+            if (!balancer) {
+                resultDiv.textContent = 'Error: Library not loaded';
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'error';
+                return;
+            }
+            
             try {
-                const balanced = window.balancer.balance(equation);
+                const balanced = balancer.balance(equation);
                 resultDiv.textContent = `Balanced: ${balanced}`;
                 resultDiv.style.display = 'block';
                 resultDiv.className = 'result';
@@ -148,6 +167,13 @@
             const amount = parseFloat(document.getElementById('amount').value);
             const unit = document.getElementById('unit').value;
             const resultDiv = document.getElementById('stoichResult');
+            
+            if (!Stoichiometry) {
+                resultDiv.textContent = 'Error: Library not loaded';
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'error';
+                return;
+            }
             
             try {
                 const stoich = new Stoichiometry(equation);
@@ -178,6 +204,13 @@
         window.calculateMolarWeight = function() {
             const formula = document.getElementById('formula').value;
             const resultDiv = document.getElementById('molarWeightResult');
+            
+            if (!Stoichiometry) {
+                resultDiv.textContent = 'Error: Library not loaded';
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'error';
+                return;
+            }
             
             try {
                 const molarWeight = Stoichiometry.calculateMolarWeight(formula);

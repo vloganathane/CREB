@@ -12,6 +12,12 @@ export default {
       file: 'dist/index.esm.js',
       format: 'es',
       sourcemap: true
+    },
+    {
+      file: 'dist/index.umd.js',
+      format: 'umd',
+      name: 'CREB',
+      sourcemap: true
     }
   ],
   plugins: [
