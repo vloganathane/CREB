@@ -97,6 +97,12 @@ const fromGrams = stoich.calculateFromGrams('O2', 32);
 console.log(fromGrams);
 ```
 
+## Connect & Contribute
+
+👨‍💻 **Author**: [Loganathane Virassamy](https://www.linkedin.com/in/loganathane-virassamy/)  
+🍴 **Fork this project**: [GitHub Repository](https://github.com/vloganathane/CREB)  
+⭐ **Like this project?** Give it a star on GitHub!
+
 ## License
 
 This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details.

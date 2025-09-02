@@ -20,7 +20,10 @@
     "stoichiometry",
     "chemical-reactions"
   ],
-  "author": "Loganathane Virassamy",
+  "author": {
+    "name": "Loganathane Virassamy",
+    "url": "https://www.linkedin.com/in/loganathane-virassamy/"
+  },
   "license": "AGPL-3.0",
   "repository": {
     "type": "git",

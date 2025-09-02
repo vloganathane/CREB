@@ -69,9 +69,48 @@
             border-radius: 4px;
             margin-top: 15px;
         }
+        
+        /* GitHub Fork Ribbon */
+        .github-fork-ribbon {
+            position: fixed;
+            top: 0;
+            right: 0;
+            z-index: 9999;
+            background: #333;
+            color: white;
+            padding: 10px 40px 10px 20px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: bold;
+            transform: rotate(45deg) translate(25%, -50%);
+            transform-origin: top right;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            transition: background 0.3s ease;
+        }
+        .github-fork-ribbon:hover {
+            background: #2980b9;
+            color: white;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding: 20px;
+            border-top: 1px solid #e0e0e0;
+            color: #7f8c8d;
+        }
+        .footer a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        .footer a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
+    <a href="https://github.com/vloganathane/CREB" class="github-fork-ribbon" target="_blank">Fork me on GitHub</a>
+    
     <div class="container">
         <h1>🧪 CREB-JS: Chemical Reaction Equation Balancer</h1>
         
@@ -119,6 +158,15 @@
             <button onclick="calculateMolarWeight()">Calculate Molar Weight</button>
             <div id="molarWeightResult" class="result" style="display: none;"></div>
         </div>
+    </div>
+    
+    <div class="footer">
+        <p>
+            Created by <a href="https://www.linkedin.com/in/loganathane-virassamy/" target="_blank">Loganathane Virassamy</a> | 
+            <a href="https://github.com/vloganathane/CREB" target="_blank">View Source</a> | 
+            <a href="https://www.npmjs.com/package/creb-js" target="_blank">npm Package</a>
+        </p>
+        <p>Based on the original <a href="https://github.com/LastChemist/CREB-Chemical_Reaction_Equation_Balancer" target="_blank">CREB</a> Python project</p>
     </div>
 
     <script src="./dist/index.umd.js"></script>
