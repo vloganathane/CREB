@@ -30,6 +30,24 @@ describe('ChemicalEquationBalancer', () => {
     expect(result.reactants).toEqual(['H2', 'O2']);
     expect(result.products).toEqual(['H2O']);
   });
+
+  test('should handle equations with existing coefficients', () => {
+    // Should ignore existing coefficients and calculate correct ones
+    const result1 = balancer.balance('CuSO4 + 4 NH3 = [Cu(NH3)4]SO4');
+    expect(result1).toBe('CuSO4 + 4 NH3 = [Cu(NH3)4]SO4');
+    
+    const result2 = balancer.balance('2 H2 + O2 = 2 H2O');
+    expect(result2).toBe('2 H2 + O2 = 2 H2O');
+    
+    // Should work the same without existing coefficients
+    const result3 = balancer.balance('CuSO4 + NH3 = [Cu(NH3)4]SO4');
+    expect(result3).toBe('CuSO4 + 4 NH3 = [Cu(NH3)4]SO4');
+  });
+
+  test('should handle coordination complexes', () => {
+    const result = balancer.balance('CuSO4 + NH3 = [Cu(NH3)4]SO4');
+    expect(result).toBe('CuSO4 + 4 NH3 = [Cu(NH3)4]SO4');
+  });
 });
 
 describe('Stoichiometry', () => {

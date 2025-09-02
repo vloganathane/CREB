@@ -219,12 +219,17 @@ class EquationParser {
         if (sides.length !== 2) {
             throw new Error('Invalid equation format. Must contain exactly one "=" sign.');
         }
-        const reactants = sides[0].split(this.speciesSplitter)
-            .map(species => species.trim())
-            .filter(species => species.length > 0);
-        const products = sides[1].split(this.speciesSplitter)
-            .map(species => species.trim())
-            .filter(species => species.length > 0);
+        const cleanSpecies = (speciesString) => {
+            return speciesString.split(this.speciesSplitter)
+                .map(species => species.trim())
+                .filter(species => species.length > 0)
+                .map(species => {
+                // Remove existing coefficients (numbers at the beginning)
+                return species.replace(/^\d+\s*/, '');
+            });
+        };
+        const reactants = cleanSpecies(sides[0]);
+        const products = cleanSpecies(sides[1]);
         return { reactants, products };
     }
     parseSpecies(species) {
