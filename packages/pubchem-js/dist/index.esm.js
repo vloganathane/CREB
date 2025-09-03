@@ -487,6 +487,40 @@ class Compound {
             throw new Error(`Failed to search for SMILES "${smiles}": ${error.message}`);
         }
     }
+    // Convenience methods that return the first/most relevant result
+    static async getByName(name, httpClient) {
+        const results = await Compound.fromName(name, httpClient);
+        return results.length > 0 ? results[0] : null;
+    }
+    static async getBySmiles(smiles, httpClient) {
+        const results = await Compound.fromSmiles(smiles, httpClient);
+        return results.length > 0 ? results[0] : null;
+    }
+    static async fromFormula(formula, httpClient) {
+        const client = httpClient || new HTTPClient();
+        const encodedFormula = encodeURIComponent(formula);
+        // Use MaxRecords parameter to limit results and avoid timeouts
+        const url = `/compound/fastformula/${encodedFormula}/JSON?MaxRecords=100`;
+        try {
+            const data = await client.get(url);
+            if (!data.PC_Compounds || data.PC_Compounds.length === 0) {
+                return [];
+            }
+            return data.PC_Compounds.map(record => new Compound(record, client));
+        }
+        catch (error) {
+            if (error.name === 'PubChemNotFoundError' ||
+                error.message?.includes('404') ||
+                error.message?.includes('ServerError')) {
+                return [];
+            }
+            throw new Error(`Failed to search for formula "${formula}": ${error.message}`);
+        }
+    }
+    static async getByFormula(formula, httpClient) {
+        const results = await Compound.fromFormula(formula, httpClient);
+        return results.length > 0 ? results[0] : null;
+    }
     // Basic identifiers
     get cid() {
         return this.record.id?.id?.cid;

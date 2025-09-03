@@ -18,6 +18,14 @@ export interface EnhancedBalancedEquation extends BalancedEquation {
         chargeBalanced: boolean;
         warnings: string[];
     };
+    safetyWarnings?: SafetyWarning[];
+}
+export interface SafetyWarning {
+    compound: string;
+    hazard: string;
+    severity: 'low' | 'medium' | 'high' | 'extreme';
+    ghsClassification?: string;
+    precautionaryStatements?: string[];
 }
 export interface CompoundInfo {
     name: string;
@@ -29,9 +37,49 @@ export interface CompoundInfo {
     isValid: boolean;
     error?: string;
     pubchemData?: PubChemCompound;
+    originalName?: string;
+    safetyInfo?: SafetyInfo;
+}
+export interface SafetyInfo {
+    ghsClassifications: string[];
+    hazardStatements: string[];
+    precautionaryStatements: string[];
+    physicalHazards: string[];
+    healthHazards: string[];
+    environmentalHazards: string[];
+    signalWord?: 'Danger' | 'Warning';
 }
 export declare class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
     private compoundCache;
+    /**
+     * Balance equation with safety and hazard information
+     */
+    balanceWithSafety(equation: string): Promise<EnhancedBalancedEquation>;
+    /**
+     * Get safety information for a compound
+     */
+    private getSafetyInfo;
+    /**
+     * Generate safety warnings from safety information
+     */
+    private generateSafetyWarnings;
+    /**
+     * Determine severity level from hazard description
+     */
+    private determineSeverity;
+    /**
+     * Knowledge base of known chemical safety information
+     */
+    private getKnownSafetyInfo;
+    /**
+     * Infer basic safety information from compound properties
+     */
+    private inferSafetyFromProperties;
+    /**
+     * Balance equation using common chemical names
+     * Converts compound names to formulas using PubChem, then balances
+     */
+    balanceByName(commonNameEquation: string): Promise<EnhancedBalancedEquation>;
     /**
      * Balance equation with PubChem data enrichment
      */
@@ -45,7 +93,19 @@ export declare class EnhancedChemicalEquationBalancer extends ChemicalEquationBa
      */
     private loadPubChemModule;
     /**
-     * Get common names for simple chemical formulas
+     * Parse equation with compound names to extract reactant and product names
+     */
+    private parseEquationNames;
+    /**
+     * Clean compound name by removing coefficients and standardizing format
+     */
+    private cleanCompoundName;
+    /**
+     * Reconstruct equation using chemical formulas instead of names
+     */
+    private reconstructEquationWithFormulas;
+    /**
+     * Get common names for simple chemical formulas or alternative names for compounds
      */
     private getCommonNames;
     /**

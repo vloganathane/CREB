@@ -122,11 +122,26 @@ CREB/
 5. **Enhanced Stoichiometry** - Glucose combustion with PubChem data
 6. **Compound Comparison** - Compare glucose vs fructose with detailed analysis
 
-### Phase 2 Enhanced Features:
-7. **Enhanced Equation Balancing** - PubChem-validated compound data with mass balance verification
-8. **Enhanced Stoichiometry** - Real compound data integration with molecular weight accuracy assessment
-9. **Compound Information Lookup** - Detailed PubChem data retrieval with intelligent caching
-10. **Alternative Compound Suggestions** - Smart suggestions for unknown or misspelled compounds
+### Phase 2 Enhanced Features (COMPLETE):
+7. **Enhanced Chemical Intelligence** - PubChem-validated compound data with mass balance verification ✅
+8. **Compound Name Resolution** - Balance equations using common chemical names ✅
+9. **Enhanced Stoichiometry** - Real compound data integration with molecular weight accuracy ✅
+10. **Chemical Safety Information** - GHS hazard warnings and safety classifications ✅
+
+### New Enhanced API:
+```javascript
+// Enhanced chemical intelligence
+const result = await balancer.balanceWithPubChemData("H2SO4 + NaOH = Na2SO4 + H2O");
+
+// Balance using common names
+const nameResult = await balancer.balanceByName(
+  "sulfuric acid + sodium hydroxide = sodium sulfate + water"
+);
+
+// Safety warnings
+const safetyResult = await balancer.balanceWithSafety("H2SO4 + NaOH = Na2SO4 + H2O");
+console.log(safetyResult.safetyWarnings); // GHS hazard information
+```
 
 ## Quick Start
 

@@ -2,10 +2,18 @@
   "name": "creb-pubchem-js",
   "version": "1.0.0",
   "description": "JavaScript/TypeScript port of PubChemPy for chemical compound data from PubChem",
-  "main": "dist/index.js",
+  "type": "module",
+  "main": "dist/index.esm.js",
   "module": "dist/index.esm.js",
   "browser": "dist/index.umd.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.js",
+      "browser": "./dist/index.umd.js"
+    }
+  },
   "scripts": {
     "build": "rollup -c",
     "test": "jest",

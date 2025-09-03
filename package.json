@@ -3,10 +3,17 @@
   "version": "1.1.0",
   "description": "Chemical Reaction Equation Balancer - JavaScript Library",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/index.esm.js",
   "module": "dist/index.esm.js",
   "browser": "dist/index.umd.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.js",
+      "browser": "./dist/index.umd.js"
+    }
+  },
   "scripts": {
     "build": "npm run build:creb && npm run build:pubchem",
     "build:creb": "rollup -c",

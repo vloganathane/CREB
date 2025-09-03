@@ -3,591 +3,1025 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CREB-JS Enhanced Demo with PubChem Integration</title>
+    <title>CREB-JS Documentation</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧪</text></svg>">
-    <style>
-        * {
-            box-sizing: border-box;
-        }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-        }
-        
-        /* Main Navigation Menu */
-        .main-nav {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            padding: 0;
-            margin: 0;
-            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-        }
-        
-        .nav-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 20px;
-        }
-        
-        .nav-brand {
-            display: flex;
-            align-items: center;
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #2c3e50;
-            text-decoration: none;
-        }
-        
-        .nav-brand .logo {
-            font-size: 2rem;
-            margin-right: 10px;
-        }
-        
-        .nav-menu {
-            display: flex;
-            list-style: none;
-            margin: 0;
-            padding: 0;
-        }
-        
-        .nav-item {
-            margin: 0 5px;
-        }
-        
-        .nav-link {
-            display: block;
-            padding: 15px 20px;
-            color: #2c3e50;
-            text-decoration: none;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            border-radius: 8px;
-            position: relative;
-        }
-        
-        .nav-link:hover, .nav-link.active {
-            background: #3498db;
-            color: white;
-            transform: translateY(-2px);
-        }
-        
-        .nav-link.active::after {
-            content: '';
-            position: absolute;
-            bottom: -2px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 6px;
-            height: 6px;
-            background: #3498db;
-            border-radius: 50%;
-        }
-        
-        /* Quick Actions Toolbar */
-        .quick-actions {
-            background: rgba(255, 255, 255, 0.9);
-            padding: 10px 20px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        
-        .quick-btn {
-            padding: 8px 16px;
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 20px;
-            color: #495057;
-            text-decoration: none;
-            font-size: 0.875rem;
-            transition: all 0.2s ease;
-            cursor: pointer;
-        }
-        
-        .quick-btn:hover {
-            background: #e9ecef;
-            transform: translateY(-1px);
-        }
-        
-        .quick-btn.primary {
-            background: #007bff;
-            color: white;
-            border-color: #007bff;
-        }
-        
-        .quick-btn.primary:hover {
-            background: #0056b3;
-        }
-        
-        /* Main Content Container */
-        .container {
-            background: white;
-            margin: 20px;
-            border-radius: 15px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        
-        .content-wrapper {
-            padding: 30px;
-        }
-        
-        .page-section {
-            display: none;
-            animation: fadeIn 0.3s ease-in;
-        }
-        
-        .page-section.active {
-            display: block;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        h1 {
-            color: #2c3e50;
-            text-align: center;
-            margin-bottom: 10px;
-        }
-        
-        .subtitle {
-            text-align: center;
-            color: #7f8c8d;
-            margin-bottom: 30px;
-            font-size: 1.1rem;
-        }
-        
-        .section {
-            margin-bottom: 30px;
-            padding: 25px;
-            border: 1px solid #e0e0e0;
-            border-radius: 10px;
-            background: #fafafa;
-            transition: all 0.3s ease;
-        }
-        
-        .section:hover {
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            transform: translateY(-2px);
-        }
-        
-        .section.enhanced {
-            border-left: 4px solid #27ae60;
-            background: linear-gradient(135deg, #f8fff8 0%, #ffffff 100%);
-        }
-        
-        .section.primary {
-            border-left: 4px solid #3498db;
-            background: linear-gradient(135deg, #f8fbff 0%, #ffffff 100%);
-        }
-        
-        .section.enhanced h2 {
-            color: #27ae60;
-        }
-        
-        .section.primary h2 {
-            color: #3498db;
-        }
-        
-        .section.enhanced h2:before {
-            content: "🧬 ";
-        }
-        
-        .section.primary h2:before {
-            content: "⚗️ ";
-        }
-        .input-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        input[type="text"], input[type="number"] {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        button {
-            background-color: #3498db;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #2980b9;
-        }
-        .result {
-            background-color: #ecf0f1;
-            padding: 15px;
-            border-radius: 4px;
-            margin-top: 15px;
-            white-space: pre-wrap;
-            font-family: monospace;
-        }
-        .error {
-            background-color: #e74c3c;
-            color: white;
-            padding: 10px;
-            border-radius: 4px;
-            margin-top: 15px;
-        }
-        
-        /* GitHub Fork Ribbon */
-        .github-fork-ribbon {
-            position: fixed;
-            top: 0;
-            right: 0;
-            z-index: 9999;
-            background: #333;
-            color: white;
-            padding: 10px 40px 10px 20px;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: bold;
-            transform: rotate(45deg) translate(25%, -50%);
-            transform-origin: top right;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-            transition: background 0.3s ease;
-        }
-        .github-fork-ribbon:hover {
-            background: #2980b9;
-            color: white;
-        }
-        
-        .footer {
-            text-align: center;
-            margin-top: 30px;
-            padding: 20px;
-            border-top: 1px solid #e0e0e0;
-            color: #7f8c8d;
-        }
-        .footer a {
-            color: #3498db;
-            text-decoration: none;
-        }
-        .footer a:hover {
-            text-decoration: underline;
-        }
-        .compound-info {
-            background: #ecf0f1;
-            padding: 15px;
-            margin: 10px 0;
-            border-radius: 6px;
-            border-left: 4px solid #3498db;
-        }
-        .compound-info h4 {
-            margin: 0 0 10px 0;
-            color: #2c3e50;
-        }
-        .property {
-            margin: 5px 0;
-            font-size: 14px;
-        }
-        .property strong {
-            color: #2c3e50;
-            display: inline-block;
-            width: 120px;
-        }
-        .demo-tabs {
-            display: flex;
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 5px;
-            margin-bottom: 20px;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
-            flex-wrap: wrap;
-            gap: 5px;
-        }
-        .demo-tab {
-            flex: 1;
-            min-width: 120px;
-            padding: 12px 16px;
-            text-align: center;
-            background: transparent;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-weight: 500;
-            color: #6c757d;
-            white-space: nowrap;
-        }
-        .demo-tab:hover {
-            background: rgba(255, 255, 255, 0.7);
-            color: #495057;
-            transform: translateY(-1px);
-        }
-        .demo-tab.active {
-            background: white;
-            color: #007bff;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-            transform: translateY(-2px);
-        }
-        .demo-content {
-            display: none;
-        }
-        .demo-content.active {
-            display: block;
-        }
-        .result.loading {
-            background-color: #fff8e1;
-            border-left: 4px solid #f39c12;
-            color: #d68910;
-        }
-        
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .nav-container {
-                flex-direction: column;
-                padding: 10px;
-            }
-            
-            .nav-menu {
-                width: 100%;
-                justify-content: center;
-                flex-wrap: wrap;
-            }
-            
-            .nav-link {
-                padding: 10px 15px;
-                font-size: 0.9rem;
-            }
-            
-            .container {
-                margin: 10px;
-            }
-            
-            .content-wrapper {
-                padding: 20px;
-            }
-            
-            .demo-tabs {
-                flex-direction: column;
-                gap: 5px;
-            }
-            
-            .demo-tab {
-                min-width: auto;
-                text-align: center;
-            }
-            
-            .quick-actions {
-                justify-content: center;
-                padding: 10px;
-            }
-            
-            .section {
-                padding: 15px;
-                margin-bottom: 20px;
-            }
-        }
-        
-        /* GitHub Fork Ribbon Enhancement */
-        .github-fork-ribbon {
-            position: fixed;
-            top: 0;
-            right: 0;
-            background: #2c3e50;
-            color: white;
-            padding: 10px 40px;
-            text-decoration: none;
-            transform: rotate(45deg) translate(25%, -50%);
-            transform-origin: center;
-            z-index: 9999;
-            font-size: 0.8rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-            transition: all 0.3s ease;
-        }
-        
-        .github-fork-ribbon:hover {
-            background: #34495e;
-            transform: rotate(45deg) translate(25%, -50%) scale(1.1);
-        }
-        
-        /* About Section Styling */
-        .about-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-        
-        .feature-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 10px;
-            text-align: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            transition: transform 0.3s ease;
-        }
-        
-        .feature-card:hover {
-            transform: translateY(-5px);
-        }
-        
-        .feature-card h3 {
-            margin-top: 0;
-            font-size: 1.5rem;
-        }
-        
-        .feature-icon {
-            font-size: 3rem;
-            margin-bottom: 10px;
-            display: block;
-        }
-    </style>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Main Navigation -->
-    <nav class="main-nav">
-        <div class="nav-container">
-            <a href="#" class="nav-brand">
-                <span class="logo">🧪</span>
-                CREB-JS
-            </a>
-            <ul class="nav-menu">
-                <li class="nav-item">
-                    <a href="#" class="nav-link active" onclick="showPage('core', this)">
-                        ⚗️ Core CREB
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showPage('pubchem', this)">
-                        🧬 PubChem
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showPage('about', this)">
-                        ℹ️ About
-                    </a>
-                </li>
-            </ul>
-        </div>
-    </nav>
+    <!-- Site Header -->
+    <header class="site-header">
+        <a href="#" class="header-title">
+            <span class="logo">🧪</span>
+            CREB-JS 1.0.0 documentation
+        </a>
+        <nav class="header-nav">
+            <a href="https://github.com/vloganathane/CREB" target="_blank">GitHub</a>
+            <a href="#" onclick="showPage('api')">API</a>
+            <a href="#" onclick="showPage('guide')">Guide</a>
+        </nav>
+    </header>
 
-    <!-- Quick Actions Toolbar -->
+    <!-- Quick Actions Bar -->
     <div class="quick-actions">
-        <span style="color: #6c757d; font-weight: 500;">Quick Actions:</span>
-        <button class="quick-btn primary" onclick="focusElement('equation')">
-            ⚗️ Balance Equation
+        <span style="color: var(--color-foreground-muted); font-weight: 500;">Quick start:</span>
+        <button class="quick-btn" onclick="focusElement('equation'); showPage('getting-started')">
+            ⚗️ Balance equation
         </button>
-        <button class="quick-btn" onclick="focusElement('cidInput'); showPage('pubchem', document.querySelector('[onclick*=pubchem]'))">
-            🔍 Search Compound
-        </button>
-        <button class="quick-btn" onclick="window.open('https://github.com/vloganathane/CREB', '_blank')">
-            📖 Documentation
+        <button class="quick-btn" onclick="focusElement('cidInput'); showPage('pubchem-search')">
+            🔍 Search compound
         </button>
         <button class="quick-btn" onclick="clearAllResults()">
-            🗑️ Clear Results
+            🗑️ Clear results
         </button>
     </div>
 
-        <div class="container">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+        <div class="sidebar-content">
+            <h2>User Guide</h2>
+            <nav>
+                <ul>
+                    <li><a href="#" class="nav-link current" onclick="showPage('introduction', this)">Introduction</a></li>
+                    <li><a href="#" class="nav-link" onclick="showPage('getting-started', this)">Getting started</a></li>
+                    <li><a href="#" class="nav-link" onclick="showPage('balancing', this)">Balancing equations</a></li>
+                    <li><a href="#" class="nav-link" onclick="showPage('stoichiometry', this)">Stoichiometry</a></li>
+                </ul>
+            </nav>
+
+            <h2>Enhanced Features ✨</h2>
+            <nav>
+                <ul>
+                    <li><a href="#" class="nav-link" onclick="showPage('enhanced-intelligence', this)">🧪 Chemical Intelligence</a></li>
+                    <li><a href="#" class="nav-link" onclick="showPage('name-resolution', this)">🏷️ Name Resolution</a></li>
+                    <li><a href="#" class="nav-link" onclick="showPage('enhanced-stoichiometry', this)">⚗️ Enhanced Stoichiometry</a></li>
+                    <li><a href="#" class="nav-link" onclick="showPage('safety-information', this)">⚠️ Safety Information</a></li>
+                </ul>
+            </nav>
+
+            <h2>PubChem Integration</h2>
+            <nav>
+                <ul>
+                    <li><a href="#" class="nav-link" onclick="showPage('pubchem-search', this)">Compound search</a></li>
+                    <li><a href="#" class="nav-link" onclick="showPage('formula-search', this)">Formula search</a></li>
+                    <li><a href="#" class="nav-link" onclick="showPage('enhanced-features', this)">Legacy demos</a></li>
+                    <li><a href="#" class="nav-link" onclick="showPage('comparison', this)">Compound comparison</a></li>
+                </ul>
+            </nav>
+
+            <h2>API Reference</h2>
+            <nav>
+                <ul>
+                    <li><a href="#" class="nav-link" onclick="showPage('api', this)">API documentation</a></li>
+                    <li><a href="#" class="nav-link" onclick="showPage('examples', this)">Code examples</a></li>
+                </ul>
+            </nav>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
         <div class="content-wrapper">
-            <!-- Core CREB Page -->
-            <div id="core-page" class="page-section active">
-                <h1>🧪 CREB-JS Demo</h1>
-                <p class="subtitle">Chemical Reaction Equation Balancer - Core Features</p>
-
-                <div class="section primary">
-                    <h2>Balance Chemical Equations</h2>
-                    <div class="input-group">
-                        <label for="equation">Enter a chemical equation (e.g., Al + CuSO4 = Al2(SO4)3 + Cu):</label>
-                        <input type="text" id="equation" placeholder="Al + CuSO4 = Al2(SO4)3 + Cu" value="Al + CuSO4 = Al2(SO4)3 + Cu">
-                        <button onclick="balanceEquation()">Balance Equation</button>
-                    </div>
-                    <div id="result" class="result"></div>
+            <!-- Introduction Page -->
+            <div id="introduction" class="page-section active">
+                <h1>CREB-JS Documentation</h1>
+                <p class="subtitle">Advanced Chemical Reaction Equation Balancer with PubChem Integration</p>
+                
+                <div class="section">
+                    <h2>🧪 What is CREB-JS?</h2>
+                    <p>CREB-JS is a comprehensive JavaScript library that revolutionizes chemical equation balancing and stoichiometric calculations. Built with modern TypeScript, it combines robust equation parsing algorithms with real-world chemical data from the PubChem database to provide accurate, validated chemical computations.</p>
+                    
+                    <p>Whether you're a student learning chemistry, a researcher performing calculations, or a developer building chemical informatics applications, CREB-JS provides the tools you need with a simple, intuitive API.</p>
                 </div>
 
-                <div class="section primary">
-                    <h2>Calculate Stoichiometry</h2>
-                    <div class="input-group">
-                        <label for="stoichEquation">Balanced equation:</label>
-                        <input type="text" id="stoichEquation" placeholder="2 H2 + O2 = 2 H2O" value="2 H2 + O2 = 2 H2O">
-                    </div>
-                    <div class="input-group">
-                        <label for="species">Species:</label>
-                        <input type="text" id="species" placeholder="H2" value="H2">
-                    </div>
-                    <div class="input-group">
-                        <label for="amount">Amount (moles):</label>
-                        <input type="number" id="amount" step="0.01" placeholder="1.5" value="1.5">
-                        <button onclick="calculateStoichiometry()">Calculate</button>
-                    </div>
-                    <div id="stoichResult" class="result"></div>
+                <div class="section">
+                    <h2>🚀 Quick Start</h2>
+                    <p>Get started with CREB-JS in just a few lines of code:</p>
+
+                    <div class="code-example">// Install the package
+npm install creb-js
+
+// Basic equation balancing
+import { ChemicalEquationBalancer } from 'creb-js';
+
+const balancer = new ChemicalEquationBalancer();
+const result = balancer.balance('H2 + O2 = H2O');
+console.log(result); // "2 H2 + O2 = 2 H2O"</div>
+
+                    <div class="code-example">// Enhanced features with PubChem integration
+import { Compound } from 'creb-pubchem-js';
+import { EnhancedStoichiometry } from 'creb-js';
+
+// Search for compounds
+const aspirin = await Compound.fromName('aspirin');
+console.log(aspirin.molecularFormula); // "C9H8O4"
+console.log(aspirin.molecularWeight);  // 180.16
+
+// Enhanced stoichiometry with real chemical data
+const enhanced = new EnhancedStoichiometry();
+const analysis = await enhanced.calculateWithPubChem('C6H12O6 + O2 = CO2 + H2O');</div>
                 </div>
 
-                <div class="section primary">
-                    <h2>Calculate Molar Weight</h2>
-                    <div class="input-group">
-                        <label for="formula">Chemical formula:</label>
-                        <input type="text" id="formula" placeholder="H2SO4" value="H2SO4">
-                        <button onclick="calculateMolarWeight()">Calculate Molar Weight</button>
+                <div class="section">
+                    <h2>✨ Key Features</h2>
+                    <div class="feature-grid">
+                        <div class="feature-item">
+                            <h4>⚖️ Smart Equation Balancing</h4>
+                            <p>Advanced algorithms automatically balance even complex chemical equations with robust error handling and validation.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>🧮 Stoichiometric Calculations</h4>
+                            <p>Calculate molar relationships, limiting reagents, theoretical yields, and percent yields with precision.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>🔍 PubChem Integration</h4>
+                            <p>Access real chemical data including molecular weights, formulas, properties, and structural information.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>🆚 Compound Comparison</h4>
+                            <p>Compare multiple compounds side-by-side with detailed property analysis and structural similarities.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>✅ Data Validation</h4>
+                            <p>Cross-reference calculated results with PubChem data to ensure accuracy and catch potential errors.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>🌐 Universal Compatibility</h4>
+                            <p>Works in browsers, Node.js, and modern frameworks with TypeScript support and multiple output formats.</p>
+                        </div>
                     </div>
-                    <div id="molarWeightResult" class="result"></div>
+                </div>
+
+                <div class="section">
+                    <h2>🎯 Use Cases</h2>
+                    <ul class="use-case-list">
+                        <li><strong>Educational Tools:</strong> Interactive chemistry learning platforms and homework helpers</li>
+                        <li><strong>Research Applications:</strong> Laboratory calculations and chemical analysis workflows</li>
+                        <li><strong>Industrial Software:</strong> Chemical process optimization and quality control systems</li>
+                        <li><strong>Web Applications:</strong> Chemistry calculators and molecular property databases</li>
+                        <li><strong>Academic Research:</strong> Computational chemistry and cheminformatics projects</li>
+                    </ul>
+                </div>
+
+                <div class="section">
+                    <h2>📚 Documentation Structure</h2>
+                    <p>This documentation is organized into several sections to help you get the most out of CREB-JS:</p>
+                    <ul class="doc-structure">
+                        <li><strong>Getting Started:</strong> Installation, setup, and basic usage patterns</li>
+                        <li><strong>Balancing Equations:</strong> Comprehensive guide to equation balancing features</li>
+                        <li><strong>Stoichiometry:</strong> Advanced calculations and molar relationships</li>
+                        <li><strong>PubChem Integration:</strong> Accessing and using real chemical data</li>
+                        <li><strong>API Reference:</strong> Complete method documentation and parameters</li>
+                        <li><strong>Examples:</strong> Practical code samples and common patterns</li>
+                    </ul>
+                </div>
+
+                <div class="section">
+                    <h2>🔗 Useful Links</h2>
+                    <div class="links-grid">
+                        <a href="https://github.com/vloganathane/CREB" target="_blank" class="link-card">
+                            <h4>📦 GitHub Repository</h4>
+                            <p>Source code, issues, and contributions</p>
+                        </a>
+                        <a href="https://www.npmjs.com/package/@creb-js/core" target="_blank" class="link-card">
+                            <h4>📋 NPM Package</h4>
+                            <p>Installation and version information</p>
+                        </a>
+                        <a href="https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest" target="_blank" class="link-card">
+                            <h4>🔬 PubChem API</h4>
+                            <p>Official PubChem REST API documentation</p>
+                        </a>
+                        <a href="https://github.com/vloganathane/CREB/issues" target="_blank" class="link-card">
+                            <h4>🐛 Issue Tracker</h4>
+                            <p>Bug reports and feature requests</p>
+                        </a>
+                    </div>
                 </div>
             </div>
 
-            <!-- PubChem Integration Page -->
-            <div id="pubchem-page" class="page-section">
-                <h1>🧬 PubChem Integration</h1>
-                <p class="subtitle">Enhanced Chemical Data and Analysis</p>
+            <!-- Getting Started Page -->
+            <div id="getting-started" class="page-section">
+                <h1>🚀 Getting Started</h1>
+                <p class="subtitle">Complete setup guide and first steps with CREB-JS</p>
 
-                <div class="section enhanced">
-                    <h2>Compound Lookup</h2>
-                    <div class="demo-tabs">
-                        <div class="demo-tab active" onclick="switchTab('search-cid')">Search by CID</div>
-                        <div class="demo-tab" onclick="switchTab('search-name')">Search by Name</div>
-                        <div class="demo-tab" onclick="switchTab('search-smiles')">Search by SMILES</div>
-                    </div>
-
-                    <div id="search-cid" class="demo-content active">
-                        <div class="input-group">
-                            <label for="cidInput">Enter PubChem CID:</label>
-                            <input type="number" id="cidInput" placeholder="2244" min="1" value="2244">
-                            <button onclick="searchByCid()">Search by CID</button>
+                <div class="section">
+                    <h2>📦 Installation</h2>
+                    <p>CREB-JS is distributed as npm packages. Choose the installation method that works best for your project:</p>
+                    
+                    <div class="step-guide">
+                        <div class="step">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <h4>Install Core Package</h4>
+                                <p>For basic equation balancing and stoichiometry calculations:</p>
+                                <div class="install-command">npm install creb-js</div>
+                            </div>
+                        </div>
+                        
+                        <div class="step">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <h4>Add PubChem Integration (Optional)</h4>
+                                <p>For enhanced features with real chemical data:</p>
+                                <div class="install-command">npm install creb-pubchem-js</div>
+                            </div>
+                        </div>
+                        
+                        <div class="step">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <h4>Browser Usage</h4>
+                                <p>For direct browser usage, include the UMD builds:</p>
+                                <div class="code-example">&lt;script src="path/to/creb-js/dist/index.umd.js">&lt;/script>
+&lt;script src="path/to/pubchem-js/dist/index.umd.js">&lt;/script></div>
+                            </div>
                         </div>
                     </div>
-
-                    <div id="search-name" class="demo-content">
-                        <div class="input-group">
-                            <label for="nameInput">Enter compound name:</label>
-                            <input type="text" id="nameInput" placeholder="aspirin" value="aspirin">
-                            <button onclick="searchByName()">Search by Name</button>
-                        </div>
-                    </div>
-
-                    <div id="search-smiles" class="demo-content">
-                        <div class="input-group">
-                            <label for="smilesInput">Enter SMILES string:</label>
-                            <input type="text" id="smilesInput" placeholder="CC(=O)OC1=CC=CC=C1C(=O)O" value="CC(=O)OC1=CC=CC=C1C(=O)O">
-                            <button onclick="searchBySmiles()">Search by SMILES</button>
-                        </div>
-                    </div>
-
-                    <div id="compoundResult" class="result"></div>
                 </div>
+
+                <div class="section">
+                    <h2>⚡ Quick Setup</h2>
+                    <p>Get up and running with CREB-JS in minutes:</p>
+                    
+                    <div class="code-example">// ES6 Modules (Node.js, modern bundlers)
+import { ChemicalEquationBalancer, EnhancedStoichiometry } from 'creb-js';
+import { Compound } from 'creb-pubchem-js';
+
+// CommonJS (Node.js)
+const { ChemicalEquationBalancer } = require('creb-js');
+const { Compound } = require('creb-pubchem-js');
+
+// Browser Global (UMD)
+const balancer = new window.CREB.ChemicalEquationBalancer();
+const compound = new window.PubChemJS.Compound();</div>
+                </div>
+
+                <div class="section">
+                    <h2>🧪 Your First Equation</h2>
+                    <p>Let's balance your first chemical equation with the interactive demo below:</p>
+
+                    <div class="demo-section">
+                        <h3>⚗️ Chemical Equation Balancer</h3>
+                        <p>Enter an unbalanced chemical equation and get the balanced version instantly.</p>
+                        
+                        <div class="form-group">
+                            <label for="equation">Chemical equation</label>
+                            <input type="text" id="equation" placeholder="Al + CuSO4 = Al2(SO4)3 + Cu" value="Al + CuSO4 = Al2(SO4)3 + Cu">
+                            <small>Try examples: "H2 + O2 = H2O", "Fe + O2 = Fe2O3", "C3H8 + O2 = CO2 + H2O"</small>
+                        </div>
+                        <button class="btn" onclick="balanceEquation()">Balance Equation</button>
+                        <div id="result" class="result" style="display: none;"></div>
+                    </div>
+
+                    <div class="code-example">// This is what happens behind the scenes:
+import { ChemicalEquationBalancer } from 'creb-js';
+
+const balancer = new ChemicalEquationBalancer();
+const equation = 'Al + CuSO4 = Al2(SO4)3 + Cu';
+const result = balancer.balance(equation);
+
+console.log(result); 
+// Output: "2 Al + 3 CuSO4 = Al2(SO4)3 + 3 Cu"</div>
+                </div>
+
+                <div class="section">
+                    <h2>🎓 Learning Path</h2>
+                    <p>Follow this recommended learning path to master CREB-JS:</p>
+                    
+                    <div class="feature-grid">
+                        <div class="feature-item">
+                            <h4>1️⃣ Basic Balancing</h4>
+                            <p>Start with simple equation balancing to understand the core functionality and API.</p>
+                            <a href="#" onclick="showPage('balancing', this)" style="color: #3498db; text-decoration: none;">→ Learn Balancing</a>
+                        </div>
+                        <div class="feature-item">
+                            <h4>2️⃣ Stoichiometry</h4>
+                            <p>Learn to calculate molar relationships, limiting reagents, and yields.</p>
+                            <a href="#" onclick="showPage('stoichiometry', this)" style="color: #3498db; text-decoration: none;">→ Learn Stoichiometry</a>
+                        </div>
+                        <div class="feature-item">
+                            <h4>3️⃣ PubChem Data</h4>
+                            <p>Enhance your calculations with real chemical data from PubChem.</p>
+                            <a href="#" onclick="showPage('pubchem-search', this)" style="color: #3498db; text-decoration: none;">→ Learn PubChem</a>
+                        </div>
+                        <div class="feature-item">
+                            <h4>4️⃣ Advanced Features</h4>
+                            <p>Explore compound comparison, validation, and enhanced calculations.</p>
+                            <a href="#" onclick="showPage('enhanced-features', this)" style="color: #3498db; text-decoration: none;">→ Advanced Features</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>🔧 Configuration</h2>
+                    <p>CREB-JS works out of the box with sensible defaults, but you can customize its behavior:</p>
+                    
+                    <div class="code-example">// Custom configuration example
+const balancer = new ChemicalEquationBalancer({
+    strictMode: true,        // Stricter parsing rules
+    allowPartialBalancing: false,  // Require complete balancing
+    maxIterations: 1000,     // Maximum balancing attempts
+    timeout: 10000          // Timeout in milliseconds
+});
+
+// PubChem configuration
+const compound = new Compound({
+    apiKey: 'your-api-key',  // Optional API key for higher rate limits
+    timeout: 15000,          // Request timeout
+    retryAttempts: 3         // Number of retry attempts
+});</div>
+                </div>
+
+                <div class="section">
+                    <h2>❓ Need Help?</h2>
+                    <p>If you encounter any issues or have questions:</p>
+                    <ul>
+                        <li>Check the <a href="#" onclick="showPage('api', this)">API Documentation</a> for detailed method information</li>
+                        <li>Browse <a href="#" onclick="showPage('examples', this)">Code Examples</a> for common usage patterns</li>
+                        <li>Visit our <a href="https://github.com/vloganathane/CREB/issues" target="_blank">GitHub Issues</a> to report bugs or request features</li>
+                        <li>Read the <a href="https://github.com/vloganathane/CREB" target="_blank">README</a> for additional setup information</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Balancing Page -->
+            <div id="balancing" class="page-section">
+                <h1>Balancing equations</h1>
+                <p class="subtitle">Advanced equation balancing features</p>
+
+                <p>CREB-JS uses matrix algebra to solve systems of linear equations, ensuring accurate balancing of even complex chemical equations.</p>
+
+                <div class="demo-section">
+                    <h3>⚖️ Advanced Equation Balancing</h3>
+                    <p>Try complex equations with multiple reactants and products:</p>
+                    
+                    <div class="form-group">
+                        <label for="complexEquation">Complex equation</label>
+                        <input type="text" id="complexEquation" placeholder="C6H12O6 + O2 = CO2 + H2O" value="C6H12O6 + O2 = CO2 + H2O">
+                    </div>
+                    <button class="btn" onclick="balanceComplexEquation()">Balance Complex Equation</button>
+                    <div id="complexResult" class="result" style="display: none;"></div>
+                </div>
+
+                <h2>How it works</h2>
+                <p>The balancing algorithm:</p>
+                <ol style="margin-left: 1.5rem; color: var(--color-foreground-secondary);">
+                    <li>Parses the chemical equation to extract reactants and products</li>
+                    <li>Creates a matrix of element coefficients</li>
+                    <li>Solves the system using Gaussian elimination</li>
+                    <li>Returns the smallest integer coefficients</li>
+                </ol>
+            </div>
+
+            <!-- Stoichiometry Page -->
+            <div id="stoichiometry" class="page-section">
+                <h1>Stoichiometry</h1>
+                <p class="subtitle">Calculate molar relationships and conversions</p>
+
+                <p>Perform stoichiometric calculations to determine the quantities of reactants and products in chemical reactions.</p>
+
+                <div class="demo-section">
+                    <h3>📊 Stoichiometric Calculator</h3>
+                    <p>Calculate molar relationships from a balanced equation:</p>
+                    
+                    <div class="form-group">
+                        <label for="stoichEquation">Balanced equation</label>
+                        <input type="text" id="stoichEquation" placeholder="2 H2 + O2 = 2 H2O" value="2 H2 + O2 = 2 H2O">
+                    </div>
+                    <div class="form-group">
+                        <label for="species">Species</label>
+                        <input type="text" id="species" placeholder="H2" value="H2">
+                    </div>
+                    <div class="form-group">
+                        <label for="amount">Amount (moles)</label>
+                        <input type="number" id="amount" step="0.01" placeholder="1.5" value="1.5">
+                    </div>
+                    <button class="btn" onclick="calculateStoichiometry()">Calculate Stoichiometry</button>
+                    <div id="stoichResult" class="result" style="display: none;"></div>
+                </div>
+
+                <div class="demo-section">
+                    <h3>⚖️ Molar Weight Calculator</h3>
+                    <p>Calculate the molar weight of any chemical formula:</p>
+                    
+                    <div class="form-group">
+                        <label for="formula">Chemical formula</label>
+                        <input type="text" id="formula" placeholder="H2SO4" value="H2SO4">
+                    </div>
+                    <button class="btn" onclick="calculateMolarWeight()">Calculate Molar Weight</button>
+                    <div id="molarWeightResult" class="result" style="display: none;"></div>
+                </div>
+            </div>
+
+            <!-- PubChem Search Page -->
+            <div id="pubchem-search" class="page-section">
+                <h1>Compound search</h1>
+                <p class="subtitle">Search PubChem database for chemical compounds</p>
+
+                <p>CREB-JS integrates with the PubChem database to provide access to millions of chemical compounds and their properties.</p>
+
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('search-cid', this)">Search by CID</button>
+                    <button class="tab" onclick="switchTab('search-name', this)">Search by Name</button>
+                    <button class="tab" onclick="switchTab('search-smiles', this)">Search by SMILES</button>
+                </div>
+
+                <div id="search-cid" class="demo-content active">
+                    <div class="demo-section">
+                        <h3>🔍 Search by PubChem CID</h3>
+                        <p>Enter a PubChem Compound ID to retrieve detailed compound information:</p>
+                        
+                        <div class="form-group">
+                            <label for="cidInput">PubChem CID</label>
+                            <input type="number" id="cidInput" placeholder="2244" min="1" value="2244">
+                        </div>
+                        <button class="btn" onclick="searchByCid()">Search by CID</button>
+                        
+                        <div class="code-example">// Example: Search aspirin by CID
+const compound = await PubChemJS.Compound.fromCid(2244);
+console.log(compound.molecularFormula); // "C9H8O4"</div>
+                    </div>
+                </div>
+
+                <div id="search-name" class="demo-content" style="display: none;">
+                    <div class="demo-section">
+                        <h3>📝 Search by Compound Name</h3>
+                        <p>Search for compounds using common names or IUPAC names:</p>
+                        
+                        <div class="form-group">
+                            <label for="nameInput">Compound name</label>
+                            <input type="text" id="nameInput" placeholder="aspirin" value="aspirin">
+                        </div>
+                        <button class="btn" onclick="searchByName()">Search by Name</button>
+                        
+                        <div class="code-example">// Example: Search by name
+const compounds = await PubChemJS.Compound.fromName('caffeine');
+console.log(compounds[0].cid); // 2519</div>
+                    </div>
+                </div>
+
+                <div id="search-smiles" class="demo-content" style="display: none;">
+                    <div class="demo-section">
+                        <h3>🧪 Search by SMILES</h3>
+                        <p>Search using SMILES (Simplified Molecular Input Line Entry System) notation:</p>
+                        
+                        <div class="form-group">
+                            <label for="smilesInput">SMILES string</label>
+                            <input type="text" id="smilesInput" placeholder="CC(=O)OC1=CC=CC=C1C(=O)O" value="CC(=O)OC1=CC=CC=C1C(=O)O">
+                        </div>
+                        <button class="btn" onclick="searchBySmiles()">Search by SMILES</button>
+                        
+                        <div class="code-example">// Example: Search by SMILES
+const smiles = 'CC(=O)OC1=CC=CC=C1C(=O)O'; // Aspirin
+const compound = await PubChemJS.Compound.fromSmiles(smiles);</div>
+                    </div>
+                </div>
+
+                <div id="compoundResult" class="result" style="display: none;"></div>
+            </div>
+
+            <!-- Formula Search Page -->
+            <div id="formula-search" class="page-section">
+                <h1>🧪 Formula Search</h1>
+                <p class="subtitle">Search for compounds by molecular formula using PubChem's comprehensive database</p>
+
+                <div class="section">
+                    <h2>🔍 Search by Molecular Formula</h2>
+                    <p>Enter a molecular formula to find all compounds with that exact formula. This is useful for finding isomers and exploring chemical diversity.</p>
+
+                    <div class="demo-container">
+                        <h3>Formula Search Demo</h3>
+                        
+                        <div class="input-group">
+                            <label for="formulaInput">Molecular Formula:</label>
+                            <input type="text" id="formulaInput" placeholder="e.g., H2O, C6H12O6, C9H8O4" value="H2O">
+                            <button onclick="searchByFormula()">Search Compounds</button>
+                        </div>
+                        
+                        <div class="result-container">
+                            <div id="formulaResult" class="result-box" style="display: none;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>💡 Common Formula Examples</h2>
+                    <p>Try these common molecular formulas to explore different types of compounds:</p>
+                    
+                    <div class="example-grid">
+                        <div class="example-card" onclick="setFormula('H2O')">
+                            <h4>H₂O</h4>
+                            <p>Water and related compounds</p>
+                        </div>
+                        <div class="example-card" onclick="setFormula('C6H12O6')">
+                            <h4>C₆H₁₂O₆</h4>
+                            <p>Glucose and sugar isomers</p>
+                        </div>
+                        <div class="example-card" onclick="setFormula('C9H8O4')">
+                            <h4>C₉H₈O₄</h4>
+                            <p>Aspirin and related compounds</p>
+                        </div>
+                        <div class="example-card" onclick="setFormula('C8H10N4O2')">
+                            <h4>C₈H₁₀N₄O₂</h4>
+                            <p>Caffeine and similar stimulants</p>
+                        </div>
+                        <div class="example-card" onclick="setFormula('C2H6O')">
+                            <h4>C₂H₆O</h4>
+                            <p>Ethanol and ether isomers</p>
+                        </div>
+                        <div class="example-card" onclick="setFormula('CH4')">
+                            <h4>CH₄</h4>
+                            <p>Methane and simple hydrocarbons</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>📊 Formula Search Features</h2>
+                    <div class="feature-grid">
+                        <div class="feature-item">
+                            <h4>🔍 Comprehensive Search</h4>
+                            <p>Search PubChem's database of millions of compounds by exact molecular formula match.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>⚡ Fast Results</h4>
+                            <p>Optimized search returns up to 100 results quickly, perfect for exploring chemical space.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>🧬 Isomer Discovery</h4>
+                            <p>Find all structural isomers that share the same molecular formula but different arrangements.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>📈 Rich Data</h4>
+                            <p>Each result includes CID, molecular weight, IUPAC names, and other chemical properties.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>💻 Formula Search API</h2>
+                    <p>Use formula search in your applications with these simple methods:</p>
+
+                    <div class="code-example">// Get all compounds with a specific formula
+const compounds = await Compound.fromFormula('C6H12O6');
+console.log(`Found ${compounds.length} compounds with formula C6H12O6`);
+
+// Get just the first/most relevant compound
+const glucose = await Compound.getByFormula('C6H12O6');
+if (glucose) {
+    console.log(`Primary compound: ${glucose.iupacName}`);
+    console.log(`CID: ${glucose.cid}, MW: ${glucose.molecularWeight}`);
+}</div>
+
+                    <div class="code-example">// Explore isomers
+const ethanolIsomers = await Compound.fromFormula('C2H6O');
+ethanolIsomers.forEach((compound, index) => {
+    console.log(`Isomer ${index + 1}: CID ${compound.cid}`);
+    console.log(`  Name: ${compound.iupacName}`);
+    console.log(`  Weight: ${compound.molecularWeight} g/mol`);
+});</div>
+                </div>
+            </div>
+
+            <!-- Enhanced Chemical Intelligence Page -->
+            <div id="enhanced-intelligence" class="page-section">
+                <h1>🧪 Enhanced Chemical Intelligence</h1>
+                <p class="subtitle">Advanced equation balancing with real-world compound data from PubChem</p>
+
+                <div class="section">
+                    <h2>🌟 PubChem-Enhanced Balancing</h2>
+                    <p>Balance equations and get comprehensive compound information including molecular weights, IUPAC names, and validation from the authoritative PubChem database.</p>
+
+                    <div class="demo-container">
+                        <h3>Enhanced Balancing Demo</h3>
+                        
+                        <div class="input-group">
+                            <label for="enhancedEquationInput">Chemical Equation:</label>
+                            <input type="text" id="enhancedEquationInput" placeholder="e.g., H2SO4 + NaOH = Na2SO4 + H2O" value="H2SO4 + NaOH = Na2SO4 + H2O">
+                            <button onclick="balanceWithEnhancedData()">Balance with PubChem Data</button>
+                        </div>
+                        
+                        <div class="result-container">
+                            <div id="enhancedIntelligenceResult" class="result-box" style="display: none;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>💡 Example Equations</h2>
+                    <p>Try these common chemical reactions to see enhanced balancing in action:</p>
+                    
+                    <div class="example-grid">
+                        <div class="example-card" onclick="setEnhancedEquation('H2SO4 + NaOH = Na2SO4 + H2O')">
+                            <h4>Acid-Base Neutralization</h4>
+                            <p>Sulfuric acid + Sodium hydroxide</p>
+                        </div>
+                        <div class="example-card" onclick="setEnhancedEquation('C6H12O6 + O2 = CO2 + H2O')">
+                            <h4>Glucose Combustion</h4>
+                            <p>Cellular respiration reaction</p>
+                        </div>
+                        <div class="example-card" onclick="setEnhancedEquation('CaCO3 + HCl = CaCl2 + H2O + CO2')">
+                            <h4>Limestone Dissolution</h4>
+                            <p>Calcium carbonate + Hydrochloric acid</p>
+                        </div>
+                        <div class="example-card" onclick="setEnhancedEquation('Fe + O2 = Fe2O3')">
+                            <h4>Iron Oxidation</h4>
+                            <p>Rust formation reaction</p>
+                        </div>
+                        <div class="example-card" onclick="setEnhancedEquation('NH3 + HCl = NH4Cl')">
+                            <h4>Ammonia Reaction</h4>
+                            <p>Ammonium chloride formation</p>
+                        </div>
+                        <div class="example-card" onclick="setEnhancedEquation('CH4 + O2 = CO2 + H2O')">
+                            <h4>Methane Combustion</h4>
+                            <p>Natural gas burning</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>📊 Enhanced Intelligence Features</h2>
+                    <div class="feature-grid">
+                        <div class="feature-item">
+                            <h4>🎯 Real Molecular Weights</h4>
+                            <p>Get precise molecular weights from PubChem instead of calculated approximations.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>🏷️ IUPAC Names</h4>
+                            <p>See standardized chemical names alongside molecular formulas for better understanding.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>✅ Mass Balance Validation</h4>
+                            <p>Automatic verification that mass is conserved using real molecular weight data.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>🔍 Compound Validation</h4>
+                            <p>Verify that all compounds in your equation exist and are correctly identified.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>💻 Enhanced Intelligence API</h2>
+                    <p>Access enhanced chemical intelligence in your applications:</p>
+
+                    <div class="code-example">import { EnhancedChemicalEquationBalancer } from 'creb-js';
+
+const balancer = new EnhancedChemicalEquationBalancer();
+const result = await balancer.balanceWithPubChemData("H2SO4 + NaOH = Na2SO4 + H2O");
+
+console.log(result.coefficients);                    // [1, 2, 1, 2]
+console.log(result.compoundData.H2SO4.iupacName);    // "sulfuric acid"
+console.log(result.compoundData.H2SO4.molarWeight);  // 98.08 g/mol (from PubChem)
+console.log(result.validation.massBalanced);         // true</div>
+                </div>
+            </div>
+
+            <!-- Name Resolution Page -->
+            <div id="name-resolution" class="page-section">
+                <h1>🏷️ Compound Name Resolution</h1>
+                <p class="subtitle">Balance equations using common chemical names instead of formulas</p>
+
+                <div class="section">
+                    <h2>🌟 Balance by Common Names</h2>
+                    <p>Enter equations using everyday chemical names like "water", "sulfuric acid", or "sodium hydroxide". CREB-JS will automatically resolve these names to their chemical formulas using PubChem and then balance the equation.</p>
+
+                    <div class="demo-container">
+                        <h3>Name Resolution Demo</h3>
+                        
+                        <div class="input-group">
+                            <label for="nameEquationInput">Equation with Common Names:</label>
+                            <input type="text" id="nameEquationInput" 
+                                   placeholder="e.g., sulfuric acid + sodium hydroxide = sodium sulfate + water" 
+                                   value="sulfuric acid + sodium hydroxide = sodium sulfate + water">
+                            <button onclick="balanceByCommonNames()">Balance by Names</button>
+                        </div>
+                        
+                        <div class="result-container">
+                            <div id="nameResolutionResult" class="result-box" style="display: none;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>💡 Common Name Examples</h2>
+                    <p>Try these equations using common chemical names:</p>
+                    
+                    <div class="example-grid">
+                        <div class="example-card" onclick="setNameEquation('sulfuric acid + sodium hydroxide = sodium sulfate + water')">
+                            <h4>Acid-Base Reaction</h4>
+                            <p>Using common acid/base names</p>
+                        </div>
+                        <div class="example-card" onclick="setNameEquation('hydrochloric acid + ammonia = ammonium chloride')">
+                            <h4>Gas Absorption</h4>
+                            <p>HCl gas + ammonia reaction</p>
+                        </div>
+                        <div class="example-card" onclick="setNameEquation('glucose + oxygen = carbon dioxide + water')">
+                            <h4>Cellular Respiration</h4>
+                            <p>Using biochemical names</p>
+                        </div>
+                        <div class="example-card" onclick="setNameEquation('methane + oxygen = carbon dioxide + water')">
+                            <h4>Natural Gas Combustion</h4>
+                            <p>Common fuel burning</p>
+                        </div>
+                        <div class="example-card" onclick="setNameEquation('calcium carbonate + hydrochloric acid = calcium chloride + water + carbon dioxide')">
+                            <h4>Limestone Reaction</h4>
+                            <p>Geological chemistry</p>
+                        </div>
+                        <div class="example-card" onclick="setNameEquation('ethanol + oxygen = carbon dioxide + water')">
+                            <h4>Alcohol Combustion</h4>
+                            <p>Ethyl alcohol burning</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>📊 Name Resolution Features</h2>
+                    <div class="feature-grid">
+                        <div class="feature-item">
+                            <h4>🧠 Intelligent Parsing</h4>
+                            <p>Automatically identifies and separates compound names from the equation structure.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>🏷️ Name Standardization</h4>
+                            <p>Handles variations like "sulfuric acid" vs "sulphuric acid" automatically.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>🔍 PubChem Resolution</h4>
+                            <p>Resolves names to chemical formulas using PubChem's comprehensive database.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>🔗 Name Mapping</h4>
+                            <p>Maintains mapping between original names and resolved formulas for transparency.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>💻 Name Resolution API</h2>
+                    <p>Use name resolution in your applications:</p>
+
+                    <div class="code-example">import { EnhancedChemicalEquationBalancer } from 'creb-js';
+
+const balancer = new EnhancedChemicalEquationBalancer();
+const result = await balancer.balanceByName(
+  "sulfuric acid + sodium hydroxide = sodium sulfate + water"
+);
+
+console.log(result.equation); // "H2O4S + 2 HNaO = Na2O4S + 2 H2O"
+
+// See how names were resolved
+for (const [formula, info] of Object.entries(result.compoundData)) {
+  if (info.originalName) {
+    console.log(`"${info.originalName}" → ${formula}`);
+  }
+}</div>
+                </div>
+            </div>
+
+            <!-- Enhanced Stoichiometry Page -->
+            <div id="enhanced-stoichiometry" class="page-section">
+                <h1>⚗️ Enhanced Stoichiometry</h1>
+                <p class="subtitle">Precise stoichiometric calculations using real molecular weights from PubChem</p>
+
+                <div class="section">
+                    <h2>🌟 PubChem-Powered Calculations</h2>
+                    <p>Perform stoichiometric calculations with unprecedented accuracy using real molecular weights from the PubChem database. Compare calculated vs. real molecular weights and get precision assessments.</p>
+
+                    <div class="demo-container">
+                        <h3>Enhanced Stoichiometry Demo</h3>
+                        
+                        <div class="input-group">
+                            <label for="stoichEquationInput">Chemical Equation:</label>
+                            <input type="text" id="stoichEquationInput" 
+                                   placeholder="e.g., 2 NaCl + AgNO3 = AgCl + 2 NaNO3" 
+                                   value="2 NaCl + AgNO3 = AgCl + 2 NaNO3">
+                        </div>
+                        
+                        <div class="input-group">
+                            <label for="stoichSpeciesInput">Given Species:</label>
+                            <input type="text" id="stoichSpeciesInput" placeholder="e.g., NaCl" value="NaCl">
+                        </div>
+                        
+                        <div class="input-group">
+                            <label for="stoichAmountInput">Amount (moles):</label>
+                            <input type="number" id="stoichAmountInput" step="0.001" placeholder="0.171" value="0.171">
+                            <button onclick="calculateEnhancedStoich()">Calculate with PubChem Data</button>
+                        </div>
+                        
+                        <div class="result-container">
+                            <div id="enhancedStoichResult" class="result-box" style="display: none;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>💡 Example Calculations</h2>
+                    <p>Try these stoichiometry problems with enhanced accuracy:</p>
+                    
+                    <div class="example-grid">
+                        <div class="example-card" onclick="setStoichExample('2 NaCl + AgNO3 = AgCl + 2 NaNO3', 'NaCl', 0.171)">
+                            <h4>Silver Chloride Precipitation</h4>
+                            <p>0.171 mol NaCl → ? g AgCl</p>
+                        </div>
+                        <div class="example-card" onclick="setStoichExample('C6H12O6 + 6 O2 = 6 CO2 + 6 H2O', 'C6H12O6', 1.0)">
+                            <h4>Glucose Respiration</h4>
+                            <p>1.0 mol glucose → ? g CO₂</p>
+                        </div>
+                        <div class="example-card" onclick="setStoichExample('2 H2 + O2 = 2 H2O', 'H2', 2.0)">
+                            <h4>Water Formation</h4>
+                            <p>2.0 mol H₂ → ? g H₂O</p>
+                        </div>
+                        <div class="example-card" onclick="setStoichExample('CaCO3 + 2 HCl = CaCl2 + H2O + CO2', 'CaCO3', 0.5)">
+                            <h4>Limestone Dissolution</h4>
+                            <p>0.5 mol CaCO₃ → ? g CO₂</p>
+                        </div>
+                        <div class="example-card" onclick="setStoichExample('2 Fe + 3 Cl2 = 2 FeCl3', 'Fe', 1.5)">
+                            <h4>Iron Chloride Formation</h4>
+                            <p>1.5 mol Fe → ? g FeCl₃</p>
+                        </div>
+                        <div class="example-card" onclick="setStoichExample('CH4 + 2 O2 = CO2 + 2 H2O', 'CH4', 0.75)">
+                            <h4>Methane Combustion</h4>
+                            <p>0.75 mol CH₄ → ? g H₂O</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>📊 Enhanced Stoichiometry Features</h2>
+                    <div class="feature-grid">
+                        <div class="feature-item">
+                            <h4>🎯 Real Molecular Weights</h4>
+                            <p>Use precise molecular weights from PubChem instead of calculated approximations.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>📊 Accuracy Analysis</h4>
+                            <p>Compare calculated vs. real molecular weights and assess precision levels.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>✅ Mass Balance Validation</h4>
+                            <p>Verify conservation of mass using real molecular weight data.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>🔍 Compound Validation</h4>
+                            <p>Ensure all compounds exist and are correctly identified before calculations.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>💻 Enhanced Stoichiometry API</h2>
+                    <p>Perform enhanced calculations in your applications:</p>
+
+                    <div class="code-example">import { EnhancedStoichiometry } from 'creb-js';
+
+const stoich = new EnhancedStoichiometry();
+await stoich.initializeWithValidation("2 NaCl + AgNO3 = AgCl + 2 NaNO3");
+
+const result = await stoich.calculateFromMolesEnhanced("NaCl", 0.171);
+
+console.log(result.products.AgCl.grams);           // 24.51 g (PubChem accuracy)
+console.log(result.pubchemMolarWeights.AgCl);      // 143.32 g/mol (real weight)
+console.log(result.validation.warnings);           // Precision analysis</div>
+                </div>
+            </div>
+
+            <!-- Safety Information Page -->
+            <div id="safety-information" class="page-section">
+                <h1>⚠️ Chemical Safety Information</h1>
+                <p class="subtitle">Comprehensive safety warnings and hazard classifications for chemical reactions</p>
+
+                <div class="section">
+                    <h2>🛡️ GHS Safety Integration</h2>
+                    <p>Get comprehensive safety information including GHS hazard classifications, signal words, and precautionary statements for all compounds in your chemical equations.</p>
+
+                    <div class="demo-container">
+                        <h3>Safety Analysis Demo</h3>
+                        
+                        <div class="input-group">
+                            <label for="safetyEquationInput">Chemical Equation:</label>
+                            <input type="text" id="safetyEquationInput" 
+                                   placeholder="e.g., H2SO4 + NaOH = Na2SO4 + H2O" 
+                                   value="H2SO4 + NaOH = Na2SO4 + H2O">
+                            <button onclick="analyzeChemicalSafety()">Analyze Safety Hazards</button>
+                        </div>
+                        
+                        <div class="result-container">
+                            <div id="safetyAnalysisResult" class="result-box" style="display: none;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>💡 Example Safety Analyses</h2>
+                    <p>See safety information for these common chemical reactions:</p>
+                    
+                    <div class="example-grid">
+                        <div class="example-card" onclick="setSafetyEquation('H2SO4 + NaOH = Na2SO4 + H2O')">
+                            <h4>Strong Acid + Base</h4>
+                            <p>High hazard corrosive reaction</p>
+                        </div>
+                        <div class="example-card" onclick="setSafetyEquation('HCl + NH3 = NH4Cl')">
+                            <h4>Acid + Ammonia</h4>
+                            <p>Respiratory and corrosion hazards</p>
+                        </div>
+                        <div class="example-card" onclick="setSafetyEquation('C6H12O6 + O2 = CO2 + H2O')">
+                            <h4>Glucose Combustion</h4>
+                            <p>Relatively safe organic reaction</p>
+                        </div>
+                        <div class="example-card" onclick="setSafetyEquation('CH4 + O2 = CO2 + H2O')">
+                            <h4>Methane Combustion</h4>
+                            <p>Flammable gas hazards</p>
+                        </div>
+                        <div class="example-card" onclick="setSafetyEquation('CaCO3 + HCl = CaCl2 + H2O + CO2')">
+                            <h4>Limestone + Acid</h4>
+                            <p>Acid handling precautions</p>
+                        </div>
+                        <div class="example-card" onclick="setSafetyEquation('Fe + O2 = Fe2O3')">
+                            <h4>Iron Oxidation</h4>
+                            <p>Minimal safety concerns</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>📊 Safety Information Features</h2>
+                    <div class="feature-grid">
+                        <div class="feature-item">
+                            <h4>🔴 GHS Classifications</h4>
+                            <p>Standard H-codes (H314, H290, etc.) for consistent hazard identification.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>⚠️ Severity Levels</h4>
+                            <p>Color-coded warnings: 🔴 Extreme, 🟠 High, 🟡 Medium, 🟢 Low hazards.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>🛡️ Precautionary Statements</h4>
+                            <p>Specific safety recommendations for handling each chemical.</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>📋 Signal Words</h4>
+                            <p>Standard "Danger" or "Warning" classifications per GHS guidelines.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>🎨 Safety Color Code</h2>
+                    <div class="safety-legend">
+                        <div class="safety-item">
+                            <span class="safety-icon extreme">🔴</span>
+                            <div>
+                                <h4>Extreme Hazard</h4>
+                                <p>Fatal, severe burns, extreme toxicity</p>
+                            </div>
+                        </div>
+                        <div class="safety-item">
+                            <span class="safety-icon high">🟠</span>
+                            <div>
+                                <h4>High Hazard</h4>
+                                <p>Serious injury, corrosive, harmful</p>
+                            </div>
+                        </div>
+                        <div class="safety-item">
+                            <span class="safety-icon medium">🟡</span>
+                            <div>
+                                <h4>Medium Hazard</h4>
+                                <p>Irritant, mild toxicity, caution required</p>
+                            </div>
+                        </div>
+                        <div class="safety-item">
+                            <span class="safety-icon low">🟢</span>
+                            <div>
+                                <h4>Low Hazard</h4>
+                                <p>Minimal risk, general precautions</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>💻 Safety Information API</h2>
+                    <p>Integrate safety analysis into your applications:</p>
+
+                    <div class="code-example">import { EnhancedChemicalEquationBalancer } from 'creb-js';
+
+const balancer = new EnhancedChemicalEquationBalancer();
+const result = await balancer.balanceWithSafety("H2SO4 + NaOH = Na2SO4 + H2O");
+
+result.safetyWarnings.forEach(warning => {
+  console.log(`⚠️ ${warning.compound}: ${warning.hazard}`);
+  console.log(`   Severity: ${warning.severity}`);
+  console.log(`   GHS: ${warning.ghsClassification}`);
+});
+
+// Access detailed safety data
+const h2so4Safety = result.compoundData.H2SO4.safetyInfo;
+console.log(`Signal Word: ${h2so4Safety.signalWord}`); // "Danger"</div>
+                </div>
+            </div>
+
+            <!-- Enhanced Features Page (Legacy) -->
+            <div id="enhanced-features" class="page-section">
 
                 <div class="section enhanced">
                     <h2>Enhanced Chemical Equation Balancer with PubChem Validation</h2>
@@ -630,11 +1064,13 @@
                     </div>
                     <div id="comparisonResult" class="result"></div>
                 </div>
+});</div>
+                </div>
             </div>
             </div>
 
             <!-- About Page -->
-            <div id="about-page" class="page-section">
+            <div id="about" class="page-section">
                 <h1>ℹ️ About CREB-JS</h1>
                 <p class="subtitle">Chemical Reaction Equation Balancer with Advanced Features</p>
 
@@ -689,11 +1125,875 @@
                     <p><strong>Testing:</strong> Comprehensive unit and integration tests</p>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- GitHub Fork Ribbon -->
-    <a href="https://github.com/vloganathane/CREB" class="github-fork-ribbon" target="_blank">Fork me on GitHub</a>
+            <!-- API Documentation Page -->
+            <div id="api" class="page-section">
+                <h1>📚 API Documentation</h1>
+                <p class="subtitle">Complete reference for CREB-JS APIs and methods</p>
+
+                <div class="section">
+                    <h2>🧪 ChemicalEquationBalancer</h2>
+                    <p>The core class for balancing chemical equations with advanced parsing and validation.</p>
+
+                    <div class="api-method">
+                        <div class="api-method-header">constructor(options?: BalancerOptions)</div>
+                        <div class="api-method-body">
+                            <h5>Description</h5>
+                            <p>Creates a new ChemicalEquationBalancer instance with optional configuration.</p>
+                            
+                            <h5>Parameters</h5>
+                            <div class="parameter-list">
+                                <code>options</code> (optional) - Configuration object with the following properties:<br>
+                                • <code>strictMode: boolean</code> - Enable stricter parsing (default: false)<br>
+                                • <code>maxIterations: number</code> - Maximum balancing attempts (default: 100)<br>
+                                • <code>timeout: number</code> - Timeout in milliseconds (default: 5000)
+                            </div>
+
+                            <h5>Example</h5>
+                            <div class="code-example">const balancer = new ChemicalEquationBalancer({
+    strictMode: true,
+    maxIterations: 200,
+    timeout: 10000
+});</div>
+                        </div>
+                    </div>
+
+                    <div class="api-method">
+                        <div class="api-method-header">balance(equation: string): string</div>
+                        <div class="api-method-body">
+                            <h5>Description</h5>
+                            <p>Balances a chemical equation and returns the balanced equation as a string.</p>
+                            
+                            <h5>Parameters</h5>
+                            <div class="parameter-list">
+                                <code>equation</code> - The unbalanced chemical equation string
+                            </div>
+
+                            <h5>Returns</h5>
+                            <p>Balanced chemical equation string with coefficients</p>
+
+                            <h5>Example</h5>
+                            <div class="code-example">const result = balancer.balance('H2 + O2 = H2O');
+// Returns: "2 H2 + O2 = 2 H2O"</div>
+                        </div>
+                    </div>
+
+                    <div class="api-method">
+                        <div class="api-method-header">calculateStoichiometry(equation: string, compound: string, amount: number): StoichiometryResult</div>
+                        <div class="api-method-body">
+                            <h5>Description</h5>
+                            <p>Calculates stoichiometric relationships for a given compound and amount.</p>
+                            
+                            <h5>Parameters</h5>
+                            <div class="parameter-list">
+                                <code>equation</code> - Balanced chemical equation<br>
+                                <code>compound</code> - Target compound formula<br>
+                                <code>amount</code> - Amount in moles
+                            </div>
+
+                            <h5>Returns</h5>
+                            <p>Object containing molar relationships for all compounds in the equation</p>
+
+                            <h5>Example</h5>
+                            <div class="code-example">const stoich = balancer.calculateStoichiometry('2 H2 + O2 = 2 H2O', 'H2', 4);
+// Returns molar amounts for all compounds based on 4 moles of H2</div>
+                        </div>
+                    </div>
+
+                    <div class="api-method">
+                        <div class="api-method-header">async balanceByName(equation: string): Promise&lt;EnhancedBalanceResult&gt; ✨ NEW!</div>
+                        <div class="api-method-body">
+                            <h5>Description</h5>
+                            <p>Balance chemical equations using compound names instead of formulas. Automatically resolves compound names to chemical formulas using PubChem database and provides enhanced results with compound information.</p>
+                            
+                            <h5>Parameters</h5>
+                            <div class="parameter-list">
+                                <code>equation</code> - Chemical equation with compound names (e.g., "water + sodium = sodium hydroxide + hydrogen")
+                            </div>
+
+                            <h5>Returns</h5>
+                            <p>Promise resolving to enhanced balance result with compound data, safety information, and balance details</p>
+
+                            <h5>Example</h5>
+                            <div class="code-example">const result = await balancer.balanceByName('water + sodium = sodium hydroxide + hydrogen');
+console.log(result.balanced); // Balanced equation with formulas
+console.log(result.compounds); // Array of compound objects with PubChem data</div>
+                        </div>
+                    </div>
+
+                    <div class="api-method">
+                        <div class="api-method-header">async balanceWithSafety(equation: string): Promise&lt;SafetyEnhancedResult&gt; ✨ NEW!</div>
+                        <div class="api-method-body">
+                            <h5>Description</h5>
+                            <p>Balance chemical equations and include comprehensive safety information for all compounds. Provides GHS hazard classifications, safety warnings, and handling recommendations.</p>
+                            
+                            <h5>Parameters</h5>
+                            <div class="parameter-list">
+                                <code>equation</code> - Chemical equation string with compound formulas or names
+                            </div>
+
+                            <h5>Returns</h5>
+                            <p>Promise resolving to result with balanced equation, compound data, and detailed safety information</p>
+
+                            <h5>Example</h5>
+                            <div class="code-example">const result = await balancer.balanceWithSafety('H2SO4 + NaOH = Na2SO4 + H2O');
+console.log(result.balanced); // Balanced equation
+console.log(result.safetyInfo); // Safety classifications and warnings
+result.safetyInfo.hazards.forEach(h => console.log(h.statement));</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>🔬 Compound (PubChem Integration)</h2>
+                    <p>Access PubChem database for real chemical compound data and properties.</p>
+
+                    <div class="api-method">
+                        <div class="api-method-header">static async fromCid(cid: number): Promise&lt;Compound&gt;</div>
+                        <div class="api-method-body">
+                            <h5>Description</h5>
+                            <p>Retrieve a compound by its PubChem Compound ID (CID).</p>
+                            
+                            <h5>Parameters</h5>
+                            <div class="parameter-list">
+                                <code>cid</code> - PubChem Compound ID (numeric)
+                            </div>
+
+                            <h5>Returns</h5>
+                            <p>Promise resolving to a single Compound instance</p>
+
+                            <h5>Example</h5>
+                            <div class="code-example">const water = await Compound.fromCid(962);
+const glucose = await Compound.fromCid(5793);</div>
+                        </div>
+                    </div>
+
+                    <div class="api-method">
+                        <div class="api-method-header">static async fromName(name: string): Promise&lt;Compound[]&gt;</div>
+                        <div class="api-method-body">
+                            <h5>Description</h5>
+                            <p>Search for compounds by common or IUPAC name. Returns array of all matching compounds.</p>
+                            
+                            <h5>Parameters</h5>
+                            <div class="parameter-list">
+                                <code>name</code> - Common name, IUPAC name, or synonym of the compound
+                            </div>
+
+                            <h5>Returns</h5>
+                            <p>Promise resolving to array of Compound instances</p>
+
+                            <h5>Example</h5>
+                            <div class="code-example">const aspirinResults = await Compound.fromName('aspirin');
+const aspirin = aspirinResults[0]; // Get first result
+console.log(`Found ${aspirinResults.length} compounds`);</div>
+                        </div>
+                    </div>
+
+                    <div class="api-method">
+                        <div class="api-method-header">static async getByName(name: string): Promise&lt;Compound | null&gt;</div>
+                        <div class="api-method-body">
+                            <h5>Description</h5>
+                            <p>Convenience method to get the first compound matching a name, or null if not found.</p>
+                            
+                            <h5>Parameters</h5>
+                            <div class="parameter-list">
+                                <code>name</code> - Common name, IUPAC name, or synonym of the compound
+                            </div>
+
+                            <h5>Returns</h5>
+                            <p>Promise resolving to a single Compound instance or null</p>
+
+                            <h5>Example</h5>
+                            <div class="code-example">const aspirin = await Compound.getByName('aspirin');
+const caffeine = await Compound.getByName('caffeine');</div>
+                        </div>
+                    </div>
+
+                    <div class="api-method">
+                        <div class="api-method-header">static async fromSmiles(smiles: string): Promise&lt;Compound[]&gt;</div>
+                        <div class="api-method-body">
+                            <h5>Description</h5>
+                            <p>Search for compounds using SMILES notation. Returns array of all matching compounds.</p>
+                            
+                            <h5>Parameters</h5>
+                            <div class="parameter-list">
+                                <code>smiles</code> - SMILES string representation of the molecule
+                            </div>
+
+                            <h5>Returns</h5>
+                            <p>Promise resolving to array of Compound instances</p>
+
+                            <h5>Example</h5>
+                            <div class="code-example">const benzeneResults = await Compound.fromSmiles('c1ccccc1');
+const ethanolResults = await Compound.fromSmiles('CCO');</div>
+                        </div>
+                    </div>
+
+                    <div class="api-method">
+                        <div class="api-method-header">static async getBySmiles(smiles: string): Promise&lt;Compound | null&gt;</div>
+                        <div class="api-method-body">
+                            <h5>Description</h5>
+                            <p>Convenience method to get the first compound matching a SMILES string.</p>
+                            
+                            <h5>Parameters</h5>
+                            <div class="parameter-list">
+                                <code>smiles</code> - SMILES string representation of the molecule
+                            </div>
+
+                            <h5>Returns</h5>
+                            <p>Promise resolving to a single Compound instance or null</p>
+
+                            <h5>Example</h5>
+                            <div class="code-example">const benzene = await Compound.getBySmiles('c1ccccc1');
+const ethanol = await Compound.getBySmiles('CCO');</div>
+                        </div>
+                    </div>
+
+                    <div class="api-method">
+                        <div class="api-method-header">static async fromFormula(formula: string): Promise&lt;Compound[]&gt; ✨ NEW!</div>
+                        <div class="api-method-body">
+                            <h5>Description</h5>
+                            <p>Search for compounds by molecular formula. Returns array of all compounds with matching formula (up to 100 results).</p>
+                            
+                            <h5>Parameters</h5>
+                            <div class="parameter-list">
+                                <code>formula</code> - Molecular formula (e.g., "H2O", "C6H12O6", "C9H8O4")
+                            </div>
+
+                            <h5>Returns</h5>
+                            <p>Promise resolving to array of Compound instances</p>
+
+                            <h5>Example</h5>
+                            <div class="code-example">const waterCompounds = await Compound.fromFormula('H2O');
+const glucoseIsomers = await Compound.fromFormula('C6H12O6');
+console.log(`Found ${glucoseIsomers.length} compounds with formula C6H12O6`);</div>
+                        </div>
+                    </div>
+
+                    <div class="api-method">
+                        <div class="api-method-header">static async getByFormula(formula: string): Promise&lt;Compound | null&gt; ✨ NEW!</div>
+                        <div class="api-method-body">
+                            <h5>Description</h5>
+                            <p>Convenience method to get the first compound matching a molecular formula.</p>
+                            
+                            <h5>Parameters</h5>
+                            <div class="parameter-list">
+                                <code>formula</code> - Molecular formula (e.g., "H2O", "C6H12O6", "C9H8O4")
+                            </div>
+
+                            <h5>Returns</h5>
+                            <p>Promise resolving to a single Compound instance or null</p>
+
+                            <h5>Example</h5>
+                            <div class="code-example">const water = await Compound.getByFormula('H2O');
+const glucose = await Compound.getByFormula('C6H12O6');
+const aspirin = await Compound.getByFormula('C9H8O4');</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>📊 Compound Properties</h2>
+                    <p>Available properties on Compound instances retrieved from PubChem:</p>
+
+                    <div class="feature-grid">
+                        <div class="feature-item">
+                            <h4>Basic Properties</h4>
+                            <ul style="text-align: left; margin: 10px 0;">
+                                <li><code>cid</code> - PubChem Compound ID</li>
+                                <li><code>name</code> - Primary compound name</li>
+                                <li><code>molecularFormula</code> - Chemical formula</li>
+                                <li><code>molecularWeight</code> - Molecular weight (g/mol)</li>
+                            </ul>
+                        </div>
+                        <div class="feature-item">
+                            <h4>Structural Data</h4>
+                            <ul style="text-align: left; margin: 10px 0;">
+                                <li><code>smiles</code> - SMILES notation</li>
+                                <li><code>inchi</code> - InChI identifier</li>
+                                <li><code>inchiKey</code> - InChI Key</li>
+                                <li><code>iupacName</code> - IUPAC systematic name</li>
+                            </ul>
+                        </div>
+                        <div class="feature-item">
+                            <h4>Physical Properties</h4>
+                            <ul style="text-align: left; margin: 10px 0;">
+                                <li><code>meltingPoint</code> - Melting point (°C)</li>
+                                <li><code>boilingPoint</code> - Boiling point (°C)</li>
+                                <li><code>density</code> - Density (g/cm³)</li>
+                                <li><code>solubility</code> - Water solubility</li>
+                            </ul>
+                        </div>
+                        <div class="feature-item">
+                            <h4>Chemical Properties</h4>
+                            <ul style="text-align: left; margin: 10px 0;">
+                                <li><code>charge</code> - Formal charge</li>
+                                <li><code>complexity</code> - Structural complexity</li>
+                                <li><code>heavyAtomCount</code> - Number of heavy atoms</li>
+                                <li><code>synonyms</code> - Array of name synonyms</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>⚗️ EnhancedStoichiometry</h2>
+                    <p>Advanced stoichiometric calculations with PubChem validation and enhanced features.</p>
+
+                    <div class="api-method">
+                        <div class="api-method-header">async calculateWithPubChem(equation: string): Promise&lt;EnhancedResult&gt;</div>
+                        <div class="api-method-body">
+                            <h5>Description</h5>
+                            <p>Performs equation balancing with PubChem validation and enhanced stoichiometric analysis.</p>
+                            
+                            <h5>Parameters</h5>
+                            <div class="parameter-list">
+                                <code>equation</code> - Chemical equation to balance and analyze
+                            </div>
+
+                            <h5>Returns</h5>
+                            <p>Promise resolving to an object containing:</p>
+                            <ul>
+                                <li><code>balancedEquation</code> - The balanced equation</li>
+                                <li><code>validation</code> - PubChem validation results</li>
+                                <li><code>compounds</code> - Array of PubChem compound data</li>
+                                <li><code>massBalance</code> - Mass balance verification</li>
+                                <li><code>stoichiometry</code> - Detailed stoichiometric relationships</li>
+                            </ul>
+
+                            <h5>Example</h5>
+                            <div class="code-example">const enhanced = new EnhancedStoichiometry();
+const result = await enhanced.calculateWithPubChem('C6H12O6 + O2 = CO2 + H2O');
+
+console.log(result.balancedEquation);    // Balanced equation
+console.log(result.validation.isValid); // PubChem validation status
+console.log(result.compounds);           // Compound data array</div>
+                        </div>
+                    </div>
+
+                    <div class="api-method">
+                        <div class="api-method-header">async calculateReagentQuantities(equation: string, targetCompound: string, desiredAmount: number, unit?: string): Promise&lt;ReagentCalculationResult&gt; ✨ NEW!</div>
+                        <div class="api-method-body">
+                            <h5>Description</h5>
+                            <p>Calculate required reagent quantities for a chemical reaction based on desired product amount. Includes molecular weight data from PubChem for accurate mass calculations.</p>
+                            
+                            <h5>Parameters</h5>
+                            <div class="parameter-list">
+                                <code>equation</code> - Chemical equation string<br>
+                                <code>targetCompound</code> - Formula of the target product compound<br>
+                                <code>desiredAmount</code> - Desired amount of target compound<br>
+                                <code>unit</code> - Unit for calculations ('moles' or 'grams', default: 'moles')
+                            </div>
+
+                            <h5>Returns</h5>
+                            <p>Promise resolving to detailed reagent quantity calculations with molecular data</p>
+
+                            <h5>Example</h5>
+                            <div class="code-example">const enhanced = new EnhancedStoichiometry();
+const result = await enhanced.calculateReagentQuantities(
+    'C6H12O6 + 6O2 = 6CO2 + 6H2O', 
+    'CO2', 
+    10, 
+    'grams'
+);
+console.log(result.reagents); // Required amounts of all reagents</div>
+                        </div>
+                    </div>
+
+                    <div class="api-method">
+                        <div class="api-method-header">async getReactionEfficiency(equation: string, actualYields: Record&lt;string, number&gt;): Promise&lt;EfficiencyAnalysis&gt; ✨ NEW!</div>
+                        <div class="api-method-body">
+                            <h5>Description</h5>
+                            <p>Analyze reaction efficiency by comparing theoretical vs actual yields for products. Provides detailed efficiency metrics and identifies limiting reagents.</p>
+                            
+                            <h5>Parameters</h5>
+                            <div class="parameter-list">
+                                <code>equation</code> - Balanced chemical equation<br>
+                                <code>actualYields</code> - Object mapping compound formulas to their actual yields
+                            </div>
+
+                            <h5>Returns</h5>
+                            <p>Promise resolving to comprehensive efficiency analysis with yield percentages and recommendations</p>
+
+                            <h5>Example</h5>
+                            <div class="code-example">const enhanced = new EnhancedStoichiometry();
+const efficiency = await enhanced.getReactionEfficiency(
+    '2H2 + O2 = 2H2O',
+    { 'H2O': 1.8 } // Actual yield: 1.8 moles of water
+);
+console.log(efficiency.yieldPercentage); // Efficiency percentage
+console.log(efficiency.limitingReagent); // Identified limiting reagent</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>🔧 Error Handling</h2>
+                    <p>CREB-JS provides comprehensive error handling for robust applications:</p>
+
+                    <div class="code-example">try {
+    const result = balancer.balance('invalid equation');
+} catch (error) {
+    if (error instanceof BalancingError) {
+        console.log('Could not balance equation:', error.message);
+    } else if (error instanceof ParseError) {
+        console.log('Could not parse equation:', error.message);
+    }
+}
+
+// Async error handling for PubChem operations
+try {
+    const compound = await Compound.fromName('nonexistent compound');
+} catch (error) {
+    if (error instanceof CompoundNotFoundError) {
+        console.log('Compound not found in PubChem');
+    } else if (error instanceof NetworkError) {
+        console.log('Network error accessing PubChem');
+    }
+}</div>
+                </div>
+
+                <div class="section">
+                    <h2>📖 Type Definitions</h2>
+                    <p>CREB-JS is fully typed with TypeScript. Key interfaces include:</p>
+
+                    <div class="code-example">interface StoichiometryResult {
+    compound: string;
+    coefficient: number;
+    moles: number;
+    mass: number;
+    percentage: number;
+}
+
+interface BalancerOptions {
+    strictMode?: boolean;
+    maxIterations?: number;
+    timeout?: number;
+}
+
+interface EnhancedResult {
+    balancedEquation: string;
+    validation: ValidationResult;
+    compounds: CompoundData[];
+    massBalance: MassBalanceResult;
+    stoichiometry: StoichiometryResult[];
+}
+
+// Enhanced Features Types ✨ NEW!
+interface EnhancedBalanceResult {
+    balanced: string;
+    compounds: CompoundInfo[];
+    intelligence: ChemicalIntelligence;
+    validation: ValidationResult;
+}
+
+interface SafetyEnhancedResult {
+    balanced: string;
+    compounds: CompoundInfo[];
+    safetyInfo: SafetyInformation;
+    validation: ValidationResult;
+}
+
+interface SafetyInformation {
+    overallRisk: 'LOW' | 'MODERATE' | 'HIGH' | 'EXTREME';
+    hazards: GHSHazard[];
+    warnings: string[];
+    recommendations: string[];
+    personalProtection: string[];
+}
+
+interface GHSHazard {
+    code: string;           // e.g., "H301"
+    category: string;       // e.g., "Acute toxicity"
+    statement: string;      // e.g., "Toxic if swallowed"
+    severity: 'LOW' | 'MODERATE' | 'HIGH' | 'EXTREME';
+}
+
+interface ReagentCalculationResult {
+    equation: string;
+    target: CompoundInfo;
+    reagents: Record&lt;string, ReagentQuantity&gt;;
+    massBalance: MassBalanceData;
+}
+
+interface EfficiencyAnalysis {
+    yieldPercentage: number;
+    limitingReagent: string;
+    theoreticalYields: Record&lt;string, number&gt;;
+    actualYields: Record&lt;string, number&gt;;
+    efficiency: Record&lt;string, number&gt;;
+}</div>
+                </div>
+            </div>
+
+            <!-- Examples Page -->
+            <div id="examples" class="page-section">
+                <h1>💡 Code Examples</h1>
+                <p class="subtitle">Practical examples and real-world usage patterns</p>
+
+                <div class="section">
+                    <h2>🔤 Basic Equation Balancing</h2>
+                    <p>Start with simple equation balancing for common chemical reactions:</p>
+                    
+                    <div class="code-example">import { ChemicalEquationBalancer } from 'creb-js';
+
+const balancer = new ChemicalEquationBalancer();
+
+// Simple synthesis reactions
+console.log(balancer.balance('H2 + O2 = H2O'));
+// Output: "2 H2 + O2 = 2 H2O"
+
+console.log(balancer.balance('Fe + O2 = Fe2O3'));
+// Output: "4 Fe + 3 O2 = 2 Fe2O3"
+
+// Combustion reactions
+console.log(balancer.balance('C3H8 + O2 = CO2 + H2O'));
+// Output: "C3H8 + 5 O2 = 3 CO2 + 4 H2O"
+
+console.log(balancer.balance('C6H12O6 + O2 = CO2 + H2O'));
+// Output: "C6H12O6 + 6 O2 = 6 CO2 + 6 H2O"</div>
+                </div>
+
+                <div class="section">
+                    <h2>🧮 Stoichiometric Calculations</h2>
+                    <p>Calculate molar relationships and quantities in chemical reactions:</p>
+                    
+                    <div class="code-example">// Calculate stoichiometry for a balanced equation
+const equation = '2 H2 + O2 = 2 H2O';
+const stoichResult = balancer.calculateStoichiometry(equation, 'H2', 4);
+
+console.log(`Starting with 4 moles of H2:`);
+console.log(`O2 needed: ${stoichResult.O2.moles} moles`);
+console.log(`H2O produced: ${stoichResult.H2O.moles} moles`);
+
+// Mass calculations
+const massResult = balancer.calculateStoichiometry(equation, 'H2', 2, 'mass');
+console.log(`H2 mass: ${massResult.H2.mass} g`);
+console.log(`O2 mass needed: ${massResult.O2.mass} g`);
+console.log(`H2O mass produced: ${massResult.H2O.mass} g`);</div>
+                </div>
+
+                <div class="section">
+                    <h2>🔬 PubChem Integration</h2>
+                    <p>Access real chemical data from the PubChem database:</p>
+                    
+                    <div class="code-example">import { Compound } from 'creb-pubchem-js';
+
+// Search compounds by different methods
+async function searchExamples() {
+    // By common name
+    const aspirin = await Compound.fromName('aspirin');
+    console.log(`Aspirin formula: ${aspirin.molecularFormula}`); // C9H8O4
+    console.log(`Molecular weight: ${aspirin.molecularWeight}`); // 180.16
+    
+    // By PubChem CID
+    const caffeine = await Compound.fromCID(2519);
+    console.log(`Caffeine SMILES: ${caffeine.smiles}`);
+    
+    // By SMILES notation
+    const ethanol = await Compound.fromSMILES('CCO');
+    console.log(`Ethanol IUPAC: ${ethanol.iupacName}`);
+    
+    // Access various properties
+    console.log(`Solubility: ${aspirin.solubility}`);
+    console.log(`Melting point: ${aspirin.meltingPoint}°C`);
+    console.log(`Synonyms: ${aspirin.synonyms.slice(0, 3).join(', ')}`);
+}</div>
+                </div>
+
+                <div class="section">
+                    <h2>⚗️ Enhanced Stoichiometry</h2>
+                    <p>Combine equation balancing with PubChem validation for accurate calculations:</p>
+                    
+                    <div class="code-example">import { EnhancedStoichiometry } from 'creb-js';
+
+async function enhancedCalculations() {
+    const enhanced = new EnhancedStoichiometry();
+    
+    // Enhanced equation balancing with validation
+    const result = await enhanced.calculateWithPubChem(
+        'C6H12O6 + O2 = CO2 + H2O'
+    );
+    
+    console.log('Balanced equation:', result.balancedEquation);
+    console.log('Validation status:', result.validation.isValid);
+    console.log('Mass balance check:', result.massBalance.isBalanced);
+    
+    // Access compound data
+    result.compounds.forEach(compound => {
+        console.log(`${compound.formula}: ${compound.name}`);
+        console.log(`  Molecular weight: ${compound.molecularWeight}`);
+        console.log(`  PubChem CID: ${compound.cid}`);
+    });
+    
+    // Detailed stoichiometric analysis
+    console.log('Stoichiometric relationships:');
+    result.stoichiometry.forEach(relation => {
+        console.log(`  ${relation.compound}: ${relation.coefficient} moles`);
+    });
+}</div>
+                </div>
+
+                <div class="section">
+                    <h2>🆚 Compound Comparison</h2>
+                    <p>Compare multiple compounds side-by-side for research and analysis:</p>
+                    
+                    <div class="code-example">async function compareCompounds() {
+    // Compare pain relievers
+    const compounds = await Promise.all([
+        Compound.fromName('aspirin'),
+        Compound.fromName('ibuprofen'),
+        Compound.fromName('acetaminophen')
+    ]);
+    
+    console.log('Pain Reliever Comparison:');
+    console.log('========================');
+    
+    compounds.forEach(compound => {
+        console.log(`\n${compound.name}:`);
+        console.log(`  Formula: ${compound.molecularFormula}`);
+        console.log(`  Weight: ${compound.molecularWeight} g/mol`);
+        console.log(`  Complexity: ${compound.complexity}`);
+        console.log(`  Heavy atoms: ${compound.heavyAtomCount}`);
+    });
+    
+    // Find compound with highest/lowest molecular weight
+    const heaviest = compounds.reduce((prev, current) => 
+        prev.molecularWeight > current.molecularWeight ? prev : current
+    );
+    console.log(`\nHeaviest compound: ${heaviest.name} (${heaviest.molecularWeight} g/mol)`);
+}</div>
+                </div>
+
+                <div class="section">
+                    <h2>🔄 Batch Processing</h2>
+                    <p>Process multiple equations or compounds efficiently:</p>
+                    
+                    <div class="code-example">async function batchProcessing() {
+    const balancer = new ChemicalEquationBalancer();
+    
+    // Batch equation balancing
+    const equations = [
+        'H2 + O2 = H2O',
+        'CH4 + O2 = CO2 + H2O',
+        'Fe + HCl = FeCl2 + H2',
+        'CaCO3 = CaO + CO2'
+    ];
+    
+    const balancedEquations = equations.map(eq => ({
+        original: eq,
+        balanced: balancer.balance(eq)
+    }));
+    
+    console.log('Batch Balancing Results:');
+    balancedEquations.forEach(result => {
+        console.log(`${result.original} → ${result.balanced}`);
+    });
+    
+    // Batch compound lookup
+    const compoundNames = ['water', 'glucose', 'sodium chloride', 'caffeine'];
+    const compoundData = await Promise.all(
+        compoundNames.map(async name => {
+            try {
+                const compound = await Compound.fromName(name);
+                return {
+                    name: compound.name,
+                    formula: compound.molecularFormula,
+                    weight: compound.molecularWeight,
+                    cid: compound.cid
+                };
+            } catch (error) {
+                return { name, error: error.message };
+            }
+        })
+    );
+    
+    console.log('\nBatch Compound Lookup:');
+    compoundData.forEach(data => {
+        if (data.error) {
+            console.log(`${data.name}: Error - ${data.error}`);
+        } else {
+            console.log(`${data.name}: ${data.formula} (MW: ${data.weight}, CID: ${data.cid})`);
+        }
+    });
+}</div>
+                </div>
+
+                <div class="section">
+                    <h2>🛠️ Error Handling & Validation</h2>
+                    <p>Robust error handling for production applications:</p>
+                    
+                    <div class="code-example">import { BalancingError, ParseError, CompoundNotFoundError } from 'creb-js';
+
+async function robustChemicalCalculations() {
+    const balancer = new ChemicalEquationBalancer();
+    
+    // Safe equation balancing
+    function safeBalance(equation) {
+        try {
+            const result = balancer.balance(equation);
+            return { success: true, result };
+        } catch (error) {
+            if (error instanceof BalancingError) {
+                return { success: false, error: 'Could not balance equation', details: error.message };
+            } else if (error instanceof ParseError) {
+                return { success: false, error: 'Invalid equation format', details: error.message };
+            } else {
+                return { success: false, error: 'Unexpected error', details: error.message };
+            }
+        }
+    }
+    
+    // Safe compound lookup
+    async function safeCompoundLookup(identifier, method = 'name') {
+        try {
+            let compound;
+            switch (method) {
+                case 'name':
+                    compound = await Compound.fromName(identifier);
+                    break;
+                case 'cid':
+                    compound = await Compound.fromCID(identifier);
+                    break;
+                case 'smiles':
+                    compound = await Compound.fromSMILES(identifier);
+                    break;
+                default:
+                    throw new Error('Invalid lookup method');
+            }
+            return { success: true, compound };
+        } catch (error) {
+            if (error instanceof CompoundNotFoundError) {
+                return { success: false, error: 'Compound not found in PubChem' };
+            } else {
+                return { success: false, error: 'Lookup failed', details: error.message };
+            }
+        }
+    }
+    
+    // Usage examples
+    const balanceResult = safeBalance('H2 + O2 = H2O');
+    if (balanceResult.success) {
+        console.log('Balanced:', balanceResult.result);
+    } else {
+        console.error('Error:', balanceResult.error);
+    }
+    
+    const compoundResult = await safeCompoundLookup('aspirin');
+    if (compoundResult.success) {
+        console.log('Found:', compoundResult.compound.name);
+    } else {
+        console.error('Error:', compoundResult.error);
+    }
+}</div>
+                </div>
+
+                <div class="section">
+                    <h2>🌐 Browser Integration</h2>
+                    <p>Using CREB-JS in web applications with modern frameworks:</p>
+                    
+                    <div class="code-example">// React component example
+import React, { useState, useEffect } from 'react';
+import { ChemicalEquationBalancer } from 'creb-js';
+import { Compound } from 'creb-pubchem-js';
+
+function ChemicalCalculator() {
+    const [equation, setEquation] = useState('');
+    const [result, setResult] = useState('');
+    const [balancer] = useState(() => new ChemicalEquationBalancer());
+    
+    const handleBalance = async () => {
+        try {
+            const balanced = balancer.balance(equation);
+            setResult(balanced);
+        } catch (error) {
+            setResult(`Error: ${error.message}`);
+        }
+    };
+    
+    return (
+        &lt;div&gt;
+            &lt;input 
+                value={equation}
+                onChange={(e) =&gt; setEquation(e.target.value)}
+                placeholder="Enter chemical equation"
+            /&gt;
+            &lt;button onClick={handleBalance}&gt;Balance&lt;/button&gt;
+            &lt;div&gt;Result: {result}&lt;/div&gt;
+        &lt;/div&gt;
+    );
+}
+
+// Vue.js component example
+export default {
+    data() {
+        return {
+            compoundName: '',
+            compoundData: null,
+            loading: false
+        };
+    },
+    methods: {
+        async searchCompound() {
+            this.loading = true;
+            try {
+                this.compoundData = await Compound.fromName(this.compoundName);
+            } catch (error) {
+                console.error('Search failed:', error);
+                this.compoundData = null;
+            } finally {
+                this.loading = false;
+            }
+        }
+    }
+};</div>
+                </div>
+            </div>
+
+            <!-- Comparison Page -->
+            <div id="comparison" class="page-section">
+                <h1>⚖️ Compound Comparison</h1>
+                <p class="subtitle">Compare chemical compounds side by side</p>
+
+                <div class="section">
+                    <h2>Compare Compounds</h2>
+                    <div class="demo-controls">
+                        <input type="text" id="compound1" placeholder="Enter first compound name">
+                        <input type="text" id="compound2" placeholder="Enter second compound name">
+                        <button onclick="compareCompounds()" class="demo-btn">Compare</button>
+                    </div>
+                    <div id="comparisonResult" class="result-section" style="display: none;"></div>
+                </div>
+            </div>
+
+            <!-- Guide Page -->
+            <div id="guide" class="page-section">
+                <h1>📖 User Guide</h1>
+                <p class="subtitle">Complete guide to using CREB-JS effectively</p>
+
+                <div class="section">
+                    <h2>Getting Started</h2>
+                    <p>CREB-JS provides comprehensive chemical equation balancing and analysis. Start with basic equation balancing and progress to advanced PubChem integration.</p>
+                    
+                    <ol>
+                        <li>Install the package: <code>npm install creb-js</code></li>
+                        <li>Import the balancer: <code>import { ChemicalEquationBalancer } from 'creb-js'</code></li>
+                        <li>Create an instance and balance equations</li>
+                    </ol>
+                </div>
+
+                <div class="section">
+                    <h2>Best Practices</h2>
+                    <ul>
+                        <li>Use standard chemical notation (H2O, CO2, etc.)</li>
+                        <li>Include states when relevant (g), (l), (s), (aq)</li>
+                        <li>Leverage PubChem integration for accurate molecular data</li>
+                        <li>Cache compound data when performing multiple calculations</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </main>
 
     <script src="../dist/index.umd.js"></script>
     <script src="../packages/pubchem-js/dist/index.umd.js"></script>
@@ -718,17 +2018,118 @@
                     console.log('PubChem-JS library loaded successfully!');
                 } else {
                     console.warn('PubChem-JS library not available - enhanced features disabled');
-                    // Disable enhanced sections
-                    document.querySelectorAll('.section.enhanced').forEach(section => {
-                        section.style.opacity = '0.6';
-                        section.style.pointerEvents = 'none';
-                        const warning = document.createElement('div');
-                        warning.innerHTML = '<p style="background: #fff3cd; padding: 10px; border-radius: 4px; margin-bottom: 15px;"><strong>⚠️ PubChem Integration Unavailable:</strong> Build the PubChem-JS package to enable enhanced features.</p>';
-                        section.insertBefore(warning, section.firstChild.nextSibling);
-                    });
                 }
-            }, 100); // 100ms delay
-        });        window.balanceEquation = function() {
+                
+                // Workaround: Ensure globalThis.PubChemJS is available for enhanced balancer
+                if (window.PubChemJS && !globalThis.PubChemJS) {
+                    globalThis.PubChemJS = window.PubChemJS;
+                }
+                
+                // Also set up legacy CREBPubChem for backwards compatibility
+                if (window.PubChemJS && !globalThis.CREBPubChem) {
+                    globalThis.CREBPubChem = window.PubChemJS;
+                }
+            }, 100);
+        });
+
+        // Navigation functions
+        window.showPage = function(pageId, linkElement) {
+            // Hide all pages
+            document.querySelectorAll('.page-section').forEach(page => {
+                page.classList.remove('active');
+            });
+            
+            // Remove current class from all nav links
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('current');
+            });
+            
+            // Show selected page
+            const targetPage = document.getElementById(pageId);
+            if (targetPage) {
+                targetPage.classList.add('active');
+            }
+            
+            // Add current class to clicked link
+            if (linkElement) {
+                linkElement.classList.add('current');
+            }
+        };
+
+        // Tab switching for PubChem search
+        window.switchTab = function(tabId, tabElement) {
+            // Hide all demo content
+            document.querySelectorAll('.demo-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected content
+            const targetContent = document.getElementById(tabId);
+            if (targetContent) {
+                targetContent.style.display = 'block';
+            }
+            
+            // Add active class to clicked tab
+            if (tabElement) {
+                tabElement.classList.add('active');
+            }
+        };
+
+        // Utility functions
+        window.focusElement = function(elementId) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.focus();
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        };
+
+        window.clearAllResults = function() {
+            const resultIds = [
+                'result', 'complexResult', 'stoichResult', 'molarWeightResult', 
+                'compoundResult', 'enhancedBalancerResult', 'enhancedStoichResult', 'comparisonResult'
+            ];
+            
+            resultIds.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.style.display = 'none';
+                    element.innerHTML = '';
+                }
+            });
+        };
+
+        function showLoading(resultId, message = 'Loading...') {
+            const resultDiv = document.getElementById(resultId);
+            if (resultDiv) {
+                resultDiv.innerHTML = `<div style="display: flex; align-items: center; gap: 10px; color: var(--color-brand-primary);"><div style="width: 20px; height: 20px; border: 2px solid var(--color-background-border); border-top: 2px solid var(--color-brand-primary); border-radius: 50%; animation: spin 1s linear infinite;"></div>${message}</div>`;
+                resultDiv.className = 'result loading';
+                resultDiv.style.display = 'block';
+            }
+        }
+
+        function showError(resultId, message) {
+            const resultDiv = document.getElementById(resultId);
+            if (resultDiv) {
+                resultDiv.innerHTML = `<strong>❌ Error:</strong> ${message}`;
+                resultDiv.className = 'result error';
+                resultDiv.style.display = 'block';
+            }
+        }
+
+        function showSuccess(resultId, content) {
+            const resultDiv = document.getElementById(resultId);
+            if (resultDiv) {
+                resultDiv.innerHTML = content;
+                resultDiv.className = 'result success';
+                resultDiv.style.display = 'block';
+            }
+        }        window.balanceEquation = function() {
             const equation = document.getElementById('equation').value.trim();
             const resultDiv = document.getElementById('result');
             
@@ -871,26 +2272,6 @@
             if (element) {
                 element.focus();
                 element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        };
-
-        window.showPage = function(pageId, linkElement) {
-            // Hide all pages
-            document.querySelectorAll('.page-section').forEach(page => {
-                page.classList.remove('active');
-            });
-            
-            // Remove active class from all nav links
-            document.querySelectorAll('.nav-link').forEach(link => {
-                link.classList.remove('active');
-            });
-            
-            // Show selected page
-            document.getElementById(pageId + '-page').classList.add('active');
-            
-            // Add active class to clicked link
-            if (linkElement) {
-                linkElement.classList.add('active');
             }
         };
 
@@ -1097,6 +2478,439 @@
             } catch (error) {
                 showError(resultId, error.message || 'Failed to search compounds');
             }
+        };
+
+        window.searchByFormula = async function() {
+            if (!window.PubChemJS || !window.PubChemJS.Compound) {
+                showError('formulaResult', 'PubChem library not available');
+                return;
+            }
+            
+            const formula = document.getElementById('formulaInput').value.trim();
+            const resultId = 'formulaResult';
+            
+            if (!formula) {
+                showError(resultId, 'Please enter a molecular formula');
+                return;
+            }
+
+            showLoading(resultId);
+
+            try {
+                const compounds = await window.PubChemJS.Compound.fromFormula(formula);
+                
+                if (compounds.length === 0) {
+                    showError(resultId, 'No compounds found for this molecular formula');
+                    return;
+                }
+
+                let html = `<div style="padding: 15px; background: #f8fff8; border-left: 4px solid #27ae60; border-radius: 4px;">
+                    <h4>✅ Found ${compounds.length} compound(s) with formula "${formula}":</h4>`;
+                
+                // Show first 3 results
+                const showCount = Math.min(3, compounds.length);
+                for (let i = 0; i < showCount; i++) {
+                    html += displayCompound(compounds[i], i === 0 ? 'Primary Compound:' : `Isomer ${i}:`);
+                }
+                
+                if (compounds.length > 3) {
+                    html += `<p><em>... and ${compounds.length - 3} more isomers/compounds</em></p>`;
+                }
+                
+                // Add summary statistics
+                html += `<div style="margin-top: 15px; padding: 10px; background: #f0f8ff; border-radius: 4px; border-left: 3px solid #3498db;">
+                    <h5>📊 Formula Analysis:</h5>
+                    <p><strong>Formula:</strong> ${formula}</p>
+                    <p><strong>Total Compounds:</strong> ${compounds.length}</p>
+                    <p><strong>Molecular Weight Range:</strong> ${Math.min(...compounds.map(c => c.molecularWeight || 0).filter(w => w > 0))} - ${Math.max(...compounds.map(c => c.molecularWeight || 0))} g/mol</p>
+                </div>`;
+                
+                html += '</div>';
+                document.getElementById(resultId).innerHTML = html;
+                document.getElementById(resultId).style.display = 'block';
+            } catch (error) {
+                showError(resultId, error.message || 'Failed to search compounds by formula');
+            }
+        };
+
+        window.setFormula = function(formula) {
+            document.getElementById('formulaInput').value = formula;
+            searchByFormula();
+        };
+
+        // Enhanced Chemical Intelligence Functions
+        window.balanceWithEnhancedData = async function() {
+            if (!window.CREB || !window.CREB.EnhancedChemicalEquationBalancer) {
+                showError('enhancedIntelligenceResult', 'Enhanced CREB library not available');
+                return;
+            }
+            
+            const equation = document.getElementById('enhancedEquationInput').value.trim();
+            const resultId = 'enhancedIntelligenceResult';
+            
+            if (!equation) {
+                showError(resultId, 'Please enter a chemical equation');
+                return;
+            }
+
+            showLoading(resultId);
+
+            try {
+                const balancer = new window.CREB.EnhancedChemicalEquationBalancer();
+                const result = await balancer.balanceWithPubChemData(equation);
+                
+                let html = `<div style="padding: 20px; background: #f8fff8; border-left: 4px solid #27ae60; border-radius: 8px; margin: 10px 0;">
+                    <h4>✅ Enhanced Chemical Intelligence Results</h4>
+                    <div style="margin: 15px 0;">
+                        <h5>📝 Balanced Equation:</h5>
+                        <p style="font-family: 'Courier New', monospace; font-size: 16px; background: #f0f8ff; padding: 10px; border-radius: 4px; margin: 8px 0;">
+                            <strong>${result.equation}</strong>
+                        </p>
+                        <p><strong>Coefficients:</strong> [${result.coefficients.join(', ')}]</p>
+                    </div>`;
+
+                // Add compound data
+                if (result.compoundData && Object.keys(result.compoundData).length > 0) {
+                    html += `<div style="margin: 15px 0;">
+                        <h5>🧪 Compound Information from PubChem:</h5>`;
+                    
+                    for (const [species, info] of Object.entries(result.compoundData)) {
+                        if (info.isValid) {
+                            html += `<div style="margin: 10px 0; padding: 12px; background: #ffffff; border: 1px solid #e1e8ed; border-radius: 6px;">
+                                <h6 style="margin: 0 0 8px 0; color: #2c3e50;">${species}</h6>
+                                <p style="margin: 4px 0;"><strong>IUPAC Name:</strong> ${info.iupacName || 'N/A'}</p>
+                                <p style="margin: 4px 0;"><strong>Molecular Weight:</strong> ${info.molecularWeight ? info.molecularWeight + ' g/mol' : 'N/A'}</p>
+                                <p style="margin: 4px 0;"><strong>Formula:</strong> ${info.molecularFormula || 'N/A'}</p>
+                                <p style="margin: 4px 0;"><strong>CID:</strong> ${info.cid || 'N/A'}</p>
+                            </div>`;
+                        } else {
+                            html += `<div style="margin: 10px 0; padding: 12px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px;">
+                                <h6 style="margin: 0 0 8px 0; color: #b68400;">${species}</h6>
+                                <p style="margin: 4px 0; color: #b68400;"><strong>Error:</strong> ${info.error}</p>
+                            </div>`;
+                        }
+                    }
+                    html += `</div>`;
+                }
+
+                // Add validation info
+                if (result.validation) {
+                    html += `<div style="margin: 15px 0;">
+                        <h5>✅ Validation Results:</h5>
+                        <p><strong>Mass Balanced:</strong> ${result.validation.massBalanced ? '✅ Yes' : '❌ No'}</p>
+                        <p><strong>Charge Balanced:</strong> ${result.validation.chargeBalanced ? '✅ Yes' : '❌ No'}</p>`;
+                    
+                    if (result.validation.warnings && result.validation.warnings.length > 0) {
+                        html += `<div style="margin: 10px 0;">
+                            <strong>⚠️ Warnings:</strong>
+                            <ul style="margin: 5px 0; padding-left: 20px;">`;
+                        for (const warning of result.validation.warnings) {
+                            html += `<li style="margin: 2px 0;">${warning}</li>`;
+                        }
+                        html += `</ul></div>`;
+                    }
+                    html += `</div>`;
+                }
+
+                html += `</div>`;
+                document.getElementById(resultId).innerHTML = html;
+                document.getElementById(resultId).style.display = 'block';
+            } catch (error) {
+                showError(resultId, error.message || 'Failed to balance equation with enhanced data');
+            }
+        };
+
+        window.setEnhancedEquation = function(equation) {
+            document.getElementById('enhancedEquationInput').value = equation;
+            balanceWithEnhancedData();
+        };
+
+        // Name Resolution Functions
+        window.balanceByCommonNames = async function() {
+            if (!window.CREB || !window.CREB.EnhancedChemicalEquationBalancer) {
+                showError('nameResolutionResult', 'Enhanced CREB library not available');
+                return;
+            }
+            
+            const equation = document.getElementById('nameEquationInput').value.trim();
+            const resultId = 'nameResolutionResult';
+            
+            if (!equation) {
+                showError(resultId, 'Please enter an equation with common chemical names');
+                return;
+            }
+
+            showLoading(resultId);
+
+            try {
+                const balancer = new window.CREB.EnhancedChemicalEquationBalancer();
+                const result = await balancer.balanceByName(equation);
+                
+                let html = `<div style="padding: 20px; background: #f8fff8; border-left: 4px solid #27ae60; border-radius: 8px; margin: 10px 0;">
+                    <h4>✅ Name Resolution Results</h4>
+                    <div style="margin: 15px 0;">
+                        <h5>📝 Original Equation:</h5>
+                        <p style="font-style: italic; margin: 8px 0;">"${equation}"</p>
+                        <h5>🔬 Balanced Formula Equation:</h5>
+                        <p style="font-family: 'Courier New', monospace; font-size: 16px; background: #f0f8ff; padding: 10px; border-radius: 4px; margin: 8px 0;">
+                            <strong>${result.equation}</strong>
+                        </p>
+                        <p><strong>Coefficients:</strong> [${result.coefficients.join(', ')}]</p>
+                    </div>`;
+
+                // Add name resolution mapping
+                if (result.compoundData && Object.keys(result.compoundData).length > 0) {
+                    html += `<div style="margin: 15px 0;">
+                        <h5>🏷️ Name Resolution Mapping:</h5>`;
+                    
+                    for (const [formula, info] of Object.entries(result.compoundData)) {
+                        if (info.originalName && info.originalName !== formula) {
+                            const statusIcon = info.isValid ? '✅' : '❌';
+                            html += `<div style="margin: 8px 0; padding: 10px; background: #ffffff; border: 1px solid #e1e8ed; border-radius: 6px;">
+                                <p style="margin: 0;"><strong>"${info.originalName}"</strong> → <code>${formula}</code> ${statusIcon}</p>`;
+                            if (info.isValid) {
+                                html += `<p style="margin: 4px 0 0 0; font-size: 14px; color: #666;">
+                                    IUPAC: ${info.iupacName || 'N/A'} | MW: ${info.molecularWeight ? info.molecularWeight + ' g/mol' : 'N/A'}
+                                </p>`;
+                            } else {
+                                html += `<p style="margin: 4px 0 0 0; font-size: 14px; color: #d63031;">Error: ${info.error}</p>`;
+                            }
+                            html += `</div>`;
+                        }
+                    }
+                    html += `</div>`;
+                }
+
+                // Add validation info
+                if (result.validation) {
+                    html += `<div style="margin: 15px 0;">
+                        <h5>✅ Validation Results:</h5>
+                        <p><strong>Mass Balanced:</strong> ${result.validation.massBalanced ? '✅ Yes' : '❌ No'}</p>
+                        <p><strong>Charge Balanced:</strong> ${result.validation.chargeBalanced ? '✅ Yes' : '❌ No'}</p>
+                    </div>`;
+                }
+
+                html += `</div>`;
+                document.getElementById(resultId).innerHTML = html;
+                document.getElementById(resultId).style.display = 'block';
+            } catch (error) {
+                showError(resultId, error.message || 'Failed to balance equation by common names');
+            }
+        };
+
+        window.setNameEquation = function(equation) {
+            document.getElementById('nameEquationInput').value = equation;
+            balanceByCommonNames();
+        };
+
+        // Enhanced Stoichiometry Functions
+        window.calculateEnhancedStoich = async function() {
+            if (!window.CREB || !window.CREB.EnhancedStoichiometry) {
+                showError('enhancedStoichResult', 'Enhanced CREB library not available');
+                return;
+            }
+            
+            const equation = document.getElementById('stoichEquationInput').value.trim();
+            const species = document.getElementById('stoichSpeciesInput').value.trim();
+            const amount = parseFloat(document.getElementById('stoichAmountInput').value);
+            const resultId = 'enhancedStoichResult';
+            
+            if (!equation || !species || isNaN(amount)) {
+                showError(resultId, 'Please fill in all fields with valid values');
+                return;
+            }
+
+            showLoading(resultId);
+
+            try {
+                const stoich = new window.CREB.EnhancedStoichiometry();
+                const analysis = await stoich.initializeWithValidation(equation);
+                const result = await stoich.calculateFromMolesEnhanced(species, amount);
+                
+                let html = `<div style="padding: 20px; background: #f8fff8; border-left: 4px solid #27ae60; border-radius: 8px; margin: 10px 0;">
+                    <h4>✅ Enhanced Stoichiometry Results</h4>
+                    <div style="margin: 15px 0;">
+                        <h5>📝 Equation Analysis:</h5>
+                        <p><strong>Equation:</strong> ${analysis.equation}</p>
+                        <p><strong>Mass Balance:</strong> ${analysis.molecularWeightValidation.isBalanced ? '✅ Balanced' : '❌ Unbalanced'}</p>
+                        <p><strong>Reactants MW:</strong> ${analysis.molecularWeightValidation.reactants.toFixed(2)} g/mol</p>
+                        <p><strong>Products MW:</strong> ${analysis.molecularWeightValidation.products.toFixed(2)} g/mol</p>
+                        <p><strong>Difference:</strong> ${analysis.molecularWeightValidation.difference.toFixed(4)} g/mol</p>
+                    </div>`;
+
+                // Calculation results
+                html += `<div style="margin: 15px 0;">
+                    <h5>🧮 Calculation Results for ${amount} mol ${species}:</h5>
+                    
+                    <div style="margin: 10px 0;">
+                        <h6>Reactants Needed:</h6>`;
+                for (const [compound, data] of Object.entries(result.reactants)) {
+                    html += `<p style="margin: 4px 0;"><strong>${compound}:</strong> ${data.moles.toFixed(4)} mol = ${data.grams.toFixed(2)} g</p>`;
+                }
+                
+                html += `</div><div style="margin: 10px 0;">
+                        <h6>Products Formed:</h6>`;
+                for (const [compound, data] of Object.entries(result.products)) {
+                    html += `<p style="margin: 4px 0;"><strong>${compound}:</strong> ${data.moles.toFixed(4)} mol = ${data.grams.toFixed(2)} g</p>`;
+                }
+                html += `</div></div>`;
+
+                // PubChem accuracy info
+                if (result.pubchemMolarWeights && Object.keys(result.pubchemMolarWeights).length > 0) {
+                    html += `<div style="margin: 15px 0;">
+                        <h5>🎯 PubChem Molecular Weights Used:</h5>`;
+                    for (const [compound, weight] of Object.entries(result.pubchemMolarWeights)) {
+                        html += `<p style="margin: 4px 0;"><strong>${compound}:</strong> ${weight} g/mol</p>`;
+                    }
+                    html += `</div>`;
+                }
+
+                // Validation warnings
+                if (result.validation && result.validation.warnings && result.validation.warnings.length > 0) {
+                    html += `<div style="margin: 15px 0;">
+                        <h5>⚠️ Validation Notes:</h5>
+                        <ul style="margin: 5px 0; padding-left: 20px;">`;
+                    for (const warning of result.validation.warnings) {
+                        html += `<li style="margin: 2px 0;">${warning}</li>`;
+                    }
+                    html += `</ul></div>`;
+                }
+
+                html += `</div>`;
+                document.getElementById(resultId).innerHTML = html;
+                document.getElementById(resultId).style.display = 'block';
+            } catch (error) {
+                showError(resultId, error.message || 'Failed to perform enhanced stoichiometry calculation');
+            }
+        };
+
+        window.setStoichExample = function(equation, species, amount) {
+            document.getElementById('stoichEquationInput').value = equation;
+            document.getElementById('stoichSpeciesInput').value = species;
+            document.getElementById('stoichAmountInput').value = amount;
+            calculateEnhancedStoich();
+        };
+
+        // Safety Information Functions
+        window.analyzeChemicalSafety = async function() {
+            if (!window.CREB || !window.CREB.EnhancedChemicalEquationBalancer) {
+                showError('safetyAnalysisResult', 'Enhanced CREB library not available');
+                return;
+            }
+            
+            const equation = document.getElementById('safetyEquationInput').value.trim();
+            const resultId = 'safetyAnalysisResult';
+            
+            if (!equation) {
+                showError(resultId, 'Please enter a chemical equation');
+                return;
+            }
+
+            showLoading(resultId);
+
+            try {
+                const balancer = new window.CREB.EnhancedChemicalEquationBalancer();
+                const result = await balancer.balanceWithSafety(equation);
+                
+                let html = `<div style="padding: 20px; background: #f8fff8; border-left: 4px solid #27ae60; border-radius: 8px; margin: 10px 0;">
+                    <h4>⚠️ Chemical Safety Analysis</h4>
+                    <div style="margin: 15px 0;">
+                        <h5>📝 Analyzed Equation:</h5>
+                        <p style="font-family: 'Courier New', monospace; font-size: 16px; background: #f0f8ff; padding: 10px; border-radius: 4px; margin: 8px 0;">
+                            <strong>${result.equation}</strong>
+                        </p>
+                    </div>`;
+
+                // Safety warnings
+                if (result.safetyWarnings && result.safetyWarnings.length > 0) {
+                    html += `<div style="margin: 15px 0;">
+                        <h5>⚠️ Safety Warnings (${result.safetyWarnings.length} found):</h5>`;
+                    
+                    for (const warning of result.safetyWarnings) {
+                        const severityIcon = {
+                            'low': '🟢',
+                            'medium': '🟡', 
+                            'high': '🟠',
+                            'extreme': '🔴'
+                        }[warning.severity];
+                        
+                        const severityColor = {
+                            'low': '#27ae60',
+                            'medium': '#f39c12', 
+                            'high': '#e67e22',
+                            'extreme': '#e74c3c'
+                        }[warning.severity];
+                        
+                        html += `<div style="margin: 8px 0; padding: 12px; background: #ffffff; border-left: 4px solid ${severityColor}; border-radius: 6px;">
+                            <p style="margin: 0 0 4px 0;"><strong>${severityIcon} ${warning.compound}:</strong> ${warning.hazard}</p>
+                            <p style="margin: 4px 0 0 0; font-size: 14px; color: #666;">
+                                Severity: ${warning.severity.toUpperCase()}${warning.ghsClassification ? ' | GHS: ' + warning.ghsClassification : ''}
+                            </p>`;
+                        
+                        if (warning.precautionaryStatements && warning.precautionaryStatements.length > 0) {
+                            html += `<p style="margin: 4px 0 0 0; font-size: 14px; color: #666;">
+                                <strong>Precautions:</strong> ${warning.precautionaryStatements.join(', ')}
+                            </p>`;
+                        }
+                        html += `</div>`;
+                    }
+                    html += `</div>`;
+                } else {
+                    html += `<div style="margin: 15px 0;">
+                        <h5>✅ Safety Status:</h5>
+                        <p style="color: #27ae60;">No specific safety warnings identified for this reaction.</p>
+                    </div>`;
+                }
+
+                // Detailed compound safety info
+                if (result.compoundData && Object.keys(result.compoundData).length > 0) {
+                    html += `<div style="margin: 15px 0;">
+                        <h5>🧪 Detailed Compound Safety Information:</h5>`;
+                    
+                    for (const [species, info] of Object.entries(result.compoundData)) {
+                        if (info.isValid && info.safetyInfo) {
+                            const safety = info.safetyInfo;
+                            html += `<div style="margin: 10px 0; padding: 12px; background: #ffffff; border: 1px solid #e1e8ed; border-radius: 6px;">
+                                <h6 style="margin: 0 0 8px 0; color: #2c3e50;">${species} (${info.iupacName || 'N/A'})</h6>`;
+                            
+                            if (safety.signalWord) {
+                                const signalColor = safety.signalWord === 'Danger' ? '#e74c3c' : '#f39c12';
+                                html += `<p style="margin: 4px 0;"><strong>Signal Word:</strong> <span style="color: ${signalColor}; font-weight: bold;">${safety.signalWord}</span></p>`;
+                            }
+                            
+                            if (safety.ghsClassifications && safety.ghsClassifications.length > 0) {
+                                html += `<p style="margin: 4px 0;"><strong>GHS Classifications:</strong> ${safety.ghsClassifications.join(', ')}</p>`;
+                            }
+                            
+                            if (safety.healthHazards && safety.healthHazards.length > 0) {
+                                html += `<p style="margin: 4px 0;"><strong>Health Hazards:</strong> ${safety.healthHazards.join('; ')}</p>`;
+                            }
+                            
+                            if (safety.physicalHazards && safety.physicalHazards.length > 0) {
+                                html += `<p style="margin: 4px 0;"><strong>Physical Hazards:</strong> ${safety.physicalHazards.join('; ')}</p>`;
+                            }
+                            
+                            if (safety.environmentalHazards && safety.environmentalHazards.length > 0) {
+                                html += `<p style="margin: 4px 0;"><strong>Environmental Hazards:</strong> ${safety.environmentalHazards.join('; ')}</p>`;
+                            }
+                            
+                            html += `</div>`;
+                        }
+                    }
+                    html += `</div>`;
+                }
+
+                html += `</div>`;
+                document.getElementById(resultId).innerHTML = html;
+                document.getElementById(resultId).style.display = 'block';
+            } catch (error) {
+                showError(resultId, error.message || 'Failed to analyze chemical safety');
+            }
+        };
+
+        window.setSafetyEquation = function(equation) {
+            document.getElementById('safetyEquationInput').value = equation;
+            analyzeChemicalSafety();
         };
 
         window.balanceWithPubChemValidation = async function() {

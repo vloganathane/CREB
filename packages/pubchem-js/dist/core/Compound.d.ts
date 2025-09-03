@@ -13,6 +13,10 @@ export declare class Compound {
     static fromCid(cid: number, httpClient?: HTTPClient): Promise<Compound>;
     static fromName(name: string, httpClient?: HTTPClient): Promise<Compound[]>;
     static fromSmiles(smiles: string, httpClient?: HTTPClient): Promise<Compound[]>;
+    static getByName(name: string, httpClient?: HTTPClient): Promise<Compound | null>;
+    static getBySmiles(smiles: string, httpClient?: HTTPClient): Promise<Compound | null>;
+    static fromFormula(formula: string, httpClient?: HTTPClient): Promise<Compound[]>;
+    static getByFormula(formula: string, httpClient?: HTTPClient): Promise<Compound | null>;
     get cid(): number;
     get molecularFormula(): string | null;
     get molecularWeight(): number | null;
