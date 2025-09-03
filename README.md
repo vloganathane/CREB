@@ -4,26 +4,67 @@
 [![npm version](https://badge.fury.io/js/creb-js.svg)](https://badge.fury.io/js/creb-js)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
-[![Demo](https://img.shields.io/badge/Demo-Live-green.svg)](https://vloganathane.github.io/CREB/demo.html)
+[![Demo](https://img.shields.io/badge/Demo-Live-green.svg)](https://vloganathane.github.io/CREB/demos/demo.html)
 
-A TypeScript/JavaScript library for balancing chemical equations and performing stoichiometric calculations.
+A comprehensive TypeScript/JavaScript library for balancing chemical equations, performing stoichiometric calculations, and accessing chemical compound data through PubChem integration.
 
-## Features
+## 🚀 Features
 
-- 🧪 Balance chemical equations automatically
-- ⚖️ Calculate stoichiometric ratios
-- 🧮 Compute molar weights
-- 📊 Perform mole and mass calculations
-- 🔬 Support for complex chemical formulas with parentheses
-- 📦 TypeScript support with full type definitions
+### Core CREB Features
+- 🧪 **Balance chemical equations** automatically with advanced algorithms
+- ⚖️ **Calculate stoichiometric ratios** for complex reactions
+- 🧮 **Compute molar weights** for any chemical formula
+- 📊 **Perform mole and mass calculations** with detailed results
+- 🔬 **Support for complex formulas** with parentheses and nested groups
 
-## Installation
+### Enhanced PubChem Integration (`@creb-js/pubchem`)
+- 🧬 **Search compounds** by name, CID, SMILES, or InChI
+- 📋 **Retrieve detailed properties** (molecular weight, formula, IUPAC names)
+- 🔍 **Compare compounds** with side-by-side analysis
+- ⚗️ **Enhanced stoichiometry** with real compound data
+- 🌐 **Type-safe API** with comprehensive error handling
+
+## 📦 Installation
 
 ```bash
+# Core CREB library
 npm install creb-js
+
+# PubChem integration (optional)
+npm install @creb-js/pubchem
 ```
 
+## 🏗️ Project Structure
+
+```
+CREB/
+├── src/                 # Core CREB source code
+├── packages/
+│   └── pubchem-js/     # PubChem integration package
+├── demos/              # Interactive demonstrations
+│   ├── demo.html       # Main comprehensive demo
+│   └── test-demo.html  # Test suite interface
+├── examples/           # Code examples and usage patterns  
+├── docs/              # Documentation and analysis
+└── dist/              # Built library files
+```
+
+## 🎮 Try the Live Demos
+
+### [**Main Demo**](demos/demo.html) - Interactive Web Interface
+- Professional UI with navigation menu
+- All CREB features in one place
+- PubChem compound search and analysis
+- Real-time calculations and results
+
+### [**Test Suite**](demos/test-demo.html) - Comprehensive Testing
+- Automated test runner for all features
+- Manual testing interface
+- Integration and unit test results
+
 ## Quick Start
+
+### Core CREB Usage
 
 ```javascript
 import { ChemicalEquationBalancer, Stoichiometry } from 'creb-js';
@@ -34,15 +75,31 @@ const balanced = balancer.balance('H2 + O2 = H2O');
 console.log(balanced); // "2 H2 + O2 = 2 H2O"
 
 // Calculate molar weight
-const stoich = new Stoichiometry();
-const molarWeight = stoich.calculateMolarWeight('H2O');
+const molarWeight = Stoichiometry.calculateMolarWeight('H2O');
 console.log(molarWeight); // 18.015
 
 // Perform stoichiometric calculations
-const equation = '2 H2 + O2 = 2 H2O';
-const calculator = new Stoichiometry(equation);
-const results = calculator.calculateFromMoles('H2', 2);
+const stoich = new Stoichiometry('2 H2 + O2 = 2 H2O');
+const results = stoich.calculateFromMoles('H2', 2);
 console.log(results);
+```
+
+### Enhanced PubChem Integration
+
+```javascript
+import { Compound } from '@creb-js/pubchem';
+
+// Search compound by name
+const compounds = await Compound.fromName('aspirin');
+console.log(compounds[0].molecularFormula); // C9H8O4
+
+// Get compound by CID
+const water = await Compound.fromCid(962);
+console.log(water.molecularWeight); // 18.015
+
+// Search by SMILES
+const benzene = await Compound.fromSmiles('C1=CC=CC=C1');
+console.log(benzene[0].iupacName); // benzene
 ```
 
 ## API Reference

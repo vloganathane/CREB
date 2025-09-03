@@ -31,13 +31,17 @@ CREB/
 │   ├── stoichiometry.ts   # Stoichiometric calculations
 │   ├── types.ts           # TypeScript type definitions
 │   └── utils.ts           # Utility functions and parsers
+├── packages/              # Package modules
+│   └── pubchem-js/        # PubChem integration package
+├── demos/                 # Interactive demonstrations
+│   ├── demo.html          # Main comprehensive demo
+│   └── test-demo.html     # Test suite interface
+├── docs/                  # Documentation and analysis
 ├── dist/                  # Built JavaScript files
 ├── examples/              # Usage examples
 ├── .github/workflows/     # CI/CD configuration
-├── demo.html             # Interactive web demo
-├── DOCUMENTATION.md      # Comprehensive API docs
-├── README.md            # Project overview
-└── package.json         # Package configuration
+├── README.md             # Project overview
+└── package.json          # Package configuration
 ```
 
 ## 🚀 Usage Examples
