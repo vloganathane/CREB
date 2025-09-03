@@ -1204,13 +1204,16 @@
                 showLoading(resultId, 'Calculating stoichiometry with PubChem data...');
                 const result = await enhancedStoich.calculateFromMolesEnhanced(species, amount);
                 
+                // Get the balanced equation from the enhanced stoichiometry instance
+                const balancedEquation = enhancedStoich.getBalancedEquation();
+                
                 let output = `<div style="padding: 15px; background: #f8fff8; border-left: 4px solid #27ae60; border-radius: 4px;">
                     <h4>🧬 Enhanced Stoichiometric Calculation</h4>
-                    <p><strong>Balanced equation:</strong> ${result.balancedEquation}</p>
+                    <p><strong>Balanced equation:</strong> ${balancedEquation}</p>
                     
                     <h5>Reactants:</h5>`;
                 
-                Object.entries(result.amounts.reactants).forEach(([sp, data]) => {
+                Object.entries(result.reactants).forEach(([sp, data]) => {
                     output += `<div style="margin: 10px 0; padding: 10px; background: #ecf0f1; border-radius: 4px;">
                         <strong>${sp}:</strong> ${data.moles.toFixed(4)} mol (${data.grams.toFixed(4)} g)`;
                     
@@ -1225,7 +1228,7 @@
                 });
                 
                 output += `<h5>Products:</h5>`;
-                Object.entries(result.amounts.products).forEach(([sp, data]) => {
+                Object.entries(result.products).forEach(([sp, data]) => {
                     output += `<div style="margin: 10px 0; padding: 10px; background: #ecf0f1; border-radius: 4px;">
                         <strong>${sp}:</strong> ${data.moles.toFixed(4)} mol (${data.grams.toFixed(4)} g)`;
                     
