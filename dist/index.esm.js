@@ -215,9 +215,17 @@ class EquationParser {
         };
     }
     splitIntoSpecies() {
+        // Check if equation is empty or only whitespace
+        if (!this.equation || this.equation.length === 0) {
+            throw new Error('Empty equation provided. Please enter a valid chemical equation.');
+        }
         const sides = this.equation.split(this.equationSplitter);
         if (sides.length !== 2) {
             throw new Error('Invalid equation format. Must contain exactly one "=" sign.');
+        }
+        // Check if either side is empty
+        if (!sides[0].trim() || !sides[1].trim()) {
+            throw new Error('Both sides of the equation must contain chemical species.');
         }
         const cleanSpecies = (speciesString) => {
             return speciesString.split(this.speciesSplitter)
@@ -495,7 +503,8 @@ class Stoichiometry {
         const allSpecies = [...this.reactants, ...this.products];
         const selectedIndex = allSpecies.indexOf(selectedSpecies);
         if (selectedIndex === -1) {
-            throw new Error(`Species "${selectedSpecies}" not found in the equation.`);
+            const availableSpecies = allSpecies.join(', ');
+            throw new Error(`Species "${selectedSpecies}" not found in the equation. Available species: ${availableSpecies}`);
         }
         const selectedCoefficient = this.coefficients[selectedIndex];
         return this.coefficients.map(coeff => coeff / selectedCoefficient);

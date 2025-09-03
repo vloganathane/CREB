@@ -53,7 +53,8 @@ export class Stoichiometry {
     const selectedIndex = allSpecies.indexOf(selectedSpecies);
     
     if (selectedIndex === -1) {
-      throw new Error(`Species "${selectedSpecies}" not found in the equation.`);
+      const availableSpecies = allSpecies.join(', ');
+      throw new Error(`Species "${selectedSpecies}" not found in the equation. Available species: ${availableSpecies}`);
     }
 
     const selectedCoefficient = this.coefficients[selectedIndex];

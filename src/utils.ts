@@ -95,9 +95,19 @@ export class EquationParser {
   }
 
   private splitIntoSpecies() {
+    // Check if equation is empty or only whitespace
+    if (!this.equation || this.equation.length === 0) {
+      throw new Error('Empty equation provided. Please enter a valid chemical equation.');
+    }
+    
     const sides = this.equation.split(this.equationSplitter);
     if (sides.length !== 2) {
       throw new Error('Invalid equation format. Must contain exactly one "=" sign.');
+    }
+    
+    // Check if either side is empty
+    if (!sides[0].trim() || !sides[1].trim()) {
+      throw new Error('Both sides of the equation must contain chemical species.');
     }
 
     const cleanSpecies = (speciesString: string): string[] => {

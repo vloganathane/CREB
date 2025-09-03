@@ -514,7 +514,7 @@
                     <h2>Balance Chemical Equations</h2>
                     <div class="input-group">
                         <label for="equation">Enter a chemical equation (e.g., Al + CuSO4 = Al2(SO4)3 + Cu):</label>
-                        <input type="text" id="equation" placeholder="Al + CuSO4 = Al2(SO4)3 + Cu">
+                        <input type="text" id="equation" placeholder="Al + CuSO4 = Al2(SO4)3 + Cu" value="Al + CuSO4 = Al2(SO4)3 + Cu">
                         <button onclick="balanceEquation()">Balance Equation</button>
                     </div>
                     <div id="result" class="result"></div>
@@ -524,15 +524,15 @@
                     <h2>Calculate Stoichiometry</h2>
                     <div class="input-group">
                         <label for="stoichEquation">Balanced equation:</label>
-                        <input type="text" id="stoichEquation" placeholder="2 H2 + O2 = 2 H2O">
+                        <input type="text" id="stoichEquation" placeholder="2 H2 + O2 = 2 H2O" value="2 H2 + O2 = 2 H2O">
                     </div>
                     <div class="input-group">
                         <label for="species">Species:</label>
-                        <input type="text" id="species" placeholder="H2">
+                        <input type="text" id="species" placeholder="H2" value="H2">
                     </div>
                     <div class="input-group">
                         <label for="amount">Amount (moles):</label>
-                        <input type="number" id="amount" step="0.01" placeholder="1.5">
+                        <input type="number" id="amount" step="0.01" placeholder="1.5" value="1.5">
                         <button onclick="calculateStoichiometry()">Calculate</button>
                     </div>
                     <div id="stoichResult" class="result"></div>
@@ -542,7 +542,7 @@
                     <h2>Calculate Molar Weight</h2>
                     <div class="input-group">
                         <label for="formula">Chemical formula:</label>
-                        <input type="text" id="formula" placeholder="H2SO4">
+                        <input type="text" id="formula" placeholder="H2SO4" value="H2SO4">
                         <button onclick="calculateMolarWeight()">Calculate Molar Weight</button>
                     </div>
                     <div id="molarWeightResult" class="result"></div>
@@ -565,7 +565,7 @@
                     <div id="search-cid" class="demo-content active">
                         <div class="input-group">
                             <label for="cidInput">Enter PubChem CID:</label>
-                            <input type="number" id="cidInput" placeholder="2244" min="1">
+                            <input type="number" id="cidInput" placeholder="2244" min="1" value="2244">
                             <button onclick="searchByCid()">Search by CID</button>
                         </div>
                     </div>
@@ -573,7 +573,7 @@
                     <div id="search-name" class="demo-content">
                         <div class="input-group">
                             <label for="nameInput">Enter compound name:</label>
-                            <input type="text" id="nameInput" placeholder="aspirin">
+                            <input type="text" id="nameInput" placeholder="aspirin" value="aspirin">
                             <button onclick="searchByName()">Search by Name</button>
                         </div>
                     </div>
@@ -581,7 +581,7 @@
                     <div id="search-smiles" class="demo-content">
                         <div class="input-group">
                             <label for="smilesInput">Enter SMILES string:</label>
-                            <input type="text" id="smilesInput" placeholder="CC(=O)OC1=CC=CC=C1C(=O)O">
+                            <input type="text" id="smilesInput" placeholder="CC(=O)OC1=CC=CC=C1C(=O)O" value="CC(=O)OC1=CC=CC=C1C(=O)O">
                             <button onclick="searchBySmiles()">Search by SMILES</button>
                         </div>
                     </div>
@@ -593,15 +593,15 @@
                     <h2>Enhanced Stoichiometry with PubChem Data</h2>
                     <div class="input-group">
                         <label for="enhancedEquation">Chemical equation:</label>
-                        <input type="text" id="enhancedEquation" placeholder="C6H12O6 + O2 = CO2 + H2O">
+                        <input type="text" id="enhancedEquation" placeholder="C6H12O6 + O2 = CO2 + H2O" value="C6H12O6 + O2 = CO2 + H2O">
                     </div>
                     <div class="input-group">
                         <label for="enhancedSpecies">Species for calculation:</label>
-                        <input type="text" id="enhancedSpecies" placeholder="C6H12O6">
+                        <input type="text" id="enhancedSpecies" placeholder="C6H12O6" value="C6H12O6">
                     </div>
                     <div class="input-group">
                         <label for="enhancedAmount">Amount (moles):</label>
-                        <input type="number" id="enhancedAmount" step="0.01" placeholder="1.0">
+                        <input type="number" id="enhancedAmount" step="0.01" placeholder="1.0" value="1.0">
                         <button onclick="calculateEnhancedStoichiometry()">Calculate with PubChem Data</button>
                     </div>
                     <div id="enhancedStoichResult" class="result"></div>
@@ -611,11 +611,11 @@
                     <h2>Compound Comparison</h2>
                     <div class="input-group">
                         <label for="compound1">First compound (name or CID):</label>
-                        <input type="text" id="compound1" placeholder="glucose">
+                        <input type="text" id="compound1" placeholder="glucose" value="glucose">
                     </div>
                     <div class="input-group">
                         <label for="compound2">Second compound (name or CID):</label>
-                        <input type="text" id="compound2" placeholder="fructose">
+                        <input type="text" id="compound2" placeholder="fructose" value="fructose">
                         <button onclick="compareCompounds()">Compare Compounds</button>
                     </div>
                     <div id="comparisonResult" class="result"></div>
@@ -719,11 +719,18 @@
                 }
             }, 100); // 100ms delay
         });        window.balanceEquation = function() {
-            const equation = document.getElementById('equation').value;
+            const equation = document.getElementById('equation').value.trim();
             const resultDiv = document.getElementById('result');
             
             if (!window.CREB || !window.CREB.ChemicalEquationBalancer) {
                 resultDiv.textContent = 'Error: CREB library not loaded';
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'error';
+                return;
+            }
+            
+            if (!equation) {
+                resultDiv.textContent = 'Error: Please enter a chemical equation';
                 resultDiv.style.display = 'block';
                 resultDiv.className = 'error';
                 return;
@@ -737,6 +744,20 @@
                 resultDiv.textContent = `Balanced: ${balanced}`;
                 resultDiv.style.display = 'block';
                 resultDiv.className = 'result';
+                
+                // Auto-populate stoichiometry section with balanced equation
+                const stoichEquationField = document.getElementById('stoichEquation');
+                const speciesField = document.getElementById('species');
+                if (stoichEquationField && speciesField) {
+                    stoichEquationField.value = balanced;
+                    // Extract the first reactant as the default species
+                    const reactants = balanced.split('=')[0].trim().split('+');
+                    if (reactants.length > 0) {
+                        // Remove coefficient and trim whitespace
+                        const firstReactant = reactants[0].trim().replace(/^\d+\s*/, '');
+                        speciesField.value = firstReactant;
+                    }
+                }
             } catch (error) {
                 resultDiv.textContent = `Error: ${error.message}`;
                 resultDiv.style.display = 'block';
@@ -745,13 +766,34 @@
         };
 
         window.calculateStoichiometry = function() {
-            const equation = document.getElementById('stoichEquation').value;
-            const species = document.getElementById('species').value;
+            const equation = document.getElementById('stoichEquation').value.trim();
+            const species = document.getElementById('species').value.trim();
             const amount = parseFloat(document.getElementById('amount').value);
             const resultDiv = document.getElementById('stoichResult');
             
             if (!window.CREB || !window.CREB.Stoichiometry) {
                 resultDiv.textContent = 'Error: CREB library not loaded';
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'error';
+                return;
+            }
+            
+            if (!equation) {
+                resultDiv.textContent = 'Error: Please enter a balanced chemical equation';
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'error';
+                return;
+            }
+            
+            if (!species) {
+                resultDiv.textContent = 'Error: Please enter a chemical species';
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'error';
+                return;
+            }
+            
+            if (isNaN(amount) || amount <= 0) {
+                resultDiv.textContent = 'Error: Please enter a valid positive amount in moles';
                 resultDiv.style.display = 'block';
                 resultDiv.className = 'error';
                 return;
@@ -766,11 +808,6 @@
                 Object.entries(result.reactants).forEach(([sp, data]) => {
                     output += `  ${sp}: ${data.moles} mol (${data.grams} g)\n`;
                 });
-                output += `\\nProducts:\\n`;
-                Object.entries(result.products).forEach(([sp, data]) => {
-                    output += `  ${sp}: ${data.moles} mol (${data.grams} g)\n`;
-                });
-                
                 output += `\nProducts:\n`;
                 Object.entries(result.products).forEach(([sp, data]) => {
                     output += `  ${sp}: ${data.moles} mol (${data.grams} g)\n`;
@@ -787,18 +824,27 @@
         };
 
         window.calculateMolarWeight = function() {
-            const formula = document.getElementById('formula').value;
+            const formula = document.getElementById('formula').value.trim();
             const resultDiv = document.getElementById('molarWeightResult');
             
-            if (!window.CREB || !window.CREB.Stoichiometry) {
+            if (!window.CREB) {
                 resultDiv.textContent = 'Error: CREB library not loaded';
                 resultDiv.style.display = 'block';
                 resultDiv.className = 'error';
                 return;
             }
             
+            if (!formula) {
+                resultDiv.textContent = 'Error: Please enter a chemical formula';
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'error';
+                return;
+            }
+            
             try {
-                const molarWeight = window.CREB.Stoichiometry.calculateMolarWeight(formula);
+                // Use the calculateMolarWeight function directly from CREB
+                const molarWeight = window.CREB.calculateMolarWeight(formula);
+                
                 resultDiv.textContent = `Molar weight of ${formula}: ${molarWeight.toFixed(3)} g/mol`;
                 resultDiv.style.display = 'block';
                 resultDiv.className = 'result';
@@ -870,8 +916,22 @@
             });
             
             // Show selected content
-            document.getElementById(tabId).classList.add('active');
-            event.target.classList.add('active');
+            const targetTab = document.getElementById(tabId);
+            if (targetTab) {
+                targetTab.classList.add('active');
+            }
+            
+            // Make the clicked tab active
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
+            
+            // Clear any previous results
+            const resultDiv = document.getElementById('compoundResult');
+            if (resultDiv) {
+                resultDiv.innerHTML = '';
+                resultDiv.style.display = 'none';
+            }
         };
 
         function showLoading(resultId, message = 'Searching PubChem database...') {
@@ -905,10 +965,16 @@
                 return;
             }
             
-            const cid = parseInt(document.getElementById('cidInput').value);
+            const cidValue = document.getElementById('cidInput').value.trim();
             const resultId = 'compoundResult';
             
-            if (!cid || isNaN(cid)) {
+            if (!cidValue) {
+                showError(resultId, 'Please enter a CID number');
+                return;
+            }
+            
+            const cid = parseInt(cidValue);
+            if (isNaN(cid) || cid <= 0) {
                 showError(resultId, 'Please enter a valid CID number');
                 return;
             }
@@ -933,7 +999,13 @@
                 return;
             }
             
-            const name = document.getElementById('nameInput').value.trim();
+            const nameElement = document.getElementById('nameInput');
+            if (!nameElement) {
+                showError('compoundResult', 'Name input field not found. Please make sure you are on the "Search by Name" tab.');
+                return;
+            }
+            
+            const name = nameElement.value.trim();
             const resultId = 'compoundResult';
             
             if (!name) {
@@ -1023,10 +1095,25 @@
                 return;
             }
             
-            const equation = document.getElementById('enhancedEquation').value;
-            const species = document.getElementById('enhancedSpecies').value;
+            const equation = document.getElementById('enhancedEquation').value.trim();
+            const species = document.getElementById('enhancedSpecies').value.trim();
             const amount = parseFloat(document.getElementById('enhancedAmount').value);
             const resultId = 'enhancedStoichResult';
+            
+            if (!equation) {
+                showError(resultId, 'Please enter a chemical equation');
+                return;
+            }
+            
+            if (!species) {
+                showError(resultId, 'Please enter a species for calculation');
+                return;
+            }
+            
+            if (isNaN(amount) || amount <= 0) {
+                showError(resultId, 'Please enter a valid positive amount in moles');
+                return;
+            }
             
             showLoading(resultId, 'Calculating with PubChem data...');
             
@@ -1091,8 +1178,16 @@
                 return;
             }
             
-            const name1 = document.getElementById('compound1').value.trim();
-            const name2 = document.getElementById('compound2').value.trim();
+            const compound1Element = document.getElementById('compound1');
+            const compound2Element = document.getElementById('compound2');
+            
+            if (!compound1Element || !compound2Element) {
+                showError('comparisonResult', 'Compound input fields not found');
+                return;
+            }
+            
+            const name1 = compound1Element.value.trim();
+            const name2 = compound2Element.value.trim();
             const resultId = 'comparisonResult';
             
             if (!name1 || !name2) {
