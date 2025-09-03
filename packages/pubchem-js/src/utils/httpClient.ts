@@ -225,14 +225,14 @@ export class HTTPClient {
         throw new PubChemHTTPError(response.status, response.statusText);
       }
 
-      const data = await response.json();
+      const data: any = await response.json();
 
       // Check for PubChem API errors in response
       if (data.Fault) {
         throw new Error(`PubChem API Error: ${data.Fault.Message}`);
       }
 
-      return data;
+      return data as T;
     } catch (error: any) {
       clearTimeout(timeoutId);
 

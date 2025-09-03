@@ -600,9 +600,531 @@
         }
     }
 
+    /**
+     * Enhanced Chemical Equation Balancer with PubChem integration
+     * Provides compound validation, molecular weight verification, and enriched data
+     */
+    class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
+        constructor() {
+            super(...arguments);
+            this.compoundCache = new Map();
+        }
+        /**
+         * Balance equation with PubChem data enrichment
+         */
+        async balanceWithPubChemData(equation) {
+            // First balance the equation normally
+            const balanced = this.balanceDetailed(equation);
+            // Enhance with PubChem data
+            const enhanced = {
+                ...balanced,
+                compoundData: {},
+                validation: {
+                    massBalanced: true,
+                    chargeBalanced: true,
+                    warnings: []
+                }
+            };
+            // Get all unique species from the equation
+            const allSpecies = [...new Set([...balanced.reactants, ...balanced.products])];
+            // Fetch PubChem data for each compound
+            for (const species of allSpecies) {
+                try {
+                    const compoundInfo = await this.getCompoundInfo(species);
+                    enhanced.compoundData[species] = compoundInfo;
+                    if (!compoundInfo.isValid && compoundInfo.error) {
+                        enhanced.validation.warnings.push(`${species}: ${compoundInfo.error}`);
+                    }
+                }
+                catch (error) {
+                    enhanced.validation.warnings.push(`Failed to fetch data for ${species}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                }
+            }
+            // Validate mass balance using PubChem molecular weights
+            try {
+                const massValidation = this.validateMassBalance(balanced, enhanced.compoundData);
+                enhanced.validation.massBalanced = massValidation.balanced;
+                if (!massValidation.balanced) {
+                    enhanced.validation.warnings.push(`Mass balance discrepancy: ${massValidation.discrepancy.toFixed(4)} g/mol`);
+                }
+            }
+            catch (error) {
+                enhanced.validation.warnings.push(`Could not validate mass balance: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+            return enhanced;
+        }
+        /**
+         * Get compound information from PubChem
+         */
+        async getCompoundInfo(compoundName) {
+            // Check cache first
+            if (this.compoundCache.has(compoundName)) {
+                return this.compoundCache.get(compoundName);
+            }
+            const result = {
+                name: compoundName,
+                isValid: false
+            };
+            try {
+                // Dynamic import of PubChem functionality
+                const pubchemModule = await this.loadPubChemModule();
+                if (!pubchemModule) {
+                    result.error = 'PubChem module not available. Install creb-pubchem-js for enhanced functionality.';
+                    this.compoundCache.set(compoundName, result);
+                    return result;
+                }
+                // Try to find compound by name
+                let compounds = [];
+                // First try exact name match
+                try {
+                    compounds = await pubchemModule.fromName(compoundName);
+                }
+                catch (error) {
+                    // If name search fails and it looks like a formula, try CID search
+                    if (this.isLikelyFormula(compoundName)) {
+                        try {
+                            // For simple cases, try to find by common names
+                            const commonNames = this.getCommonNames(compoundName);
+                            for (const name of commonNames) {
+                                try {
+                                    compounds = await pubchemModule.fromName(name);
+                                    if (compounds.length > 0)
+                                        break;
+                                }
+                                catch {
+                                    // Continue to next name
+                                }
+                            }
+                        }
+                        catch (formulaError) {
+                            result.error = `Not found by name or common formula names: ${error instanceof Error ? error.message : 'Unknown error'}`;
+                        }
+                    }
+                    else {
+                        result.error = `Not found by name: ${error instanceof Error ? error.message : 'Unknown error'}`;
+                    }
+                }
+                if (compounds.length > 0) {
+                    const compound = compounds[0]; // Use first match
+                    result.cid = compound.cid;
+                    result.molecularWeight = compound.molecularWeight || undefined;
+                    result.molecularFormula = compound.molecularFormula || undefined;
+                    result.iupacName = compound.iupacName || undefined;
+                    result.canonicalSmiles = compound.isomericSmiles || undefined;
+                    result.isValid = true;
+                    result.pubchemData = compound;
+                }
+                else if (!result.error) {
+                    result.error = 'No compounds found';
+                }
+            }
+            catch (error) {
+                result.error = `Search failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+            }
+            // Cache the result
+            this.compoundCache.set(compoundName, result);
+            return result;
+        }
+        /**
+         * Dynamically load PubChem module if available
+         */
+        async loadPubChemModule() {
+            try {
+                // Try to import the PubChem module
+                // In browser environment, this would be from global scope
+                if (typeof globalThis !== 'undefined' && globalThis.CREBPubChem) {
+                    return globalThis.CREBPubChem.Compound;
+                }
+                // In Node.js environment, try dynamic import with error handling
+                try {
+                    // Use eval to avoid TypeScript compile-time module resolution
+                    const importFn = new Function('specifier', 'return import(specifier)');
+                    const pubchemModule = await importFn('creb-pubchem-js');
+                    return pubchemModule.Compound;
+                }
+                catch (importError) {
+                    // Module not available
+                    return null;
+                }
+            }
+            catch (error) {
+                // PubChem module not available
+                return null;
+            }
+        }
+        /**
+         * Get common names for simple chemical formulas
+         */
+        getCommonNames(formula) {
+            const commonNames = {
+                'H2O': ['water'],
+                'CO2': ['carbon dioxide'],
+                'NaCl': ['sodium chloride', 'salt'],
+                'H2SO4': ['sulfuric acid'],
+                'HCl': ['hydrochloric acid'],
+                'NH3': ['ammonia'],
+                'CH4': ['methane'],
+                'C2H5OH': ['ethanol', 'ethyl alcohol'],
+                'C6H12O6': ['glucose'],
+                'CaCO3': ['calcium carbonate'],
+                'NaOH': ['sodium hydroxide'],
+                'KOH': ['potassium hydroxide'],
+                'Mg': ['magnesium'],
+                'Al': ['aluminum'],
+                'Fe': ['iron'],
+                'Cu': ['copper'],
+                'Zn': ['zinc'],
+                'O2': ['oxygen'],
+                'N2': ['nitrogen'],
+                'H2': ['hydrogen']
+            };
+            return commonNames[formula] || [];
+        }
+        /**
+         * Check if a string looks like a chemical formula
+         */
+        isLikelyFormula(str) {
+            // Simple heuristic: contains only letters, numbers, parentheses, and common symbols
+            return /^[A-Za-z0-9()[\]+-]+$/.test(str) && /[A-Z]/.test(str);
+        }
+        /**
+         * Validate mass balance using PubChem molecular weights
+         */
+        validateMassBalance(balanced, compoundData) {
+            let reactantMass = 0;
+            let productMass = 0;
+            // Calculate reactant mass
+            for (let i = 0; i < balanced.reactants.length; i++) {
+                const species = balanced.reactants[i];
+                const coefficient = balanced.coefficients[i];
+                const compound = compoundData[species];
+                if (compound?.molecularWeight) {
+                    reactantMass += coefficient * compound.molecularWeight;
+                }
+                else {
+                    throw new Error(`Missing molecular weight for reactant: ${species}`);
+                }
+            }
+            // Calculate product mass
+            for (let i = 0; i < balanced.products.length; i++) {
+                const species = balanced.products[i];
+                const coefficient = balanced.coefficients[balanced.reactants.length + i];
+                const compound = compoundData[species];
+                if (compound?.molecularWeight) {
+                    productMass += coefficient * compound.molecularWeight;
+                }
+                else {
+                    throw new Error(`Missing molecular weight for product: ${species}`);
+                }
+            }
+            const discrepancy = Math.abs(reactantMass - productMass);
+            const tolerance = 0.01; // 0.01 g/mol tolerance
+            return {
+                balanced: discrepancy <= tolerance,
+                discrepancy
+            };
+        }
+        /**
+         * Suggest alternative compound names or formulas
+         */
+        async suggestAlternatives(compoundName) {
+            const suggestions = [];
+            try {
+                const pubchemModule = await this.loadPubChemModule();
+                if (!pubchemModule) {
+                    return suggestions;
+                }
+                // Try various search strategies
+                const searchTerms = [
+                    compoundName.toLowerCase(),
+                    compoundName.toUpperCase(),
+                    compoundName.replace(/\s+/g, ''),
+                    compoundName.replace(/\s+/g, '-'),
+                    compoundName.replace(/-/g, ' '),
+                ];
+                for (const term of searchTerms) {
+                    if (term !== compoundName) {
+                        try {
+                            const compounds = await pubchemModule.fromName(term);
+                            if (compounds.length > 0) {
+                                suggestions.push(term);
+                            }
+                        }
+                        catch {
+                            // Ignore errors for suggestions
+                        }
+                    }
+                }
+            }
+            catch (error) {
+                // Return empty suggestions if search fails
+            }
+            return [...new Set(suggestions)]; // Remove duplicates
+        }
+        /**
+         * Clear the compound cache
+         */
+        clearCache() {
+            this.compoundCache.clear();
+        }
+        /**
+         * Get cached compound info without making new requests
+         */
+        getCachedCompoundInfo(compoundName) {
+            return this.compoundCache.get(compoundName);
+        }
+    }
+
+    /**
+     * Enhanced Stoichiometry calculator with PubChem integration
+     * Provides accurate molecular weights, compound validation, and enriched calculations
+     */
+    class EnhancedStoichiometry extends Stoichiometry {
+        constructor(equation) {
+            super(equation);
+            this.compoundDataCache = {};
+            this.enhancedBalancer = new EnhancedChemicalEquationBalancer();
+        }
+        /**
+         * Initialize with compound validation and enrichment
+         */
+        async initializeWithValidation(equation) {
+            // Initialize the stoichiometry with the equation
+            this.initializedStoich = new Stoichiometry(equation);
+            // Balance the equation with PubChem data
+            const enhancedBalance = await this.enhancedBalancer.balanceWithPubChemData(equation);
+            // Store compound data for later use
+            this.compoundDataCache = enhancedBalance.compoundData || {};
+            // Calculate molecular weight validation
+            const validation = this.calculateMolecularWeightValidation(enhancedBalance);
+            // Generate suggestions for compounds that weren't found
+            const suggestions = {};
+            for (const [species, info] of Object.entries(this.compoundDataCache)) {
+                if (!info.isValid) {
+                    try {
+                        suggestions[species] = await this.enhancedBalancer.suggestAlternatives(species);
+                    }
+                    catch (error) {
+                        // Ignore suggestion errors
+                    }
+                }
+            }
+            return {
+                equation: enhancedBalance.equation,
+                balanced: true,
+                molecularWeightValidation: validation,
+                compoundInfo: this.compoundDataCache,
+                suggestions: Object.keys(suggestions).length > 0 ? suggestions : undefined
+            };
+        }
+        /**
+         * Enhanced stoichiometric calculation with PubChem data
+         */
+        async calculateFromMolesEnhanced(selectedSpecies, moles) {
+            // Use the initialized stoichiometry or throw error if not initialized
+            if (!this.initializedStoich) {
+                throw new Error('Enhanced stoichiometry not initialized. Call initializeWithValidation() first.');
+            }
+            // Get basic calculation
+            const basicResult = this.initializedStoich.calculateFromMoles(selectedSpecies, moles);
+            // Enhance with PubChem data
+            const enhanced = {
+                ...basicResult,
+                compoundData: this.compoundDataCache,
+                pubchemMolarWeights: {},
+                validation: {
+                    molecularWeightAccuracy: {},
+                    warnings: []
+                }
+            };
+            // Compare calculated vs PubChem molecular weights
+            const allSpecies = [...Object.keys(basicResult.reactants), ...Object.keys(basicResult.products)];
+            for (const species of allSpecies) {
+                const speciesData = basicResult.reactants[species] || basicResult.products[species];
+                const compoundInfo = this.compoundDataCache[species];
+                if (compoundInfo?.molecularWeight && speciesData) {
+                    enhanced.pubchemMolarWeights[species] = compoundInfo.molecularWeight;
+                    const calculated = speciesData.molarWeight;
+                    const pubchem = compoundInfo.molecularWeight;
+                    const difference = Math.abs(calculated - pubchem);
+                    const percentDiff = (difference / pubchem) * 100;
+                    enhanced.validation.molecularWeightAccuracy[species] = {
+                        calculated,
+                        pubchem,
+                        difference,
+                        accuracy: percentDiff < 0.1 ? 'excellent' :
+                            percentDiff < 1 ? 'good' :
+                                percentDiff < 5 ? 'fair' : 'poor'
+                    };
+                    if (percentDiff > 1) {
+                        enhanced.validation.warnings.push(`Molecular weight mismatch for ${species}: calculated ${calculated.toFixed(3)}, PubChem ${pubchem.toFixed(3)} (${percentDiff.toFixed(1)}% difference)`);
+                    }
+                }
+                else if (!compoundInfo?.isValid) {
+                    enhanced.validation.warnings.push(`No PubChem data available for ${species}: ${compoundInfo?.error || 'Unknown compound'}`);
+                }
+            }
+            return enhanced;
+        }
+        /**
+         * Enhanced calculation from grams with PubChem data
+         */
+        async calculateFromGramsEnhanced(selectedSpecies, grams) {
+            // Use the initialized stoichiometry or throw error if not initialized
+            if (!this.initializedStoich) {
+                throw new Error('Enhanced stoichiometry not initialized. Call initializeWithValidation() first.');
+            }
+            // Get basic calculation
+            const basicResult = this.initializedStoich.calculateFromGrams(selectedSpecies, grams);
+            // Convert to enhanced result using the same logic as calculateFromMolesEnhanced
+            const speciesData = basicResult.reactants[selectedSpecies] || basicResult.products[selectedSpecies];
+            if (speciesData) {
+                return this.calculateFromMolesEnhanced(selectedSpecies, speciesData.moles);
+            }
+            throw new Error(`Species ${selectedSpecies} not found in calculation results`);
+        }
+        /**
+         * Get compound information with PubChem enrichment
+         */
+        async getCompoundInfo(compoundName) {
+            if (this.compoundDataCache[compoundName]) {
+                return this.compoundDataCache[compoundName];
+            }
+            const info = await this.enhancedBalancer.getCompoundInfo(compoundName);
+            this.compoundDataCache[compoundName] = info;
+            return info;
+        }
+        /**
+         * Calculate molar weight with PubChem verification
+         */
+        async calculateMolarWeightEnhanced(formula) {
+            const calculated = this.calculateMolarWeight(formula);
+            try {
+                const compoundInfo = await this.getCompoundInfo(formula);
+                if (compoundInfo.isValid && compoundInfo.molecularWeight) {
+                    const pubchem = compoundInfo.molecularWeight;
+                    const difference = Math.abs(calculated - pubchem);
+                    const percentDiff = (difference / pubchem) * 100;
+                    return {
+                        calculated,
+                        pubchem,
+                        difference,
+                        accuracy: percentDiff < 0.1 ? 'excellent' :
+                            percentDiff < 1 ? 'good' :
+                                percentDiff < 5 ? 'fair' : 'poor',
+                        compoundInfo
+                    };
+                }
+            }
+            catch (error) {
+                // PubChem lookup failed, return calculated value only
+            }
+            return { calculated };
+        }
+        /**
+         * Compare two compounds using PubChem data
+         */
+        async compareCompounds(compound1, compound2) {
+            const info1 = await this.getCompoundInfo(compound1);
+            const info2 = await this.getCompoundInfo(compound2);
+            const comparison = {
+                molecularWeightRatio: 1,
+                formulasSimilar: false,
+                sameCompound: false,
+                differences: []
+            };
+            if (info1.isValid && info2.isValid) {
+                // Compare molecular weights
+                if (info1.molecularWeight && info2.molecularWeight) {
+                    comparison.molecularWeightRatio = info1.molecularWeight / info2.molecularWeight;
+                }
+                // Compare formulas
+                if (info1.molecularFormula && info2.molecularFormula) {
+                    comparison.formulasSimilar = info1.molecularFormula === info2.molecularFormula;
+                    if (comparison.formulasSimilar) {
+                        comparison.sameCompound = true;
+                    }
+                }
+                // Find differences
+                if (info1.cid && info2.cid && info1.cid === info2.cid) {
+                    comparison.sameCompound = true;
+                }
+                else {
+                    if (info1.molecularFormula !== info2.molecularFormula) {
+                        comparison.differences.push(`Different molecular formulas: ${info1.molecularFormula} vs ${info2.molecularFormula}`);
+                    }
+                    if (info1.molecularWeight && info2.molecularWeight && Math.abs(info1.molecularWeight - info2.molecularWeight) > 0.01) {
+                        comparison.differences.push(`Different molecular weights: ${info1.molecularWeight} vs ${info2.molecularWeight}`);
+                    }
+                }
+            }
+            else {
+                if (!info1.isValid)
+                    comparison.differences.push(`Cannot find data for ${compound1}`);
+                if (!info2.isValid)
+                    comparison.differences.push(`Cannot find data for ${compound2}`);
+            }
+            return {
+                compound1: info1,
+                compound2: info2,
+                comparison
+            };
+        }
+        /**
+         * Calculate molecular weight validation for balanced equation
+         */
+        calculateMolecularWeightValidation(enhancedBalance) {
+            let reactantMass = 0;
+            let productMass = 0;
+            if (enhancedBalance.compoundData) {
+                // Calculate reactant total mass
+                for (let i = 0; i < enhancedBalance.reactants.length; i++) {
+                    const species = enhancedBalance.reactants[i];
+                    const coefficient = enhancedBalance.coefficients[i];
+                    const compound = enhancedBalance.compoundData[species];
+                    if (compound?.molecularWeight) {
+                        reactantMass += coefficient * compound.molecularWeight;
+                    }
+                }
+                // Calculate product total mass  
+                for (let i = 0; i < enhancedBalance.products.length; i++) {
+                    const species = enhancedBalance.products[i];
+                    const coefficient = enhancedBalance.coefficients[enhancedBalance.reactants.length + i];
+                    const compound = enhancedBalance.compoundData[species];
+                    if (compound?.molecularWeight) {
+                        productMass += coefficient * compound.molecularWeight;
+                    }
+                }
+            }
+            const difference = Math.abs(reactantMass - productMass);
+            const isBalanced = difference < 0.01; // 0.01 g/mol tolerance
+            return {
+                reactants: reactantMass,
+                products: productMass,
+                difference,
+                isBalanced
+            };
+        }
+        /**
+         * Clear cached compound data
+         */
+        clearCache() {
+            this.compoundDataCache = {};
+            this.enhancedBalancer.clearCache();
+        }
+        /**
+         * Get all cached compound data
+         */
+        getCachedCompounds() {
+            return { ...this.compoundDataCache };
+        }
+    }
+
     exports.ChemicalEquationBalancer = ChemicalEquationBalancer;
     exports.ELEMENTS_LIST = ELEMENTS_LIST;
     exports.ElementCounter = ElementCounter;
+    exports.EnhancedChemicalEquationBalancer = EnhancedChemicalEquationBalancer;
+    exports.EnhancedStoichiometry = EnhancedStoichiometry;
     exports.EquationParser = EquationParser;
     exports.PARAMETER_SYMBOLS = PARAMETER_SYMBOLS;
     exports.PERIODIC_TABLE = PERIODIC_TABLE;
