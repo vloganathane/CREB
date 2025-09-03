@@ -590,6 +590,16 @@
                 </div>
 
                 <div class="section enhanced">
+                    <h2>Enhanced Chemical Equation Balancer with PubChem Validation</h2>
+                    <div class="input-group">
+                        <label for="enhancedBalancerEquation">Chemical equation:</label>
+                        <input type="text" id="enhancedBalancerEquation" placeholder="C6H12O6 + O2 = CO2 + H2O" value="C6H12O6 + O2 = CO2 + H2O">
+                        <button onclick="balanceWithPubChemValidation()">Balance with PubChem Validation</button>
+                    </div>
+                    <div id="enhancedBalancerResult" class="result"></div>
+                </div>
+
+                <div class="section enhanced">
                     <h2>Enhanced Stoichiometry with PubChem Data</h2>
                     <div class="input-group">
                         <label for="enhancedEquation">Chemical equation:</label>
@@ -1089,9 +1099,75 @@
             }
         };
 
+        window.balanceWithPubChemValidation = async function() {
+            if (!window.PubChemJS || !window.PubChemJS.Compound || !window.CREB || !window.CREB.EnhancedChemicalEquationBalancer) {
+                showError('enhancedBalancerResult', 'Required libraries not available. Make sure both CREB and PubChem JS are loaded.');
+                return;
+            }
+            
+            const equation = document.getElementById('enhancedBalancerEquation').value.trim();
+            const resultId = 'enhancedBalancerResult';
+            
+            if (!equation) {
+                showError(resultId, 'Please enter a chemical equation');
+                return;
+            }
+            
+            showLoading(resultId, 'Balancing equation with PubChem validation...');
+            
+            try {
+                const enhancedBalancer = new window.CREB.EnhancedChemicalEquationBalancer();
+                const result = await enhancedBalancer.balanceWithPubChemData(equation);
+                
+                let output = `<div style="padding: 15px; background: #f8fff8; border-left: 4px solid #27ae60; border-radius: 4px;">
+                    <h4>⚖️ Enhanced Chemical Equation Balancing</h4>
+                    <p><strong>Original equation:</strong> ${equation}</p>
+                    <p><strong>Balanced equation:</strong> ${result.balancedEquation}</p>
+                    
+                    <div style="margin: 15px 0;">
+                        <h5>Validation Results:</h5>
+                        <div style="background: #e8f8ff; padding: 10px; border-radius: 4px;">
+                            <p><strong>PubChem Validated:</strong> ${result.validation.allCompoundsFound ? '✅ All compounds found' : '⚠️ Some compounds not found'}</p>
+                            <p><strong>Formula Consistency:</strong> ${result.validation.formulaConsistency ? '✅ Consistent' : '❌ Inconsistent'}</p>
+                            <p><strong>Mass Balance:</strong> ${result.validation.massBalance ? '✅ Balanced' : '❌ Unbalanced'}</p>
+                        </div>
+                    </div>`;
+                
+                if (result.compoundInfo && Object.keys(result.compoundInfo).length > 0) {
+                    output += `<h5>Compound Information:</h5>`;
+                    Object.entries(result.compoundInfo).forEach(([formula, info]) => {
+                        output += `<div style="margin: 10px 0; padding: 10px; background: #ecf0f1; border-radius: 4px;">
+                            <strong>${formula}:</strong><br>
+                            <small>📊 PubChem CID: ${info.cid} | MW: ${info.molecularWeight?.toFixed(2)} g/mol</small><br>
+                            <small>🧪 Formula: ${info.molecularFormula}</small>`;
+                        if (info.synonyms && info.synonyms.length > 0) {
+                            output += `<br><small>🏷️ Names: ${info.synonyms.slice(0, 3).join(', ')}</small>`;
+                        }
+                        output += `</div>`;
+                    });
+                }
+                
+                if (result.suggestions && result.suggestions.length > 0) {
+                    output += `<h5>Suggestions:</h5>
+                        <div style="background: #fff3cd; padding: 10px; border-radius: 4px; border-left: 4px solid #ffc107;">`;
+                    result.suggestions.forEach(suggestion => {
+                        output += `<p>💡 ${suggestion}</p>`;
+                    });
+                    output += `</div>`;
+                }
+                
+                output += `</div>`;
+                document.getElementById(resultId).innerHTML = output;
+                document.getElementById(resultId).style.display = 'block';
+            } catch (error) {
+                console.error('Enhanced balancing failed:', error);
+                showError(resultId, `Balancing failed: ${error.message}`);
+            }
+        };
+
         window.calculateEnhancedStoichiometry = async function() {
-            if (!window.PubChemJS || !window.PubChemJS.Compound || !window.CREB || !window.CREB.Stoichiometry) {
-                showError('enhancedStoichResult', 'Required libraries not available');
+            if (!window.PubChemJS || !window.PubChemJS.Compound || !window.CREB || !window.CREB.EnhancedStoichiometry) {
+                showError('enhancedStoichResult', 'Required libraries not available. Make sure both CREB and PubChem JS are loaded.');
                 return;
             }
             
@@ -1118,57 +1194,59 @@
             showLoading(resultId, 'Calculating with PubChem data...');
             
             try {
-                const stoich = new window.CREB.Stoichiometry(equation);
-                const result = stoich.calculateFromMoles(species, amount);
-                
-                // Try to get PubChem data for compounds
-                const compoundData = {};
-                const allSpecies = [...Object.keys(result.reactants), ...Object.keys(result.products)];
-                
-                for (const sp of allSpecies) {
-                    try {
-                        const compounds = await window.PubChemJS.Compound.fromName(sp);
-                        if (compounds.length > 0) {
-                            compoundData[sp] = compounds[0];
-                        }
-                    } catch (e) {
-                        // Ignore individual compound lookup failures
-                    }
-                }
+                const enhancedStoich = new window.CREB.EnhancedStoichiometry(equation);
+                const result = await enhancedStoich.calculateFromMolesEnhanced(species, amount);
                 
                 let output = `<div style="padding: 15px; background: #f8fff8; border-left: 4px solid #27ae60; border-radius: 4px;">
                     <h4>🧬 Enhanced Stoichiometric Calculation</h4>
-                    <p><strong>Balanced equation:</strong> ${stoich.getBalancedEquation()}</p>
+                    <p><strong>Balanced equation:</strong> ${result.balancedEquation}</p>
                     
                     <h5>Reactants:</h5>`;
                 
-                Object.entries(result.reactants).forEach(([sp, data]) => {
+                Object.entries(result.amounts.reactants).forEach(([sp, data]) => {
                     output += `<div style="margin: 10px 0; padding: 10px; background: #ecf0f1; border-radius: 4px;">
-                        <strong>${sp}:</strong> ${data.moles} mol (${data.grams} g)`;
-                    if (compoundData[sp]) {
-                        const compound = compoundData[sp];
+                        <strong>${sp}:</strong> ${data.moles.toFixed(4)} mol (${data.grams.toFixed(4)} g)`;
+                    
+                    if (result.compoundData[sp]) {
+                        const compound = result.compoundData[sp];
                         output += `<br><small>📊 PubChem: ${compound.molecularFormula} | MW: ${compound.molecularWeight?.toFixed(2)} g/mol | CID: ${compound.cid}</small>`;
+                        if (compound.synonyms && compound.synonyms.length > 0) {
+                            output += `<br><small>🏷️ Also known as: ${compound.synonyms.slice(0, 3).join(', ')}</small>`;
+                        }
                     }
-                    output += '</div>';
+                    output += `</div>`;
                 });
                 
-                output += '<h5>Products:</h5>';
-                Object.entries(result.products).forEach(([sp, data]) => {
+                output += `<h5>Products:</h5>`;
+                Object.entries(result.amounts.products).forEach(([sp, data]) => {
                     output += `<div style="margin: 10px 0; padding: 10px; background: #ecf0f1; border-radius: 4px;">
-                        <strong>${sp}:</strong> ${data.moles} mol (${data.grams} g)`;
-                    if (compoundData[sp]) {
-                        const compound = compoundData[sp];
+                        <strong>${sp}:</strong> ${data.moles.toFixed(4)} mol (${data.grams.toFixed(4)} g)`;
+                    
+                    if (result.compoundData[sp]) {
+                        const compound = result.compoundData[sp];
                         output += `<br><small>📊 PubChem: ${compound.molecularFormula} | MW: ${compound.molecularWeight?.toFixed(2)} g/mol | CID: ${compound.cid}</small>`;
+                        if (compound.synonyms && compound.synonyms.length > 0) {
+                            output += `<br><small>🏷️ Also known as: ${compound.synonyms.slice(0, 3).join(', ')}</small>`;
+                        }
                     }
-                    output += '</div>';
+                    output += `</div>`;
                 });
                 
-                output += '</div>';
+                if (result.analysis) {
+                    output += `<h5>Reaction Analysis:</h5>
+                        <div style="margin: 10px 0; padding: 10px; background: #e8f8ff; border-radius: 4px;">
+                        <p><strong>Type:</strong> ${result.analysis.reactionType}</p>
+                        <p><strong>Atom Balance:</strong> ${result.analysis.atomBalance ? '✅ Balanced' : '❌ Not balanced'}</p>
+                        <p><strong>Mass Conservation:</strong> ${result.analysis.massConservation ? '✅ Conserved' : '❌ Not conserved'}</p>
+                        </div>`;
+                }
                 
+                output += `</div>`;
                 document.getElementById(resultId).innerHTML = output;
                 document.getElementById(resultId).style.display = 'block';
             } catch (error) {
-                showError(resultId, error.message || 'Failed to calculate stoichiometry');
+                console.error('Enhanced stoichiometry calculation failed:', error);
+                showError(resultId, `Calculation failed: ${error.message}`);
             }
         };
 
