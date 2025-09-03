@@ -689,49 +689,50 @@
     <script src="./packages/pubchem-js/dist/index.umd.js"></script>
     <script>
         // Load both CREB and PubChem libraries
-        const { ChemicalEquationBalancer, Stoichiometry } = window.CREB || {};
-        const { Compound } = window.PubChemJS || {};
-
         let balancer;
-        let pubchemAvailable = false;
         
         // Initialize when the page loads
         document.addEventListener('DOMContentLoaded', function() {
-            if (ChemicalEquationBalancer && Stoichiometry) {
-                balancer = new ChemicalEquationBalancer();
-                console.log('CREB-JS library loaded successfully!');
-            } else {
-                console.error('Failed to load CREB-JS library');
-            }
-            
-            if (Compound) {
-                pubchemAvailable = true;
-                console.log('PubChem-JS library loaded successfully!');
-            } else {
-                console.warn('PubChem-JS library not available - enhanced features disabled');
-                // Disable enhanced sections
-                document.querySelectorAll('.section.enhanced').forEach(section => {
-                    section.style.opacity = '0.6';
-                    section.style.pointerEvents = 'none';
-                    const warning = document.createElement('div');
-                    warning.innerHTML = '<p style="background: #fff3cd; padding: 10px; border-radius: 4px; margin-bottom: 15px;"><strong>⚠️ PubChem Integration Unavailable:</strong> Build the PubChem-JS package to enable enhanced features.</p>';
-                    section.insertBefore(warning, section.firstChild.nextSibling);
-                });
-            }
-        });
-
-        window.balanceEquation = function() {
+            // Add a small delay to ensure scripts are fully loaded
+            setTimeout(function() {
+                // Initialize core CREB functionality
+                if (window.CREB && window.CREB.ChemicalEquationBalancer) {
+                    balancer = new window.CREB.ChemicalEquationBalancer();
+                    console.log('CREB-JS library loaded successfully!');
+                } else {
+                    console.error('Failed to load CREB-JS library');
+                }
+                
+                // Check PubChem availability
+                if (window.PubChemJS && window.PubChemJS.Compound) {
+                    console.log('PubChem-JS library loaded successfully!');
+                } else {
+                    console.warn('PubChem-JS library not available - enhanced features disabled');
+                    // Disable enhanced sections
+                    document.querySelectorAll('.section.enhanced').forEach(section => {
+                        section.style.opacity = '0.6';
+                        section.style.pointerEvents = 'none';
+                        const warning = document.createElement('div');
+                        warning.innerHTML = '<p style="background: #fff3cd; padding: 10px; border-radius: 4px; margin-bottom: 15px;"><strong>⚠️ PubChem Integration Unavailable:</strong> Build the PubChem-JS package to enable enhanced features.</p>';
+                        section.insertBefore(warning, section.firstChild.nextSibling);
+                    });
+                }
+            }, 100); // 100ms delay
+        });        window.balanceEquation = function() {
             const equation = document.getElementById('equation').value;
             const resultDiv = document.getElementById('result');
             
-            if (!balancer) {
-                resultDiv.textContent = 'Error: Library not loaded';
+            if (!window.CREB || !window.CREB.ChemicalEquationBalancer) {
+                resultDiv.textContent = 'Error: CREB library not loaded';
                 resultDiv.style.display = 'block';
                 resultDiv.className = 'error';
                 return;
             }
             
             try {
+                if (!balancer) {
+                    balancer = new window.CREB.ChemicalEquationBalancer();
+                }
                 const balanced = balancer.balance(equation);
                 resultDiv.textContent = `Balanced: ${balanced}`;
                 resultDiv.style.display = 'block';
@@ -749,15 +750,15 @@
             const amount = parseFloat(document.getElementById('amount').value);
             const resultDiv = document.getElementById('stoichResult');
             
-            if (!Stoichiometry) {
-                resultDiv.textContent = 'Error: Library not loaded';
+            if (!window.CREB || !window.CREB.Stoichiometry) {
+                resultDiv.textContent = 'Error: CREB library not loaded';
                 resultDiv.style.display = 'block';
                 resultDiv.className = 'error';
                 return;
             }
             
             try {
-                const stoich = new Stoichiometry(equation);
+                const stoich = new window.CREB.Stoichiometry(equation);
                 const result = stoich.calculateFromMoles(species, amount);
                 
                 let output = `Balanced equation: ${stoich.getBalancedEquation()}\n\n`;
@@ -789,16 +790,16 @@
             const formula = document.getElementById('formula').value;
             const resultDiv = document.getElementById('molarWeightResult');
             
-            if (!Stoichiometry) {
-                resultDiv.textContent = 'Error: Library not loaded';
+            if (!window.CREB || !window.CREB.Stoichiometry) {
+                resultDiv.textContent = 'Error: CREB library not loaded';
                 resultDiv.style.display = 'block';
                 resultDiv.className = 'error';
                 return;
             }
             
             try {
-                const molarWeight = Stoichiometry.calculateMolarWeight(formula);
-                resultDiv.textContent = `Molar weight of ${formula}: ${molarWeight} g/mol`;
+                const molarWeight = window.CREB.Stoichiometry.calculateMolarWeight(formula);
+                resultDiv.textContent = `Molar weight of ${formula}: ${molarWeight.toFixed(3)} g/mol`;
                 resultDiv.style.display = 'block';
                 resultDiv.className = 'result';
             } catch (error) {
@@ -899,7 +900,10 @@
         }
 
         window.searchByCid = async function() {
-            if (!pubchemAvailable) return;
+            if (!window.PubChemJS || !window.PubChemJS.Compound) {
+                showError('compoundResult', 'PubChem library not available');
+                return;
+            }
             
             const cid = parseInt(document.getElementById('cidInput').value);
             const resultId = 'compoundResult';
@@ -912,7 +916,7 @@
             showLoading(resultId);
 
             try {
-                const compound = await Compound.fromCid(cid);
+                const compound = await window.PubChemJS.Compound.fromCid(cid);
                 document.getElementById(resultId).innerHTML = 
                     `<div style="padding: 15px; background: #f8fff8; border-left: 4px solid #27ae60; border-radius: 4px;">
                         ${displayCompound(compound, 'Found:')}
@@ -924,7 +928,10 @@
         };
 
         window.searchByName = async function() {
-            if (!pubchemAvailable) return;
+            if (!window.PubChemJS || !window.PubChemJS.Compound) {
+                showError('compoundResult', 'PubChem library not available');
+                return;
+            }
             
             const name = document.getElementById('nameInput').value.trim();
             const resultId = 'compoundResult';
@@ -937,7 +944,7 @@
             showLoading(resultId);
 
             try {
-                const compounds = await Compound.fromName(name);
+                const compounds = await window.PubChemJS.Compound.fromName(name);
                 
                 if (compounds.length === 0) {
                     showError(resultId, 'No compounds found for this name');
@@ -966,7 +973,10 @@
         };
 
         window.searchBySmiles = async function() {
-            if (!pubchemAvailable) return;
+            if (!window.PubChemJS || !window.PubChemJS.Compound) {
+                showError('compoundResult', 'PubChem library not available');
+                return;
+            }
             
             const smiles = document.getElementById('smilesInput').value.trim();
             const resultId = 'compoundResult';
@@ -979,7 +989,7 @@
             showLoading(resultId);
 
             try {
-                const compounds = await Compound.fromSmiles(smiles);
+                const compounds = await window.PubChemJS.Compound.fromSmiles(smiles);
                 
                 if (compounds.length === 0) {
                     showError(resultId, 'No compounds found for this SMILES string');
@@ -1008,7 +1018,10 @@
         };
 
         window.calculateEnhancedStoichiometry = async function() {
-            if (!pubchemAvailable || !Stoichiometry) return;
+            if (!window.PubChemJS || !window.PubChemJS.Compound || !window.CREB || !window.CREB.Stoichiometry) {
+                showError('enhancedStoichResult', 'Required libraries not available');
+                return;
+            }
             
             const equation = document.getElementById('enhancedEquation').value;
             const species = document.getElementById('enhancedSpecies').value;
@@ -1018,7 +1031,7 @@
             showLoading(resultId, 'Calculating with PubChem data...');
             
             try {
-                const stoich = new Stoichiometry(equation);
+                const stoich = new window.CREB.Stoichiometry(equation);
                 const result = stoich.calculateFromMoles(species, amount);
                 
                 // Try to get PubChem data for compounds
@@ -1027,7 +1040,7 @@
                 
                 for (const sp of allSpecies) {
                     try {
-                        const compounds = await Compound.fromName(sp);
+                        const compounds = await window.PubChemJS.Compound.fromName(sp);
                         if (compounds.length > 0) {
                             compoundData[sp] = compounds[0];
                         }
@@ -1073,7 +1086,10 @@
         };
 
         window.compareCompounds = async function() {
-            if (!pubchemAvailable) return;
+            if (!window.PubChemJS || !window.PubChemJS.Compound) {
+                showError('comparisonResult', 'PubChem library not available');
+                return;
+            }
             
             const name1 = document.getElementById('compound1').value.trim();
             const name2 = document.getElementById('compound2').value.trim();
@@ -1091,9 +1107,9 @@
                 const getCompound = async (input) => {
                     const cid = parseInt(input);
                     if (!isNaN(cid)) {
-                        return await Compound.fromCid(cid);
+                        return await window.PubChemJS.Compound.fromCid(cid);
                     } else {
-                        const compounds = await Compound.fromName(input);
+                        const compounds = await window.PubChemJS.Compound.fromName(input);
                         if (compounds.length === 0) throw new Error(`No compound found for "${input}"`);
                         return compounds[0];
                     }
