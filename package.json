@@ -8,8 +8,12 @@
   "browser": "dist/index.umd.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "rollup -c",
-    "test": "jest",
+    "build": "npm run build:creb && npm run build:pubchem",
+    "build:creb": "rollup -c",
+    "build:pubchem": "cd packages/pubchem-js && npm run build",
+    "test": "jest && cd packages/pubchem-js && npm test",
+    "test:creb": "jest",
+    "test:pubchem": "cd packages/pubchem-js && npm test",
     "dev": "rollup -c -w",
     "prepublishOnly": "npm run build"
   },

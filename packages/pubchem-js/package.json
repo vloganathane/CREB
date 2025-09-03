@@ -1,0 +1,53 @@
+{
+  "name": "@creb-js/pubchem",
+  "version": "1.0.0",
+  "description": "JavaScript/TypeScript port of PubChemPy for chemical compound data from PubChem",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "browser": "dist/index.umd.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "rollup -c",
+    "test": "jest",
+    "dev": "rollup -c -w",
+    "lint": "eslint src/**/*.ts",
+    "typecheck": "tsc --noEmit",
+    "demo": "node demo/basic.js",
+    "demo:interactive": "npx tsx demo/interactive.ts",
+    "demo:benchmark": "node demo/benchmark.js",
+    "demo:serve": "npx serve . -p 8000"
+  },
+  "keywords": [
+    "chemistry",
+    "pubchem",
+    "chemical-compounds",
+    "molecular-data",
+    "chemical-informatics",
+    "api-client"
+  ],
+  "author": {
+    "name": "Loganathane Virassamy",
+    "url": "https://www.linkedin.com/in/loganathane-virassamy/"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vloganathane/CREB.git",
+    "directory": "packages/pubchem-js"
+  },
+  "files": [
+    "dist"
+  ],
+  "peerDependencies": {
+    "creb-js": "^1.0.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-typescript": "^11.1.6",
+    "@types/jest": "^29.5.12",
+    "jest": "^29.7.0",
+    "rollup": "^4.12.0",
+    "ts-jest": "^29.1.2",
+    "tslib": "^2.8.1",
+    "typescript": "^5.3.3"
+  }
+}

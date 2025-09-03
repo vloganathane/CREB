@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CREB Demo Test Suite</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .test { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .pass { background: #d4edda; border-color: #c3e6cb; }
+        .fail { background: #f8d7da; border-color: #f5c6cb; }
+        .pending { background: #fff3cd; border-color: #ffeaa7; }
+        button { margin: 5px; padding: 8px 16px; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🧪 CREB Demo Test Suite</h1>
+    
+    <div id="tests">
+        <div class="test pending" id="test-library-loading">
+            <h3>📚 Library Loading</h3>
+            <button onclick="testLibraryLoading()">Test Library Loading</button>
+            <div id="result-library-loading"></div>
+        </div>
+
+        <div class="test pending" id="test-equation-balancing">
+            <h3>⚗️ Equation Balancing</h3>
+            <button onclick="testEquationBalancing()">Test Equation Balancing</button>
+            <div id="result-equation-balancing"></div>
+        </div>
+
+        <div class="test pending" id="test-stoichiometry">
+            <h3>🧮 Stoichiometry</h3>
+            <button onclick="testStoichiometry()">Test Stoichiometry</button>
+            <div id="result-stoichiometry"></div>
+        </div>
+
+        <div class="test pending" id="test-molar-weight">
+            <h3>⚖️ Molar Weight</h3>
+            <button onclick="testMolarWeight()">Test Molar Weight</button>
+            <div id="result-molar-weight"></div>
+        </div>
+
+        <div class="test pending" id="test-pubchem">
+            <h3>🧬 PubChem Integration</h3>
+            <button onclick="testPubChem()">Test PubChem (requires internet)</button>
+            <div id="result-pubchem"></div>
+        </div>
+
+        <div class="test pending" id="test-navigation">
+            <h3>🧭 Navigation</h3>
+            <button onclick="testNavigation()">Test Navigation</button>
+            <div id="result-navigation"></div>
+        </div>
+    </div>
+
+    <div style="margin-top: 30px;">
+        <button onclick="runAllTests()" style="background: #007bff; color: white; font-size: 16px; padding: 12px 24px;">
+            🚀 Run All Tests
+        </button>
+    </div>
+
+    <!-- Load the libraries -->
+    <script src="./dist/index.umd.js"></script>
+    <script src="./packages/pubchem-js/dist/index.umd.js"></script>
+
+    <script>
+        // Test functions
+        function setTestResult(testId, passed, message) {
+            const testDiv = document.getElementById(testId);
+            const resultDiv = document.getElementById(`result-${testId.replace('test-', '')}`);
+            
+            testDiv.className = `test ${passed ? 'pass' : 'fail'}`;
+            resultDiv.innerHTML = `<pre>${message}</pre>`;
+        }
+
+        function testLibraryLoading() {
+            let results = [];
+            let allPassed = true;
+
+            // Test CREB library
+            if (window.CREB) {
+                const { ChemicalEquationBalancer, Stoichiometry } = window.CREB;
+                if (ChemicalEquationBalancer && Stoichiometry) {
+                    results.push('✅ CREB library loaded successfully');
+                    results.push(`   - ChemicalEquationBalancer: ${typeof ChemicalEquationBalancer}`);
+                    results.push(`   - Stoichiometry: ${typeof Stoichiometry}`);
+                } else {
+                    results.push('❌ CREB library missing components');
+                    allPassed = false;
+                }
+            } else {
+                results.push('❌ CREB library not loaded');
+                allPassed = false;
+            }
+
+            // Test PubChem library
+            if (window.PubChemJS) {
+                const { Compound } = window.PubChemJS;
+                if (Compound) {
+                    results.push('✅ PubChem library loaded successfully');
+                    results.push(`   - Compound: ${typeof Compound}`);
+                } else {
+                    results.push('❌ PubChem library missing Compound class');
+                    allPassed = false;
+                }
+            } else {
+                results.push('❌ PubChem library not loaded');
+                allPassed = false;
+            }
+
+            setTestResult('test-library-loading', allPassed, results.join('\n'));
+        }
+
+        function testEquationBalancing() {
+            const results = [];
+            let allPassed = true;
+
+            try {
+                const { ChemicalEquationBalancer } = window.CREB;
+                const balancer = new ChemicalEquationBalancer();
+
+                // Test cases
+                const testCases = [
+                    { equation: 'Al + CuSO4 = Al2(SO4)3 + Cu', expected: '2 Al + 3 CuSO4 = Al2(SO4)3 + 3 Cu' },
+                    { equation: 'H2 + O2 = H2O', expected: '2 H2 + O2 = 2 H2O' },
+                    { equation: 'C + O2 = CO2', expected: 'C + O2 = CO2' }
+                ];
+
+                for (const testCase of testCases) {
+                    try {
+                        const result = balancer.balance(testCase.equation);
+                        if (result === testCase.expected) {
+                            results.push(`✅ ${testCase.equation} → ${result}`);
+                        } else {
+                            results.push(`❌ ${testCase.equation} → ${result} (expected: ${testCase.expected})`);
+                            allPassed = false;
+                        }
+                    } catch (error) {
+                        results.push(`❌ ${testCase.equation} → Error: ${error.message}`);
+                        allPassed = false;
+                    }
+                }
+            } catch (error) {
+                results.push(`❌ Failed to initialize balancer: ${error.message}`);
+                allPassed = false;
+            }
+
+            setTestResult('test-equation-balancing', allPassed, results.join('\n'));
+        }
+
+        function testStoichiometry() {
+            const results = [];
+            let allPassed = true;
+
+            try {
+                const { Stoichiometry } = window.CREB;
+                const stoich = new Stoichiometry('2 H2 + O2 = 2 H2O');
+                
+                const result = stoich.calculateFromMoles('H2', 1.0);
+                
+                results.push('✅ Stoichiometry calculation successful');
+                results.push(`   Balanced equation: ${stoich.getBalancedEquation()}`);
+                results.push(`   Reactants: ${Object.keys(result.reactants).join(', ')}`);
+                results.push(`   Products: ${Object.keys(result.products).join(', ')}`);
+                
+                // Check H2 amount
+                if (result.reactants.H2 && result.reactants.H2.moles === 1.0) {
+                    results.push('✅ H2 amount correct: 1.0 mol');
+                } else {
+                    results.push(`❌ H2 amount incorrect: ${result.reactants.H2?.moles || 'undefined'}`);
+                    allPassed = false;
+                }
+
+            } catch (error) {
+                results.push(`❌ Stoichiometry test failed: ${error.message}`);
+                allPassed = false;
+            }
+
+            setTestResult('test-stoichiometry', allPassed, results.join('\n'));
+        }
+
+        function testMolarWeight() {
+            const results = [];
+            let allPassed = true;
+
+            try {
+                const { Stoichiometry } = window.CREB;
+                
+                const testCases = [
+                    { formula: 'H2O', expected: 18.015 },
+                    { formula: 'H2SO4', expected: 98.079 },
+                    { formula: 'C6H12O6', expected: 180.156 }
+                ];
+
+                for (const testCase of testCases) {
+                    try {
+                        const weight = Stoichiometry.calculateMolarWeight(testCase.formula);
+                        const diff = Math.abs(weight - testCase.expected);
+                        
+                        if (diff < 0.1) {
+                            results.push(`✅ ${testCase.formula}: ${weight} g/mol`);
+                        } else {
+                            results.push(`❌ ${testCase.formula}: ${weight} g/mol (expected: ${testCase.expected})`);
+                            allPassed = false;
+                        }
+                    } catch (error) {
+                        results.push(`❌ ${testCase.formula}: Error: ${error.message}`);
+                        allPassed = false;
+                    }
+                }
+            } catch (error) {
+                results.push(`❌ Molar weight test failed: ${error.message}`);
+                allPassed = false;
+            }
+
+            setTestResult('test-molar-weight', allPassed, results.join('\n'));
+        }
+
+        async function testPubChem() {
+            const results = [];
+            let allPassed = true;
+
+            try {
+                const { Compound } = window.PubChemJS;
+                
+                results.push('⏳ Testing PubChem connectivity...');
+                
+                // Test with a simple compound (water)
+                try {
+                    const compounds = await Compound.fromCid(962);
+                    results.push(`✅ Successfully fetched CID 962: ${compounds.cid}`);
+                    results.push(`   Formula: ${compounds.molecularFormula || 'N/A'}`);
+                    results.push(`   Weight: ${compounds.molecularWeight || 'N/A'} g/mol`);
+                } catch (error) {
+                    if (error.message.includes('fetch')) {
+                        results.push('⚠️ Network not available for PubChem test');
+                        results.push('   (This is expected in offline environments)');
+                    } else {
+                        results.push(`❌ PubChem test failed: ${error.message}`);
+                        allPassed = false;
+                    }
+                }
+            } catch (error) {
+                results.push(`❌ PubChem initialization failed: ${error.message}`);
+                allPassed = false;
+            }
+
+            setTestResult('test-pubchem', allPassed, results.join('\n'));
+        }
+
+        function testNavigation() {
+            const results = [];
+            let allPassed = true;
+
+            try {
+                // Test if navigation functions exist
+                const navFunctions = ['showPage', 'focusElement', 'clearAllResults', 'switchTab'];
+                
+                for (const funcName of navFunctions) {
+                    if (typeof window[funcName] === 'function') {
+                        results.push(`✅ ${funcName} function available`);
+                    } else {
+                        results.push(`❌ ${funcName} function missing`);
+                        allPassed = false;
+                    }
+                }
+
+                // Test if required elements exist
+                const requiredElements = ['core-page', 'pubchem-page', 'about-page'];
+                
+                for (const elementId of requiredElements) {
+                    const element = document.getElementById(elementId);
+                    if (element) {
+                        results.push(`✅ ${elementId} element found`);
+                    } else {
+                        results.push(`❌ ${elementId} element missing`);
+                        allPassed = false;
+                    }
+                }
+
+            } catch (error) {
+                results.push(`❌ Navigation test failed: ${error.message}`);
+                allPassed = false;
+            }
+
+            setTestResult('test-navigation', allPassed, results.join('\n'));
+        }
+
+        async function runAllTests() {
+            console.log('🚀 Running all tests...');
+            
+            testLibraryLoading();
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            testEquationBalancing();
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            testStoichiometry();
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            testMolarWeight();
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            testNavigation();
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // PubChem test might take longer
+            await testPubChem();
+            
+            console.log('✅ All tests completed!');
+        }
+    </script>
+</body>
+</html>
