@@ -26,6 +26,14 @@ A comprehensive TypeScript/JavaScript library for balancing chemical equations, 
 - 🌐 **Type-safe API** with comprehensive error handling
 - 🎯 **Smart auto-population** between related features
 
+### Phase 2: Enhanced Classes (NEW!)
+- 🆕 **EnhancedChemicalEquationBalancer** - PubChem-integrated balancing with compound validation
+- 🆕 **EnhancedStoichiometry** - Advanced calculations with real compound data and accuracy verification
+- ✅ **Mass balance validation** using accurate PubChem molecular weights
+- 🏪 **Intelligent caching** to minimize API calls and improve performance
+- 🔄 **Graceful degradation** - works with or without PubChem package installed
+- 💡 **Alternative suggestions** for unknown or misspelled compounds
+
 ## 🎮 Try the Live Demos
 
 ### [**Main Demo**](demos/demo.html) - Interactive Web Interface ✨
@@ -39,6 +47,12 @@ A comprehensive TypeScript/JavaScript library for balancing chemical equations, 
 - Automated test runner for all features
 - Manual testing interface
 - Integration and unit test results
+
+### [**Enhanced Demo**](demos/enhanced-demo.js) - Phase 2 Showcase
+- Interactive Node.js demonstration of enhanced features
+- PubChem integration examples with graceful fallbacks
+- Compound validation and molecular weight verification
+- Run with: `node demos/enhanced-demo.js`
 
 ## 📦 Installation
 
@@ -81,14 +95,24 @@ CREB/
 
 ## ✨ Recent Updates
 
-**Latest Release**: All demo features are now fully functional with enhanced user experience!
+**Phase 2 Release**: Enhanced CREB with PubChem Integration! 🎉
+
+- 🆕 **New Enhanced Classes** - `EnhancedChemicalEquationBalancer` and `EnhancedStoichiometry`
+- 🧬 **PubChem Integration** - Real compound data, molecular weight verification, and validation
+- ✅ **Mass Balance Validation** - Verify conservation using accurate PubChem molecular weights
+- 🏪 **Smart Caching** - Intelligent compound data caching to minimize API calls
+- 🔄 **Graceful Degradation** - Full functionality with or without PubChem package
+- 💡 **Compound Suggestions** - Alternative names for unknown or misspelled compounds
+- 📊 **Molecular Weight Accuracy** - Compare calculated vs. PubChem values with accuracy ratings
+- 🔬 **Compound Comparison** - Side-by-side analysis of chemical compounds
+
+**Previous Updates**: All demo features are fully functional with enhanced user experience!
 
 - 🔧 **Fixed all demo functionality** with robust validation and error handling
 - ⚡ **Pre-filled working examples** for immediate testing of all features
 - 🎯 **Smart auto-population** between equation balancer and stoichiometry calculator
 - 🛡️ **Comprehensive input validation** with helpful error messages
 - 📚 **Improved library exports** ensuring proper browser compatibility
-- 🌟 **Enhanced PubChem integration** with compound search, comparison, and analysis
 
 ### Demo Features Ready to Use:
 1. **Balance Chemical Equations** - Pre-filled with `Al + CuSO4 = Al2(SO4)3 + Cu`
@@ -97,6 +121,12 @@ CREB/
 4. **PubChem Compound Search** - Search by CID (2244), Name (aspirin), or SMILES
 5. **Enhanced Stoichiometry** - Glucose combustion with PubChem data
 6. **Compound Comparison** - Compare glucose vs fructose with detailed analysis
+
+### Phase 2 Enhanced Features:
+7. **Enhanced Equation Balancing** - PubChem-validated compound data with mass balance verification
+8. **Enhanced Stoichiometry** - Real compound data integration with molecular weight accuracy assessment
+9. **Compound Information Lookup** - Detailed PubChem data retrieval with intelligent caching
+10. **Alternative Compound Suggestions** - Smart suggestions for unknown or misspelled compounds
 
 ## Quick Start
 
@@ -138,6 +168,41 @@ const benzene = await Compound.fromSmiles('C1=CC=CC=C1');
 console.log(benzene[0].iupacName); // benzene
 ```
 
+### Phase 2: Enhanced Classes with PubChem Integration
+
+```javascript
+import { 
+  EnhancedChemicalEquationBalancer, 
+  EnhancedStoichiometry 
+} from 'creb-js';
+
+// Enhanced equation balancing with compound validation
+const balancer = new EnhancedChemicalEquationBalancer();
+const result = await balancer.balanceWithPubChemData('C6H12O6 + O2 = CO2 + H2O');
+
+console.log('Balanced:', result.equation);
+console.log('Mass balanced:', result.validation?.massBalanced);
+
+// Display compound information
+if (result.compoundData) {
+  for (const [species, info] of Object.entries(result.compoundData)) {
+    console.log(`${species}: MW=${info.molecularWeight}, CID=${info.cid}`);
+  }
+}
+
+// Enhanced stoichiometry with PubChem data
+const stoich = new EnhancedStoichiometry();
+await stoich.initializeWithValidation('2 H2 + O2 = 2 H2O');
+
+const enhanced = await stoich.calculateFromMolesEnhanced('H2', 2);
+console.log('Enhanced results with PubChem validation:', enhanced);
+
+// Molecular weight with PubChem verification
+const mwResult = await stoich.calculateMolarWeightEnhanced('H2O');
+console.log(`H2O: Calculated=${mwResult.calculated}, PubChem=${mwResult.pubchem}`);
+console.log(`Accuracy: ${mwResult.accuracy}`);
+```
+
 ## API Reference
 
 ### ChemicalEquationBalancer
@@ -155,6 +220,27 @@ Performs stoichiometric calculations starting from a given number of moles.
 
 #### `calculateFromGrams(species: string, grams: number): StoichiometryResult`
 Performs stoichiometric calculations starting from a given mass in grams.
+
+### Enhanced Classes (Phase 2)
+
+#### EnhancedChemicalEquationBalancer
+
+#### `balanceWithPubChemData(equation: string): Promise<EnhancedBalancedEquation>`
+Balances a chemical equation with PubChem compound validation and enrichment.
+
+#### `getCompoundInfo(compoundName: string): Promise<CompoundInfo>`
+Retrieves detailed compound information from PubChem with caching.
+
+#### EnhancedStoichiometry
+
+#### `initializeWithValidation(equation: string): Promise<ReactionAnalysis>`
+Initializes stoichiometry with PubChem compound validation and mass balance verification.
+
+#### `calculateFromMolesEnhanced(species: string, moles: number): Promise<EnhancedStoichiometryResult>`
+Enhanced calculation with PubChem molecular weight validation and accuracy assessment.
+
+#### `calculateMolarWeightEnhanced(formula: string): Promise<MolarWeightResult>`
+Calculates molecular weight with PubChem verification and accuracy rating.
 
 ## Examples
 
@@ -189,6 +275,50 @@ console.log(fromMoles);
 const fromGrams = stoich.calculateFromGrams('O2', 32);
 console.log(fromGrams);
 ```
+
+## 🧪 Testing & Demos
+
+### Running Tests
+
+```bash
+# Run all tests (CREB + PubChem)
+npm test
+
+# Run only CREB tests
+npm run test:creb
+
+# Run only PubChem tests
+npm run test:pubchem
+```
+
+### Interactive Demos
+
+#### Web-based Demos
+- **[Main Demo](demos/demo.html)** - Complete web interface with all features
+- **[Test Suite](demos/test-demo.html)** - Automated testing interface
+
+#### Node.js Demos
+```bash
+# Enhanced Phase 2 demonstration
+node demos/enhanced-demo.js
+
+# Run TypeScript examples
+npx ts-node examples/enhanced-usage.ts
+```
+
+### Test Coverage
+- ✅ **57 tests** covering all functionality
+- ✅ **Enhanced classes** with comprehensive test suites
+- ✅ **Error handling** and edge case validation
+- ✅ **PubChem integration** with graceful fallback testing
+- ✅ **Browser compatibility** testing
+
+### Demo Features
+1. **Interactive Web Interface** - Real-time calculations with instant feedback
+2. **Enhanced Node.js Demo** - Showcase of Phase 2 PubChem integration
+3. **Automated Test Runner** - Comprehensive validation of all features
+4. **TypeScript Examples** - Complete code examples with type safety
+5. **Error Handling Demo** - Graceful degradation when dependencies unavailable
 
 ## Connect & Contribute
 
