@@ -1191,10 +1191,17 @@
                 return;
             }
             
-            showLoading(resultId, 'Calculating with PubChem data...');
+            showLoading(resultId, 'Initializing with PubChem validation and calculating...');
             
             try {
-                const enhancedStoich = new window.CREB.EnhancedStoichiometry(equation);
+                const enhancedStoich = new window.CREB.EnhancedStoichiometry();
+                
+                // First initialize with validation
+                showLoading(resultId, 'Validating equation with PubChem data...');
+                const analysis = await enhancedStoich.initializeWithValidation(equation);
+                
+                // Then perform the enhanced calculation
+                showLoading(resultId, 'Calculating stoichiometry with PubChem data...');
                 const result = await enhancedStoich.calculateFromMolesEnhanced(species, amount);
                 
                 let output = `<div style="padding: 15px; background: #f8fff8; border-left: 4px solid #27ae60; border-radius: 4px;">
@@ -1207,7 +1214,7 @@
                     output += `<div style="margin: 10px 0; padding: 10px; background: #ecf0f1; border-radius: 4px;">
                         <strong>${sp}:</strong> ${data.moles.toFixed(4)} mol (${data.grams.toFixed(4)} g)`;
                     
-                    if (result.compoundData[sp]) {
+                    if (result.compoundData && result.compoundData[sp]) {
                         const compound = result.compoundData[sp];
                         output += `<br><small>📊 PubChem: ${compound.molecularFormula} | MW: ${compound.molecularWeight?.toFixed(2)} g/mol | CID: ${compound.cid}</small>`;
                         if (compound.synonyms && compound.synonyms.length > 0) {
@@ -1222,7 +1229,7 @@
                     output += `<div style="margin: 10px 0; padding: 10px; background: #ecf0f1; border-radius: 4px;">
                         <strong>${sp}:</strong> ${data.moles.toFixed(4)} mol (${data.grams.toFixed(4)} g)`;
                     
-                    if (result.compoundData[sp]) {
+                    if (result.compoundData && result.compoundData[sp]) {
                         const compound = result.compoundData[sp];
                         output += `<br><small>📊 PubChem: ${compound.molecularFormula} | MW: ${compound.molecularWeight?.toFixed(2)} g/mol | CID: ${compound.cid}</small>`;
                         if (compound.synonyms && compound.synonyms.length > 0) {
@@ -1232,13 +1239,25 @@
                     output += `</div>`;
                 });
                 
-                if (result.analysis) {
-                    output += `<h5>Reaction Analysis:</h5>
+                // Add validation information from initialization
+                if (analysis) {
+                    output += `<h5>Validation Results:</h5>
                         <div style="margin: 10px 0; padding: 10px; background: #e8f8ff; border-radius: 4px;">
-                        <p><strong>Type:</strong> ${result.analysis.reactionType}</p>
-                        <p><strong>Atom Balance:</strong> ${result.analysis.atomBalance ? '✅ Balanced' : '❌ Not balanced'}</p>
-                        <p><strong>Mass Conservation:</strong> ${result.analysis.massConservation ? '✅ Conserved' : '❌ Not conserved'}</p>
+                        <p><strong>Equation Balanced:</strong> ${analysis.balanced ? '✅ Yes' : '❌ No'}</p>
+                        <p><strong>Mass Conservation:</strong> ${analysis.molecularWeightValidation.isBalanced ? '✅ Conserved' : '❌ Not conserved'}</p>
+                        <p><strong>MW Difference:</strong> ${analysis.molecularWeightValidation.difference.toFixed(4)} g/mol</p>
                         </div>`;
+                }
+                
+                // Add molecular weight validation if available
+                if (result.validation && result.validation.molecularWeightAccuracy) {
+                    output += `<h5>Molecular Weight Validation:</h5>`;
+                    Object.entries(result.validation.molecularWeightAccuracy).forEach(([compound, accuracy]) => {
+                        output += `<div style="margin: 5px 0; padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 0.9em;">
+                            <strong>${compound}:</strong> ${accuracy.accuracy} 
+                            (Calculated: ${accuracy.calculated.toFixed(2)} g/mol, PubChem: ${accuracy.pubchem.toFixed(2)} g/mol)
+                        </div>`;
+                    });
                 }
                 
                 output += `</div>`;
