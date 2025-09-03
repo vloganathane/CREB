@@ -18,7 +18,7 @@ A comprehensive TypeScript/JavaScript library for balancing chemical equations, 
 - 🔬 **Support for complex formulas** with parentheses and nested groups
 - ✅ **Robust validation** with helpful error messages and pre-filled examples
 
-### Enhanced PubChem Integration (`@creb-js/pubchem`)
+### Enhanced PubChem Integration (`creb-pubchem-js`)
 - 🧬 **Search compounds** by name, CID, SMILES, or InChI
 - 📋 **Retrieve detailed properties** (molecular weight, formula, IUPAC names)
 - 🔍 **Compare compounds** with side-by-side analysis
@@ -47,7 +47,7 @@ A comprehensive TypeScript/JavaScript library for balancing chemical equations, 
 npm install creb-js
 
 # PubChem integration (optional)  
-npm install @creb-js/pubchem
+npm install creb-pubchem-js
 ```
 
 ## 🏗️ Project Structure
@@ -123,7 +123,7 @@ console.log(results);
 ### Enhanced PubChem Integration
 
 ```javascript
-import { Compound } from '@creb-js/pubchem';
+import { Compound } from 'creb-pubchem-js';
 
 // Search compound by name
 const compounds = await Compound.fromName('aspirin');

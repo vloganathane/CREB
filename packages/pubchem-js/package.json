@@ -1,5 +1,5 @@
 {
-  "name": "@creb-js/pubchem",
+  "name": "creb-pubchem-js",
   "version": "1.0.0",
   "description": "JavaScript/TypeScript port of PubChemPy for chemical compound data from PubChem",
   "main": "dist/index.js",
