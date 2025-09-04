@@ -10,6 +10,11 @@
 <body>
     <!-- Site Header -->
     <header class="site-header">
+        <button class="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Toggle menu">
+            <span class="hamburger"></span>
+            <span class="hamburger"></span>
+            <span class="hamburger"></span>
+        </button>
         <a href="#" class="header-title">
             <span class="logo">🧪</span>
             CREB-JS 1.0.0 documentation
@@ -1998,8 +2003,33 @@ export default {
     <script src="../dist/index.umd.js"></script>
     <script src="../packages/pubchem-js/dist/index.umd.js"></script>
     <script>
+        // Mobile menu toggle function
+        function toggleMobileMenu() {
+            const sidebar = document.querySelector('.sidebar');
+            const mobileBtn = document.querySelector('.mobile-menu-btn');
+            
+            sidebar.classList.toggle('open');
+            mobileBtn.classList.toggle('active');
+        }
+
+        // Close mobile menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const sidebar = document.querySelector('.sidebar');
+            const mobileBtn = document.querySelector('.mobile-menu-btn');
+            
+            if (window.innerWidth <= 768 && 
+                sidebar.classList.contains('open') && 
+                !sidebar.contains(event.target) && 
+                !mobileBtn.contains(event.target)) {
+                sidebar.classList.remove('open');
+                mobileBtn.classList.remove('active');
+            }
+        });
+
         // Load both CREB and PubChem libraries
         let balancer;
+        let crebLoaded = false;
+        let pubchemLoaded = false;
         
         // Initialize when the page loads
         document.addEventListener('DOMContentLoaded', function() {
@@ -2008,6 +2038,7 @@ export default {
                 // Initialize core CREB functionality
                 if (window.CREB && window.CREB.ChemicalEquationBalancer) {
                     balancer = new window.CREB.ChemicalEquationBalancer();
+                    crebLoaded = true;
                     console.log('CREB-JS library loaded successfully!');
                 } else {
                     console.error('Failed to load CREB-JS library');
@@ -2015,6 +2046,7 @@ export default {
                 
                 // Check PubChem availability
                 if (window.PubChemJS && window.PubChemJS.Compound) {
+                    pubchemLoaded = true;
                     console.log('PubChem-JS library loaded successfully!');
                 } else {
                     console.warn('PubChem-JS library not available - enhanced features disabled');
@@ -2133,7 +2165,7 @@ export default {
             const equation = document.getElementById('equation').value.trim();
             const resultDiv = document.getElementById('result');
             
-            if (!window.CREB || !window.CREB.ChemicalEquationBalancer) {
+            if (!crebLoaded || !window.CREB || !window.CREB.ChemicalEquationBalancer) {
                 resultDiv.textContent = 'Error: CREB library not loaded';
                 resultDiv.style.display = 'block';
                 resultDiv.className = 'error';
@@ -2176,13 +2208,46 @@ export default {
             }
         };
 
+        window.balanceComplexEquation = function() {
+            const equation = document.getElementById('complexEquation').value.trim();
+            const resultDiv = document.getElementById('complexResult');
+            
+            if (!crebLoaded || !window.CREB || !window.CREB.ChemicalEquationBalancer) {
+                resultDiv.textContent = 'Error: CREB library not loaded';
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'error';
+                return;
+            }
+            
+            if (!equation) {
+                resultDiv.textContent = 'Error: Please enter a chemical equation';
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'error';
+                return;
+            }
+            
+            try {
+                if (!balancer) {
+                    balancer = new window.CREB.ChemicalEquationBalancer();
+                }
+                const balanced = balancer.balance(equation);
+                resultDiv.textContent = `Balanced: ${balanced}`;
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result';
+            } catch (error) {
+                resultDiv.textContent = `Error: ${error.message}`;
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'error';
+            }
+        };
+
         window.calculateStoichiometry = function() {
             const equation = document.getElementById('stoichEquation').value.trim();
             const species = document.getElementById('species').value.trim();
             const amount = parseFloat(document.getElementById('amount').value);
             const resultDiv = document.getElementById('stoichResult');
             
-            if (!window.CREB || !window.CREB.Stoichiometry) {
+            if (!crebLoaded || !window.CREB || !window.CREB.Stoichiometry) {
                 resultDiv.textContent = 'Error: CREB library not loaded';
                 resultDiv.style.display = 'block';
                 resultDiv.className = 'error';
@@ -2238,7 +2303,7 @@ export default {
             const formula = document.getElementById('formula').value.trim();
             const resultDiv = document.getElementById('molarWeightResult');
             
-            if (!window.CREB) {
+            if (!crebLoaded || !window.CREB) {
                 resultDiv.textContent = 'Error: CREB library not loaded';
                 resultDiv.style.display = 'block';
                 resultDiv.className = 'error';
@@ -2267,63 +2332,6 @@ export default {
         };
 
         // Enhanced PubChem Integration Functions
-        window.focusElement = function(elementId) {
-            const element = document.getElementById(elementId);
-            if (element) {
-                element.focus();
-                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        };
-
-        window.clearAllResults = function() {
-            const resultIds = [
-                'result', 'stoichResult', 'molarWeightResult', 
-                'compoundResult', 'enhancedStoichResult', 'comparisonResult'
-            ];
-            
-            resultIds.forEach(id => {
-                const element = document.getElementById(id);
-                if (element) {
-                    element.style.display = 'none';
-                    element.innerHTML = '';
-                }
-            });
-            
-            // Clear all input fields
-            document.querySelectorAll('input').forEach(input => {
-                if (input.type === 'text' || input.type === 'number') {
-                    input.value = '';
-                }
-            });
-        };
-
-        window.switchTab = function(tabId) {
-            // Hide all content
-            document.querySelectorAll('.demo-content').forEach(content => {
-                content.classList.remove('active');
-            });
-            document.querySelectorAll('.demo-tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            
-            // Show selected content
-            const targetTab = document.getElementById(tabId);
-            if (targetTab) {
-                targetTab.classList.add('active');
-            }
-            
-            // Make the clicked tab active
-            if (event && event.target) {
-                event.target.classList.add('active');
-            }
-            
-            // Clear any previous results
-            const resultDiv = document.getElementById('compoundResult');
-            if (resultDiv) {
-                resultDiv.innerHTML = '';
-                resultDiv.style.display = 'none';
-            }
-        };
 
         function showLoading(resultId, message = 'Searching PubChem database...') {
             const resultDiv = document.getElementById(resultId);
@@ -2540,8 +2548,8 @@ export default {
 
         // Enhanced Chemical Intelligence Functions
         window.balanceWithEnhancedData = async function() {
-            if (!window.CREB || !window.CREB.EnhancedChemicalEquationBalancer) {
-                showError('enhancedIntelligenceResult', 'Enhanced CREB library not available');
+            if (!crebLoaded || !pubchemLoaded || !window.CREB || !window.CREB.EnhancedChemicalEquationBalancer) {
+                showError('enhancedIntelligenceResult', 'Enhanced CREB library or PubChem not available');
                 return;
             }
             
@@ -2627,8 +2635,8 @@ export default {
 
         // Name Resolution Functions
         window.balanceByCommonNames = async function() {
-            if (!window.CREB || !window.CREB.EnhancedChemicalEquationBalancer) {
-                showError('nameResolutionResult', 'Enhanced CREB library not available');
+            if (!crebLoaded || !pubchemLoaded || !window.CREB || !window.CREB.EnhancedChemicalEquationBalancer) {
+                showError('nameResolutionResult', 'Enhanced CREB library or PubChem not available');
                 return;
             }
             
@@ -2705,8 +2713,8 @@ export default {
 
         // Enhanced Stoichiometry Functions
         window.calculateEnhancedStoich = async function() {
-            if (!window.CREB || !window.CREB.EnhancedStoichiometry) {
-                showError('enhancedStoichResult', 'Enhanced CREB library not available');
+            if (!crebLoaded || !pubchemLoaded || !window.CREB || !window.CREB.EnhancedStoichiometry) {
+                showError('enhancedStoichResult', 'Enhanced CREB library or PubChem not available');
                 return;
             }
             
@@ -2793,8 +2801,8 @@ export default {
 
         // Safety Information Functions
         window.analyzeChemicalSafety = async function() {
-            if (!window.CREB || !window.CREB.EnhancedChemicalEquationBalancer) {
-                showError('safetyAnalysisResult', 'Enhanced CREB library not available');
+            if (!crebLoaded || !pubchemLoaded || !window.CREB || !window.CREB.EnhancedChemicalEquationBalancer) {
+                showError('safetyAnalysisResult', 'Enhanced CREB library or PubChem not available');
                 return;
             }
             
