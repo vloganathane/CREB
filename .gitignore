@@ -46,3 +46,8 @@ pids
 # Temporary folders
 tmp/
 temp/
+
+# Local project tracking (not for public repo)
+docs/PROJECT_REVIEW.md
+docs/FUTURE_ROADMAP.md
+docs/PROGRESS_TRACKER.md
