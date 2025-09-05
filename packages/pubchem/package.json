@@ -1,0 +1,7 @@
+{
+  "name": "creb-pubchem",
+  "version": "1.3.0",
+  "description": "PubChem integration for CREB-JS",
+  "main": "dist/index.js",
+  "private": true
+}

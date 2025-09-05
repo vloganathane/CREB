@@ -55,7 +55,11 @@ export class ThermodynamicsCalculator {
         equilibriumConstant,
         spontaneity,
         temperatureDependence,
-        conditions
+        conditions,
+        // Alias properties for integrated balancer
+        enthalpy: deltaH,
+        gibbsFreeEnergy: deltaG,
+        isSpontaneous: spontaneity === 'spontaneous'
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -278,5 +282,44 @@ export class ThermodynamicsCalculator {
       heatCapacity: 30, // Rough estimate
       temperatureRange: [298, 500]
     };
+  }
+
+  /**
+   * Calculate thermodynamics for reaction data format (used by integrated balancer)
+   */
+  async calculateReactionThermodynamics(
+    reactionData: import('./types').ReactionData,
+    temperature: number = this.standardTemperature
+  ): Promise<ThermodynamicsResult> {
+    // Convert ReactionData to BalancedEquation format
+    const reactants = reactionData.reactants.map(r => r.formula);
+    const products = reactionData.products.map(p => p.formula);
+    const coefficients = [
+      ...reactionData.reactants.map(r => r.coefficient),
+      ...reactionData.products.map(p => p.coefficient)
+    ];
+
+    // Create equation string for BalancedEquation
+    const reactantString = reactionData.reactants
+      .map(r => `${r.coefficient > 1 ? r.coefficient : ''}${r.formula}`)
+      .join(' + ');
+    const productString = reactionData.products
+      .map(p => `${p.coefficient > 1 ? p.coefficient : ''}${p.formula}`)
+      .join(' + ');
+    const equationString = `${reactantString} = ${productString}`;
+
+    const equation: BalancedEquation = {
+      equation: equationString,
+      reactants,
+      products,
+      coefficients
+    };
+
+    const conditions: ReactionConditions = {
+      temperature,
+      pressure: this.standardPressure
+    };
+
+    return this.calculateThermodynamics(equation, conditions);
   }
 }

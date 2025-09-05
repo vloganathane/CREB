@@ -1,1 +1,1 @@
-{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["../../src/thermodynamics/index.ts"],"names":[],"mappings":"AAAA;;;GAGG;AAEH,OAAO,EAAE,wBAAwB,EAAE,MAAM,cAAc,CAAC;AACxD,cAAc,SAAS,CAAC;AAGxB,OAAO,EAAE,wBAAwB,EAAE,MAAM,cAAc,CAAC;AACxD,eAAe,wBAAwB,CAAC"}
+{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["../../src/thermodynamics/index.ts"],"names":[],"mappings":"AAAA;;;GAGG;AAEH,OAAO,EAAE,wBAAwB,EAAE,MAAM,cAAc,CAAC;AACxD,OAAO,EAAE,8BAA8B,EAAE,MAAM,0BAA0B,CAAC;AAC1E,cAAc,SAAS,CAAC;AAGxB,OAAO,EAAE,wBAAwB,EAAE,MAAM,cAAc,CAAC;AAExD,eAAe,wBAAwB,CAAC"}

@@ -35,6 +35,12 @@ export interface ThermodynamicsResult {
     temperatureDependence: TemperatureProfile;
     /** Calculation conditions */
     conditions: ReactionConditions;
+    /** Standard enthalpy change (alias for deltaH) */
+    enthalpy: number;
+    /** Gibbs free energy change (alias for deltaG) */
+    gibbsFreeEnergy: number;
+    /** Whether reaction is spontaneous */
+    isSpontaneous: boolean;
 }
 export interface TemperatureProfile {
     /** Temperature range analyzed (K) */
@@ -94,5 +100,21 @@ export interface ThermodynamicsConfig {
     temperatureDependence: boolean;
     /** Precision for calculations */
     precision: number;
+}
+export interface ReactionData {
+    reactants: Array<{
+        formula: string;
+        coefficient: number;
+    }>;
+    products: Array<{
+        formula: string;
+        coefficient: number;
+    }>;
+}
+export interface CompoundThermodynamics {
+    formula: string;
+    deltaHf: number;
+    entropy: number;
+    heatCapacity: number;
 }
 //# sourceMappingURL=types.d.ts.map

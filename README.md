@@ -6,7 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
 [![Demo](https://img.shields.io/badge/Demo-Live-green.svg)](https://vloganathane.github.io/CREB/demos/demo.html)
 
-A comprehensive TypeScript/JavaScript library for balancing chemical equations, performing stoichiometric calculations, and accessing chemical compound data through PubChem integration. **All features are fully functional with robust validation and user-friendly interfaces.**
+A comprehensive TypeScript/JavaScript library for balancing chemical equations with thermodynamic analysis, performing stoichiometric calculations, and accessing chemical compound data through PubChem integration. **All features are fully functional with robust validation and user-friendly interfaces.**
 
 ## 🚀 Features
 
@@ -41,6 +41,7 @@ A comprehensive TypeScript/JavaScript library for balancing chemical equations, 
 - 🔥 **Energy analysis** - Calculate heat released/absorbed in reactions
 - 🧬 **Biochemical reactions** - Analyze glucose combustion and metabolic pathways
 - 📚 **Scientific accuracy** - Based on NIST and CRC Handbook reference data
+- 🚀 **Thermodynamics-Integrated Balancer** - Revolutionary tool combining equation balancing with comprehensive thermodynamic analysis, safety assessment, and optimization recommendations
 
 ## 🎮 Try the Live Demos
 
@@ -258,6 +259,38 @@ const tempAnalysis = calculator.calculateTemperatureDependence(glucoseReaction, 
 tempAnalysis.forEach(data => {
     console.log(`T: ${data.temperature}K, ΔG: ${data.gibbsFreeEnergy.toFixed(1)} kJ/mol`);
 });
+```
+
+### NEW: Thermodynamics-Integrated Balancer 🚀
+
+```javascript
+import { ThermodynamicsEquationBalancer } from 'creb-js';
+
+// Create the revolutionary integrated balancer
+const balancer = new ThermodynamicsEquationBalancer();
+
+// Balance and analyze in one step
+const equation = 'CH4 + O2 = CO2 + H2O';
+const result = await balancer.balanceWithThermodynamics(equation);
+
+// Get comprehensive analysis
+console.log('✅ Balanced equation:', result.balanced);
+console.log('🏷️ Reaction type:', result.reactionType);
+console.log('⚡ Energy released:', result.energyReleased, 'kJ/mol');
+console.log('✨ Feasibility:', result.feasibility);
+console.log('⚠️ Safety level:', result.safetyLevel);
+console.log('🔥 Spontaneous:', result.spontaneous);
+
+// Safety and industrial insights
+console.log('⚠️ Safety warnings:', result.safetyWarnings);
+console.log('💡 Recommendations:', result.recommendations);
+console.log('🏭 Industrial applications:', result.industrialApplications);
+
+// Find optimal reaction conditions
+const conditions = await balancer.findOptimalConditions(equation);
+console.log('🌡️ Optimal temperature:', conditions.temperature, 'K');
+console.log('🎯 Expected yield:', conditions.yield, '%');
+console.log('🧠 Reasoning:', conditions.reasoning);
 ```
 
 ## API Reference

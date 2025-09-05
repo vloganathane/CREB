@@ -38,6 +38,14 @@ export interface ThermodynamicsResult {
   temperatureDependence: TemperatureProfile;
   /** Calculation conditions */
   conditions: ReactionConditions;
+  
+  // Additional properties for integrated balancer
+  /** Standard enthalpy change (alias for deltaH) */
+  enthalpy: number;
+  /** Gibbs free energy change (alias for deltaG) */
+  gibbsFreeEnergy: number;
+  /** Whether reaction is spontaneous */
+  isSpontaneous: boolean;
 }
 
 export interface TemperatureProfile {
@@ -100,4 +108,16 @@ export interface ThermodynamicsConfig {
   temperatureDependence: boolean;
   /** Precision for calculations */
   precision: number;
+}
+
+export interface ReactionData {
+  reactants: Array<{ formula: string; coefficient: number }>;
+  products: Array<{ formula: string; coefficient: number }>;
+}
+
+export interface CompoundThermodynamics {
+  formula: string;
+  deltaHf: number;     // kJ/mol
+  entropy: number;     // J/(mol·K)
+  heatCapacity: number; // J/(mol·K)
 }

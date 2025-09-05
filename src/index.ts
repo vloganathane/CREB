@@ -19,6 +19,7 @@ export {
 // Thermodynamics module (Phase 2 - Advanced Chemistry)
 export { 
   ThermodynamicsCalculator,
+  ThermodynamicsEquationBalancer,
   type ThermodynamicsResult,
   type ReactionConditions,
   type ThermodynamicProperties,

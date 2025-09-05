@@ -55,5 +55,9 @@ export declare class ThermodynamicsCalculator {
      * TODO: Implement Joback and Reid group contribution method
      */
     private estimateThermodynamicProperties;
+    /**
+     * Calculate thermodynamics for reaction data format (used by integrated balancer)
+     */
+    calculateReactionThermodynamics(reactionData: import('./types').ReactionData, temperature?: number): Promise<ThermodynamicsResult>;
 }
 //# sourceMappingURL=calculator.d.ts.map
