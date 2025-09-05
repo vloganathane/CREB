@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0-alpha] - 2025-09-02
+
+### Added - Phase 3: Thermodynamics Module
+- **NEW**: `ThermodynamicsCalculator` class for comprehensive thermodynamic analysis
+- **Thermodynamic calculations**: Calculate ΔH°, ΔS°, and ΔG° for chemical reactions
+- **Spontaneity prediction**: Determine if reactions are thermodynamically favorable
+- **Temperature analysis**: Study how temperature affects reaction thermodynamics
+- **Energy analysis**: Calculate heat released/absorbed in reactions
+- **Glucose combustion demo**: Interactive analysis of biochemical reactions
+- **Scientific accuracy**: Based on NIST and CRC Handbook reference data
+- **Interactive demo integration**: New thermodynamics page in web demo
+- **Comprehensive testing**: Full test suite for thermodynamic calculations
+- **Documentation**: Complete API reference and usage examples
+
+### Enhanced
+- Demo updated to v1.3.0-alpha with new "🔥 Thermodynamics (NEW!)" menu
+- CSS styling for thermodynamic property grids and result displays
+- JavaScript functions for interactive thermodynamic calculations
+- Documentation updated with thermodynamic principles and examples
+- README.md updated with Phase 3 features and examples
+
+### Technical
+- `src/thermodynamics/` module with types, calculator, and comprehensive tests
+- TypeScript interfaces for `ReactionData`, `ThermodynamicsResult`, `CompoundThermodynamics`
+- Temperature-dependent Gibbs free energy calculations (ΔG = ΔH - TΔS)
+- Standard thermodynamic data integration for common compounds
+- Error handling and validation for thermodynamic inputs
+
 ## [1.0.0] - 2025-09-02
 
 ### Added

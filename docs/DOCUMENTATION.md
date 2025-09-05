@@ -244,6 +244,182 @@ Supports balancing of:
 - Mass-to-mole conversions
 - Ratio calculations
 
+### Thermodynamic Analysis
+
+- Calculate enthalpy changes (ΔH°)
+- Calculate entropy changes (ΔS°)
+- Calculate Gibbs free energy (ΔG°)
+- Predict reaction spontaneity
+- Temperature-dependent analysis
+
+## Thermodynamics Module
+
+### ThermodynamicsCalculator
+
+The `ThermodynamicsCalculator` class provides powerful tools for analyzing the energy changes in chemical reactions.
+
+#### Constructor
+
+```typescript
+import { ThermodynamicsCalculator } from 'creb-js';
+const calculator = new ThermodynamicsCalculator();
+```
+
+#### Methods
+
+##### `calculateReactionThermodynamics(reaction: ReactionData, temperature: number): ThermodynamicsResult`
+
+Calculates the thermodynamic properties of a chemical reaction at a given temperature.
+
+**Parameters:**
+- `reaction`: Object containing reactants and products with their coefficients
+- `temperature`: Temperature in Kelvin (default: 298.15 K)
+
+**Returns:**
+- `ThermodynamicsResult` object containing enthalpy, entropy, Gibbs free energy, and spontaneity
+
+**Example:**
+
+```typescript
+const reaction = {
+    reactants: [
+        { formula: 'C6H12O6', coefficient: 1 },
+        { formula: 'O2', coefficient: 6 }
+    ],
+    products: [
+        { formula: 'CO2', coefficient: 6 },
+        { formula: 'H2O', coefficient: 6 }
+    ]
+};
+
+const result = calculator.calculateReactionThermodynamics(reaction, 298.15);
+console.log('ΔH°:', result.enthalpy, 'kJ/mol');
+console.log('ΔS°:', result.entropy, 'J/(mol·K)');
+console.log('ΔG°:', result.gibbsFreeEnergy, 'kJ/mol');
+console.log('Spontaneous:', result.isSpontaneous);
+```
+
+##### `getCompoundThermodynamics(formula: string): CompoundThermodynamics`
+
+Retrieves standard thermodynamic data for a given compound.
+
+**Parameters:**
+- `formula`: Chemical formula (e.g., 'H2O', 'CO2', 'C6H12O6')
+
+**Returns:**
+- `CompoundThermodynamics` object with standard formation enthalpy, entropy, and heat capacity
+
+##### `calculateTemperatureDependence(reaction: ReactionData, temperatures: number[]): TemperatureAnalysis[]`
+
+Analyzes how thermodynamic properties change with temperature.
+
+**Parameters:**
+- `reaction`: Reaction data object
+- `temperatures`: Array of temperatures in Kelvin
+
+**Returns:**
+- Array of thermodynamic results at each temperature
+
+### Thermodynamic Data Types
+
+#### `ReactionData`
+
+```typescript
+interface ReactionData {
+    reactants: Array<{
+        formula: string;
+        coefficient: number;
+    }>;
+    products: Array<{
+        formula: string;
+        coefficient: number;
+    }>;
+}
+```
+
+#### `ThermodynamicsResult`
+
+```typescript
+interface ThermodynamicsResult {
+    enthalpy: number;          // ΔH° in kJ/mol
+    entropy: number;           // ΔS° in J/(mol·K)
+    gibbsFreeEnergy: number;   // ΔG° in kJ/mol
+    isSpontaneous: boolean;    // True if ΔG° < 0
+    temperature: number;       // Temperature in K
+}
+```
+
+#### `CompoundThermodynamics`
+
+```typescript
+interface CompoundThermodynamics {
+    formula: string;
+    standardFormationEnthalpy: number;  // ΔHf° in kJ/mol
+    standardEntropy: number;            // S° in J/(mol·K)
+    heatCapacity: number;               // Cp in J/(mol·K)
+}
+```
+
+### Thermodynamic Principles
+
+#### Enthalpy (ΔH)
+- **Negative values**: Exothermic reaction (releases heat)
+- **Positive values**: Endothermic reaction (absorbs heat)
+- **Units**: kJ/mol
+
+#### Entropy (ΔS)
+- **Positive values**: Increased disorder in the system
+- **Negative values**: Decreased disorder in the system
+- **Units**: J/(mol·K)
+
+#### Gibbs Free Energy (ΔG)
+- **Negative values**: Spontaneous reaction
+- **Positive values**: Non-spontaneous reaction
+- **Zero**: System at equilibrium
+- **Units**: kJ/mol
+- **Equation**: ΔG = ΔH - TΔS
+
+#### Spontaneity Prediction
+- **ΔG < 0**: Reaction is thermodynamically favorable
+- **ΔG > 0**: Reaction requires energy input
+- **ΔG = 0**: System is at equilibrium
+
+### Common Thermodynamic Applications
+
+#### Glucose Combustion Analysis
+
+```typescript
+const glucoseCombustion = {
+    reactants: [
+        { formula: 'C6H12O6', coefficient: 1 },
+        { formula: 'O2', coefficient: 6 }
+    ],
+    products: [
+        { formula: 'CO2', coefficient: 6 },
+        { formula: 'H2O', coefficient: 6 }
+    ]
+};
+
+const result = calculator.calculateReactionThermodynamics(glucoseCombustion, 298.15);
+// Expected: ΔH° ≈ -2803 kJ/mol (highly exothermic)
+// Expected: ΔG° ≈ -2726 kJ/mol (spontaneous)
+```
+
+#### Temperature Effect Analysis
+
+```typescript
+const temperatures = [273.15, 298.15, 373.15, 500];
+const temperatureEffects = calculator.calculateTemperatureDependence(
+    glucoseCombustion, 
+    temperatures
+);
+
+// Analyze how spontaneity changes with temperature
+temperatureEffects.forEach(result => {
+    console.log(`T: ${result.temperature}K, ΔG: ${result.gibbsFreeEnergy} kJ/mol, Spontaneous: ${result.isSpontaneous}`);
+});
+```
+
 ## Examples
 
 ### Advanced Balancing

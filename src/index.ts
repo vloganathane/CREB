@@ -15,3 +15,12 @@ export {
   type EnhancedStoichiometryResult,
   type ReactionAnalysis 
 } from './enhancedStoichiometry';
+
+// Thermodynamics module (Phase 2 - Advanced Chemistry)
+export { 
+  ThermodynamicsCalculator,
+  type ThermodynamicsResult,
+  type ReactionConditions,
+  type ThermodynamicProperties,
+  type TemperatureProfile
+} from './thermodynamics';

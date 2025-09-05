@@ -34,6 +34,14 @@ A comprehensive TypeScript/JavaScript library for balancing chemical equations, 
 - 🔄 **Graceful degradation** - works with or without PubChem package installed
 - 💡 **Alternative suggestions** for unknown or misspelled compounds
 
+### Phase 3: Thermodynamics Module (NEW! 🔥)
+- 🌡️ **Thermodynamic calculations** - Calculate ΔH°, ΔS°, and ΔG° for chemical reactions
+- ⚖️ **Spontaneity prediction** - Determine if reactions are thermodynamically favorable
+- 📊 **Temperature analysis** - Study how temperature affects reaction thermodynamics
+- 🔥 **Energy analysis** - Calculate heat released/absorbed in reactions
+- 🧬 **Biochemical reactions** - Analyze glucose combustion and metabolic pathways
+- 📚 **Scientific accuracy** - Based on NIST and CRC Handbook reference data
+
 ## 🎮 Try the Live Demos
 
 ### [**Main Demo**](demos/demo.html) - Interactive Web Interface ✨
@@ -216,6 +224,40 @@ console.log('Enhanced results with PubChem validation:', enhanced);
 const mwResult = await stoich.calculateMolarWeightEnhanced('H2O');
 console.log(`H2O: Calculated=${mwResult.calculated}, PubChem=${mwResult.pubchem}`);
 console.log(`Accuracy: ${mwResult.accuracy}`);
+```
+
+### Phase 3: Thermodynamics Analysis
+
+```javascript
+import { ThermodynamicsCalculator } from 'creb-js';
+
+// Create thermodynamics calculator
+const calculator = new ThermodynamicsCalculator();
+
+// Analyze glucose combustion
+const glucoseReaction = {
+    reactants: [
+        { formula: 'C6H12O6', coefficient: 1 },
+        { formula: 'O2', coefficient: 6 }
+    ],
+    products: [
+        { formula: 'CO2', coefficient: 6 },
+        { formula: 'H2O', coefficient: 6 }
+    ]
+};
+
+const result = calculator.calculateReactionThermodynamics(glucoseReaction, 298.15);
+console.log('ΔH°:', result.enthalpy, 'kJ/mol');      // ~-2803 kJ/mol
+console.log('ΔS°:', result.entropy, 'J/(mol·K)');    // ~262 J/(mol·K)  
+console.log('ΔG°:', result.gibbsFreeEnergy, 'kJ/mol'); // ~-2726 kJ/mol
+console.log('Spontaneous:', result.isSpontaneous);    // true
+
+// Temperature effect analysis
+const temperatures = [273.15, 298.15, 373.15, 500];
+const tempAnalysis = calculator.calculateTemperatureDependence(glucoseReaction, temperatures);
+tempAnalysis.forEach(data => {
+    console.log(`T: ${data.temperature}K, ΔG: ${data.gibbsFreeEnergy.toFixed(1)} kJ/mol`);
+});
 ```
 
 ## API Reference

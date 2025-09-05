@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thermodynamics Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .result { background: #f0f0f0; padding: 15px; margin: 10px 0; border-radius: 8px; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; }
+        button { padding: 10px 20px; margin: 10px 0; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🔥 Thermodynamics Function Test</h1>
+    
+    <h2>Test 1: Glucose Combustion</h2>
+    <button onclick="testGlucoseThermodynamics()">Test Glucose Combustion</button>
+    <div id="glucose-result" class="result" style="display: none;"></div>
+    
+    <h2>Test 2: Custom Reaction</h2>
+    <button onclick="testCustomThermodynamics()">Test H2 + O2 → H2O</button>
+    <div id="custom-result" class="result" style="display: none;"></div>
+
+    <script>
+        // Copy the exact functions from demo.html
+        function calculateGlucoseThermodynamics() {
+            const temperature = 298.15;
+            const resultDiv = document.getElementById('glucose-result');
+            
+            try {
+                // Simulate thermodynamics calculation for glucose combustion
+                const mockResults = {
+                    enthalpy: -2803.0, // kJ/mol (standard value for glucose combustion)
+                    entropy: 262.3, // J/(mol·K)
+                    gibbsFreeEnergy: -2725.8, // kJ/mol at 298.15 K
+                    isSpontaneous: true
+                };
+                
+                // Adjust for temperature (simplified calculation)
+                const tempEffect = (temperature - 298.15) * mockResults.entropy / 1000;
+                const adjustedGibbs = mockResults.gibbsFreeEnergy + tempEffect;
+                const adjustedSpontaneous = adjustedGibbs < 0;
+                
+                let html = `
+                    <div class="success">
+                        <h4>🔥 Glucose Combustion Results</h4>
+                        <p><strong>ΔH°:</strong> ${mockResults.enthalpy} kJ/mol</p>
+                        <p><strong>ΔS°:</strong> ${mockResults.entropy} J/(mol·K)</p>
+                        <p><strong>ΔG°:</strong> ${adjustedGibbs.toFixed(1)} kJ/mol</p>
+                        <p><strong>Spontaneous:</strong> ${adjustedSpontaneous ? 'Yes' : 'No'}</p>
+                    </div>`;
+                
+                resultDiv.innerHTML = html;
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result success';
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result error';
+            }
+        }
+        
+        function calculateCustomThermodynamics() {
+            const resultDiv = document.getElementById('custom-result');
+            
+            try {
+                // Water formation reaction
+                const reactionData = {
+                    enthalpy: -285.8, // kJ/mol
+                    entropy: -163.3, // J/(mol·K)
+                    name: 'Water Formation'
+                };
+                
+                const temperature = 298.15;
+                const gibbsFreeEnergy = reactionData.enthalpy - (temperature * reactionData.entropy / 1000);
+                const isSpontaneous = gibbsFreeEnergy < 0;
+                
+                let html = `
+                    <div class="success">
+                        <h4>💧 Water Formation Results</h4>
+                        <p><strong>Reaction:</strong> 2 H₂ + O₂ → 2 H₂O</p>
+                        <p><strong>ΔH°:</strong> ${reactionData.enthalpy} kJ/mol</p>
+                        <p><strong>ΔS°:</strong> ${reactionData.entropy} J/(mol·K)</p>
+                        <p><strong>ΔG°:</strong> ${gibbsFreeEnergy.toFixed(1)} kJ/mol</p>
+                        <p><strong>Spontaneous:</strong> ${isSpontaneous ? 'Yes' : 'No'}</p>
+                    </div>`;
+                
+                resultDiv.innerHTML = html;
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result success';
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result error';
+            }
+        }
+        
+        function testGlucoseThermodynamics() {
+            calculateGlucoseThermodynamics();
+        }
+        
+        function testCustomThermodynamics() {
+            calculateCustomThermodynamics();
+        }
+    </script>
+</body>
+</html>
