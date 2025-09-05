@@ -1,19 +1,21 @@
 #!/usr/bin/env node
 
 /**
- * CREB-JS Phase 2 Demo
+ * CREB-JS v1.4.0 Enhanced Demo
  * Demonstrates enhanced functionality with PubChem integration
+ * and NEW Thermodynamics-Integrated Balancer
  * 
- * Run with: node demo/enhanced-demo.js
+ * Run with: node demos/enhanced-demo.js
  */
 
 import { 
   EnhancedChemicalEquationBalancer, 
-  EnhancedStoichiometry 
+  EnhancedStoichiometry,
+  ThermodynamicsEquationBalancer
 } from '../dist/index.esm.js';
 
 async function demo() {
-  console.log('🧪 CREB-JS Phase 2: Enhanced PubChem Integration Demo\n');
+  console.log('🧪 CREB-JS v1.4.0: Enhanced Demo with Thermodynamics Integration\n');
   console.log('=' .repeat(60));
 
   // Demo 1: Enhanced Chemical Equation Balancing
@@ -180,8 +182,49 @@ async function demo() {
     }
   }
 
+  // Demo 5: NEW - Thermodynamics-Integrated Balancer
+  console.log('\n🚀 Demo 5: NEW - Thermodynamics-Integrated Balancer');
+  console.log('-'.repeat(50));
+  
+  const thermBalancer = new ThermodynamicsEquationBalancer();
+  const combustionEquation = 'CH4 + O2 = CO2 + H2O';
+  
+  console.log(`Testing thermodynamics-integrated balancing for: ${combustionEquation}`);
+  
+  try {
+    const thermoResult = await thermBalancer.balanceWithThermodynamics(combustionEquation);
+    
+    console.log('✅ Thermodynamics-Integrated Analysis Results:');
+    console.log(`   Balanced: ${thermoResult.balanced}`);
+    
+    if (thermoResult.analysis) {
+      console.log(`   Reaction Type: ${thermoResult.analysis.reactionType}`);
+      console.log(`   Feasibility: ${thermoResult.analysis.feasibility}`);
+      console.log(`   Safety Level: ${thermoResult.analysis.safetyLevel}`);
+      console.log(`   Energy Release: ${thermoResult.analysis.energyRelease?.toFixed(2)} kJ/mol`);
+      console.log(`   Temperature Coefficient: ${thermoResult.analysis.temperatureCoefficient?.toFixed(4)}`);
+    } else {
+      console.log('   Analysis: Using estimated thermodynamic data');
+    }
+    
+    if (thermoResult.conditions) {
+      console.log('   Optimal Conditions:');
+      console.log(`     Temperature: ${thermoResult.conditions.temperature} K`);
+      console.log(`     Pressure: ${thermoResult.conditions.pressure} atm`);
+    }
+    
+    if (thermoResult.industrialApplications?.length > 0) {
+      console.log(`   Industrial Applications: ${thermoResult.industrialApplications.join(', ')}`);
+    }
+    
+  } catch (error) {
+    console.error('❌ Error in thermodynamics analysis:', error.message);
+    console.log('   Note: This may occur if thermodynamic data is unavailable.');
+    console.log('   The system will fall back to estimated values.');
+  }
+
   console.log('\n' + '='.repeat(60));
-  console.log('🎉 Phase 2 Demo Complete!');
+  console.log('🎉 Enhanced Demo Complete with NEW Thermodynamics Integration!');
   console.log('\nNote: Some features may show warnings or limited data if');
   console.log('the creb-pubchem-js package is not installed or if PubChem');
   console.log('is not accessible. The library gracefully falls back to');

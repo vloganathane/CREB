@@ -1,13 +1,14 @@
 /**
- * Enhanced CREB Examples - Phase 2: PubChem Integration
- * Demonstrates enhanced balancer and stoichiometry with PubChem data
+ * Enhanced CREB Examples - v1.4.0: PubChem Integration + Thermodynamics
+ * Demonstrates enhanced balancer, stoichiometry with PubChem data, and NEW thermodynamics integration
  */
 
 import {
   EnhancedChemicalEquationBalancer,
   EnhancedStoichiometry,
   CompoundInfo,
-  EnhancedStoichiometryResult
+  EnhancedStoichiometryResult,
+  ThermodynamicsEquationBalancer
 } from '../src/index';
 
 // Example 1: Enhanced Equation Balancing with Compound Validation
@@ -226,9 +227,42 @@ async function exampleErrorHandling() {
   console.log('\n' + '='.repeat(60) + '\n');
 }
 
+// Example 6: NEW - Thermodynamics-Integrated Balancer
+async function exampleThermodynamicsIntegration() {
+  console.log('=== NEW: Thermodynamics-Integrated Balancer ===\n');
+  
+  const thermBalancer = new ThermodynamicsEquationBalancer();
+  
+  try {
+    // Example: Methane combustion with thermodynamic analysis
+    const equation = 'CH4 + O2 = CO2 + H2O';
+    console.log(`Analyzing: ${equation}`);
+    
+    const result = await thermBalancer.balanceWithThermodynamics(equation);
+    
+    console.log('Results:');
+    console.log(`✅ Balanced equation: ${result.balanced}`);
+    console.log(`🔬 Reaction type: ${result.reactionType}`);
+    console.log(`⚡ Feasibility: ${result.feasibility}`);
+    console.log(`🛡️ Safety level: ${result.safetyLevel}`);
+    console.log(`🔥 Energy release: ${result.energyReleased?.toFixed(2)} kJ/mol`);
+    console.log(`🌡️ Optimal temperature: ${result.optimalTemperature} K`);
+    console.log(`📊 Equilibrium constant: ${result.equilibriumConstant.toExponential(2)}`);
+    
+    if (result.industrialApplications?.length > 0) {
+      console.log(`🏭 Applications: ${result.industrialApplications.join(', ')}`);
+    }
+    
+  } catch (error) {
+    console.error('Error in thermodynamics analysis:', error.message);
+  }
+  
+  console.log('\n' + '='.repeat(60) + '\n');
+}
+
 // Main function to run all examples
 async function runAllExamples() {
-  console.log('Enhanced CREB Examples - Phase 2: PubChem Integration');
+  console.log('Enhanced CREB Examples - v1.4.0: PubChem Integration + Thermodynamics');
   console.log('Note: Some features require the creb-pubchem-js package to be installed\n');
   
   await exampleEnhancedBalancing();
@@ -236,6 +270,7 @@ async function runAllExamples() {
   await exampleEnhancedMolarWeight();
   await exampleCompoundComparison();
   await exampleErrorHandling();
+  await exampleThermodynamicsIntegration(); // NEW example
   
   console.log('All examples completed!');
 }
@@ -247,10 +282,11 @@ export {
   exampleEnhancedMolarWeight,
   exampleCompoundComparison,
   exampleErrorHandling,
+  exampleThermodynamicsIntegration,
   runAllExamples
 };
 
 // Run examples if this file is executed directly
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   runAllExamples().catch(console.error);
 }
