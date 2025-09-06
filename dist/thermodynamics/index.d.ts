@@ -4,6 +4,7 @@
  */
 export { ThermodynamicsCalculator } from './calculator';
 export { ThermodynamicsEquationBalancer } from './thermodynamicsBalancer';
+export { EnergyProfileGenerator, createEnergyProfile, exportEnergyProfile } from './energyProfile';
 export * from './types';
 import { ThermodynamicsCalculator } from './calculator';
 export default ThermodynamicsCalculator;

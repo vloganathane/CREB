@@ -4,6 +4,41 @@ export { ElementCounter, EquationParser, calculateMolarWeight } from './utils';
 export * from './types';
 export * from './constants';
 
+// Enhanced TypeScript Support (NEW) - Selective exports to avoid conflicts
+export {
+  // Branded Types
+  type ChemicalFormula,
+  type ElementSymbol,
+  type BalancedEquationString,
+  type SMILESNotation,
+  type InChINotation,
+  type CASNumber,
+  
+  // Advanced Types
+  type ValidElement,
+  type TypedElementCount,
+  type TypedCompound,
+  type TypedReaction,
+  type ReactionType,
+  type PhaseState,
+  
+  // Type Guards
+  isChemicalFormula,
+  isElementSymbol,
+  isBalancedEquation,
+  
+  // Utility Functions
+  parseFormula,
+  createChemicalFormula,
+  createElementSymbol,
+  
+  // Error Types
+  ChemicalFormulaError,
+  EquationBalancingError
+} from './advancedTypes';
+
+export { EnhancedBalancer } from './enhancedBalancerSimple';
+
 // Enhanced PubChem-integrated classes (Phase 2)
 export { 
   EnhancedChemicalEquationBalancer,
@@ -20,10 +55,18 @@ export {
 export { 
   ThermodynamicsCalculator,
   ThermodynamicsEquationBalancer,
+  EnergyProfileGenerator,
+  createEnergyProfile,
+  exportEnergyProfile,
   type ThermodynamicsResult,
   type ReactionConditions,
   type ThermodynamicProperties,
-  type TemperatureProfile
+  type TemperatureProfile,
+  type EnergyProfile,
+  type EnergyProfilePoint,
+  type TransitionState,
+  type ReactionCoordinate,
+  type BondChange
 } from './thermodynamics';
 
 // Advanced Kinetics & Analytics Module (Phase 2 - v1.5.0)
@@ -50,3 +93,22 @@ export {
   type ReactionClass,
   type RateLawType
 } from './kinetics';
+
+// Enhanced Data Integration Module (Phase 2 - v1.6.0)
+export {
+  ChemicalDatabaseManager,
+  NISTWebBookIntegration,
+  DataValidationService,
+  type CompoundDatabase,
+  type ExtendedThermodynamicProperties,
+  type PhysicalProperties,
+  type SafetyProperties,
+  type DatabaseSource,
+  type DatabaseQuery,
+  type DataImportResult,
+  type DataExportOptions,
+  type ValidationResult,
+  type ValidationError,
+  type ValidationWarning,
+  type DatabaseProvider
+} from './data';

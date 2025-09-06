@@ -1,19 +1,32 @@
 # 📚 CREB-JS Documentation
 
-This folder contains the comprehensive documentation for the CREB-JS project.
+This folder contains the comprehensive documentation for the CREB-JS project, organized by category for better navigation.
 
-## 📁 **File Overview**
+## 📁 **Directory Structure**
 
-### **🎯 Planning & Strategy**
+### **Core Documentation**
 - **`FUTURE_ROADMAP.md`** - Project roadmap and upcoming features
+- **`README.md`** - This file
+
+### **🚀 Development** (`development/`)
+Development-related documentation and guides:
 - **`PROGRESS_TRACKER.md`** - Development progress and milestones
 - **`PROJECT_REVIEW.md`** - Regular project assessments and reviews
-
-### **🔬 Technical Analysis**
-- **`ENHANCED_FEATURE_ANALYSIS.md`** - Analysis of advanced features
-- **`KINETICS_MODULE_SUMMARY.md`** - Kinetics implementation details
-- **`PUBCHEM_COVERAGE_ANALYSIS.md`** - PubChem API coverage assessment
+- **`CLEANUP_SUMMARY.md`** - Project organization and cleanup summaries
+- **`SQLITE_INTEGRATION_GUIDE.md`** - SQLite integration development guide
 - **`PHASE2_DOCUMENTATION.md`** - Phase 2 development documentation
+
+### **⚙️ Implementation** (`implementation/`)
+Feature implementation details and summaries:
+- **`ENHANCED_TYPESCRIPT_COMPLETE.md`** - TypeScript enhancement documentation
+- **`PERFORMANCE_OPTIMIZATIONS_COMPLETE.md`** - Performance optimization implementation
+- **`KINETICS_MODULE_SUMMARY.md`** - Kinetics module implementation details
+- **`ENHANCED_TYPESCRIPT_SUMMARY.md`** - TypeScript enhancement summary
+
+### **🔬 Analysis** (`analysis/`)
+Technical analysis and research documentation:
+- **`ENHANCED_FEATURE_ANALYSIS.md`** - Analysis of advanced features
+- **`PUBCHEM_COVERAGE_ANALYSIS.md`** - PubChem API coverage assessment
 
 ---
 

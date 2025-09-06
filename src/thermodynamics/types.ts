@@ -121,3 +121,76 @@ export interface CompoundThermodynamics {
   entropy: number;     // J/(mol·K)
   heatCapacity: number; // J/(mol·K)
 }
+
+/**
+ * Energy Profile Visualization Data Types
+ * For generating energy diagrams and reaction coordinate plots
+ */
+export interface EnergyProfilePoint {
+  /** Reaction coordinate (0-1, where 0 = reactants, 1 = products) */
+  coordinate: number;
+  /** Energy relative to reactants (kJ/mol) */
+  energy: number;
+  /** Point type */
+  type: 'reactant' | 'transition-state' | 'intermediate' | 'product';
+  /** Optional label for the point */
+  label?: string;
+  /** Species present at this point */
+  species?: string[];
+}
+
+export interface EnergyProfile {
+  /** Array of energy points along reaction coordinate */
+  points: EnergyProfilePoint[];
+  /** Overall energy change (kJ/mol) */
+  deltaE: number;
+  /** Activation energy for forward reaction (kJ/mol) */
+  activationEnergyForward: number;
+  /** Activation energy for reverse reaction (kJ/mol) */
+  activationEnergyReverse: number;
+  /** Number of elementary steps */
+  steps: number;
+  /** Rate-determining step index */
+  rateDeterminingStep: number;
+  /** Temperature for the profile (K) */
+  temperature: number;
+  /** Pressure for the profile (Pa) */
+  pressure: number;
+  /** Whether the reaction is exothermic */
+  isExothermic: boolean;
+}
+
+export interface TransitionState {
+  /** Reaction coordinate position (0-1) */
+  coordinate: number;
+  /** Energy relative to reactants (kJ/mol) */
+  energy: number;
+  /** Transition state structure description */
+  structure?: string;
+  /** Species involved in transition */
+  involvedSpecies: string[];
+  /** Bond breaking/forming information */
+  bondChanges?: BondChange[];
+}
+
+export interface BondChange {
+  /** Type of bond change */
+  type: 'breaking' | 'forming' | 'stretching' | 'compressing';
+  /** Atoms involved */
+  atoms: [string, string];
+  /** Bond order change */
+  bondOrderChange: number;
+  /** Energy contribution (kJ/mol) */
+  energyContribution: number;
+}
+
+export interface ReactionCoordinate {
+  /** Description of the reaction coordinate */
+  description: string;
+  /** Units of measurement */
+  units: string;
+  /** Physical meaning of the coordinate */
+  physicalMeaning: string;
+  /** Range of coordinate values */
+  range: [number, number];
+}

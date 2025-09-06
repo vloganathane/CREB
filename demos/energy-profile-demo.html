@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CREB-JS Energy Profile Visualization Demo</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .demo-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            background: #f9f9f9;
+        }
+
+        .demo-section h2 {
+            color: #4a4a4a;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        select, input {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .chart-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            min-height: 400px;
+            position: relative;
+        }
+
+        .data-display {
+            background: #f0f4f8;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            border-left: 4px solid #667eea;
+        }
+
+        .energy-point {
+            background: #e3f2fd;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border-left: 3px solid #2196f3;
+        }
+
+        .transition-state {
+            background: #fff3e0;
+            border-left-color: #ff9800;
+        }
+
+        .error {
+            color: #d32f2f;
+            background: #ffebee;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .success {
+            color: #388e3c;
+            background: #e8f5e8;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .info-box {
+            background: #e1f5fe;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #03a9f4;
+            margin: 15px 0;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            border-top: 4px solid #667eea;
+        }
+
+        .feature-card h3 {
+            color: #333;
+            margin-top: 0;
+        }
+
+        svg {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 CREB-JS Energy Profile Visualization</h1>
+        
+        <div class="info-box">
+            <h3>🔬 What are Energy Profiles?</h3>
+            <p>Energy profiles show how the energy of a chemical system changes during a reaction. They help visualize:</p>
+            <ul>
+                <li><strong>Activation Energy:</strong> Energy barrier that must be overcome</li>
+                <li><strong>Transition States:</strong> High-energy intermediate configurations</li>
+                <li><strong>Reaction Thermodynamics:</strong> Overall energy change</li>
+                <li><strong>Reaction Mechanisms:</strong> Step-by-step pathways</li>
+            </ul>
+        </div>
+
+        <div class="demo-section">
+            <h2>🚀 Interactive Demo</h2>
+            
+            <div class="controls">
+                <button onclick="generateSIPProfile()">SN2 Reaction</button>
+                <button onclick="generateCombustionProfile()">Combustion</button>
+                <button onclick="generateCatalyzedProfile()">Catalyzed Reaction</button>
+                <button onclick="generateCustomProfile()">Custom Profile</button>
+                <button onclick="exportCurrentProfile()">Export Data</button>
+            </div>
+
+            <div class="controls">
+                <label>Temperature (K): <input type="number" id="temperature" value="298" min="200" max="1000" step="10"></label>
+                <label>Pressure (atm): <input type="number" id="pressure" value="1" min="0.1" max="10" step="0.1"></label>
+                <label>Points: <input type="number" id="numPoints" value="50" min="10" max="200" step="10"></label>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="energyChart" width="800" height="400"></canvas>
+            </div>
+
+            <div id="profileData" class="data-display" style="display: none;"></div>
+            <div id="status"></div>
+        </div>
+
+        <div class="feature-grid">
+            <div class="feature-card">
+                <h3>🎯 Key Features</h3>
+                <ul>
+                    <li>Generate energy profiles for any reaction</li>
+                    <li>Support for multi-step mechanisms</li>
+                    <li>Transition state identification</li>
+                    <li>Thermodynamic calculations</li>
+                    <li>Export capabilities (JSON, CSV)</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <h3>📊 Visualization Options</h3>
+                <ul>
+                    <li>Interactive charts with Chart.js</li>
+                    <li>Customizable reaction coordinates</li>
+                    <li>Energy unit conversions</li>
+                    <li>Temperature and pressure effects</li>
+                    <li>Bond change tracking</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <h3>🔧 Integration Ready</h3>
+                <ul>
+                    <li>TypeScript support</li>
+                    <li>Comprehensive type definitions</li>
+                    <li>Jest testing framework</li>
+                    <li>Documentation and examples</li>
+                    <li>NPM package ready</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { 
+            createEnergyProfile, 
+            exportEnergyProfile,
+            EnergyProfileGenerator 
+        } from '../src/index.js';
+
+        let currentProfile = null;
+        let chart = null;
+
+        // Initialize Chart.js
+        const ctx = document.getElementById('energyChart').getContext('2d');
+        
+        function initChart() {
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Energy (kJ/mol)',
+                        data: [],
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderWidth: 3,
+                        pointBackgroundColor: '#667eea',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 5,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Energy Profile',
+                            font: { size: 18, weight: 'bold' }
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Reaction Coordinate',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            grid: { color: 'rgba(0,0,0,0.1)' }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Energy (kJ/mol)',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            grid: { color: 'rgba(0,0,0,0.1)' }
+                        }
+                    },
+                    elements: {
+                        point: {
+                            hoverRadius: 8
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChart(profile) {
+            if (!chart) return;
+
+            const labels = profile.points.map((_, i) => `${(i / (profile.points.length - 1) * 100).toFixed(0)}%`);
+            const energies = profile.points.map(p => p.energy);
+
+            chart.data.labels = labels;
+            chart.data.datasets[0].data = energies;
+            
+            // Highlight transition states
+            const pointColors = profile.points.map(p => 
+                p.isTransitionState ? '#ff6b6b' : '#667eea'
+            );
+            chart.data.datasets[0].pointBackgroundColor = pointColors;
+            
+            chart.update();
+        }
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = type;
+            statusDiv.textContent = message;
+            setTimeout(() => statusDiv.textContent = '', 3000);
+        }
+
+        function displayProfileData(profile) {
+            const dataDiv = document.getElementById('profileData');
+            dataDiv.style.display = 'block';
+            
+            let html = `<h3>Energy Profile Data</h3>`;
+            html += `<p><strong>Total Points:</strong> ${profile.points.length}</p>`;
+            html += `<p><strong>Energy Range:</strong> ${Math.min(...profile.points.map(p => p.energy)).toFixed(2)} to ${Math.max(...profile.points.map(p => p.energy)).toFixed(2)} kJ/mol</p>`;
+            html += `<p><strong>Transition States:</strong> ${profile.points.filter(p => p.isTransitionState).length}</p>`;
+            
+            html += `<h4>Key Points:</h4>`;
+            profile.points.forEach((point, i) => {
+                if (i % 10 === 0 || point.isTransitionState) {
+                    html += `<div class="energy-point ${point.isTransitionState ? 'transition-state' : ''}">`;
+                    html += `<strong>Point ${i}:</strong> ${point.energy.toFixed(2)} kJ/mol`;
+                    if (point.isTransitionState) html += ` <em>(Transition State)</em>`;
+                    html += `</div>`;
+                }
+            });
+            
+            dataDiv.innerHTML = html;
+        }
+
+        // Demo functions (made global for onclick handlers)
+        window.generateSIPProfile = function() {
+            try {
+                const temp = parseFloat(document.getElementById('temperature').value);
+                const pressure = parseFloat(document.getElementById('pressure').value);
+                const numPoints = parseInt(document.getElementById('numPoints').value);
+
+                currentProfile = createEnergyProfile({
+                    reactants: ['CH3Br', 'OH-'],
+                    products: ['CH3OH', 'Br-'],
+                    activationEnergy: 85.2,
+                    deltaH: -42.5,
+                    temperature: temp,
+                    pressure: pressure,
+                    mechanism: [{
+                        type: 'elementary',
+                        description: 'Nucleophilic substitution',
+                        activationEnergy: 85.2
+                    }]
+                }, numPoints);
+
+                updateChart(currentProfile);
+                displayProfileData(currentProfile);
+                showStatus('Generated SN2 reaction profile!', 'success');
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+            }
+        };
+
+        window.generateCombustionProfile = function() {
+            try {
+                const temp = parseFloat(document.getElementById('temperature').value);
+                const pressure = parseFloat(document.getElementById('pressure').value);
+                const numPoints = parseInt(document.getElementById('numPoints').value);
+
+                currentProfile = createEnergyProfile({
+                    reactants: ['CH4', 'O2'],
+                    products: ['CO2', 'H2O'],
+                    activationEnergy: 632.1,
+                    deltaH: -890.3,
+                    temperature: temp,
+                    pressure: pressure,
+                    mechanism: [
+                        {
+                            type: 'initiation',
+                            description: 'CH4 + O2 → CH3• + HO2•',
+                            activationEnergy: 632.1
+                        },
+                        {
+                            type: 'propagation',
+                            description: 'CH3• + O2 → CH3O2•',
+                            activationEnergy: 12.5
+                        },
+                        {
+                            type: 'termination',
+                            description: 'Chain termination',
+                            activationEnergy: 5.0
+                        }
+                    ]
+                }, numPoints);
+
+                updateChart(currentProfile);
+                displayProfileData(currentProfile);
+                showStatus('Generated combustion reaction profile!', 'success');
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+            }
+        };
+
+        window.generateCatalyzedProfile = function() {
+            try {
+                const temp = parseFloat(document.getElementById('temperature').value);
+                const pressure = parseFloat(document.getElementById('pressure').value);
+                const numPoints = parseInt(document.getElementById('numPoints').value);
+
+                currentProfile = createEnergyProfile({
+                    reactants: ['N2', 'H2'],
+                    products: ['NH3'],
+                    activationEnergy: 125.0, // Catalyzed
+                    deltaH: -92.2,
+                    temperature: temp,
+                    pressure: pressure,
+                    catalyst: 'Fe',
+                    mechanism: [
+                        {
+                            type: 'adsorption',
+                            description: 'N2 + H2 adsorption on Fe',
+                            activationEnergy: 45.0
+                        },
+                        {
+                            type: 'surface_reaction',
+                            description: 'Surface reaction',
+                            activationEnergy: 125.0
+                        },
+                        {
+                            type: 'desorption',
+                            description: 'NH3 desorption',
+                            activationEnergy: 25.0
+                        }
+                    ]
+                }, numPoints);
+
+                updateChart(currentProfile);
+                displayProfileData(currentProfile);
+                showStatus('Generated catalyzed reaction profile!', 'success');
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+            }
+        };
+
+        window.generateCustomProfile = function() {
+            try {
+                const temp = parseFloat(document.getElementById('temperature').value);
+                const pressure = parseFloat(document.getElementById('pressure').value);
+                const numPoints = parseInt(document.getElementById('numPoints').value);
+
+                // Create a complex multi-step profile
+                currentProfile = createEnergyProfile({
+                    reactants: ['A', 'B'],
+                    products: ['C', 'D'],
+                    activationEnergy: 150.0,
+                    deltaH: Math.random() * 200 - 100, // Random between -100 and +100
+                    temperature: temp,
+                    pressure: pressure,
+                    mechanism: [
+                        {
+                            type: 'step1',
+                            description: 'Formation of intermediate I1',
+                            activationEnergy: 80.0
+                        },
+                        {
+                            type: 'step2',
+                            description: 'I1 → I2 rearrangement',
+                            activationEnergy: 150.0
+                        },
+                        {
+                            type: 'step3',
+                            description: 'I2 → Products',
+                            activationEnergy: 60.0
+                        }
+                    ]
+                }, numPoints);
+
+                updateChart(currentProfile);
+                displayProfileData(currentProfile);
+                showStatus('Generated custom multi-step profile!', 'success');
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+            }
+        };
+
+        window.exportCurrentProfile = function() {
+            if (!currentProfile) {
+                showStatus('No profile to export! Generate one first.', 'error');
+                return;
+            }
+
+            try {
+                const exported = exportEnergyProfile(currentProfile, 'json');
+                
+                // Create downloadable file
+                const blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'energy_profile.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showStatus('Profile exported successfully!', 'success');
+            } catch (error) {
+                showStatus(`Export error: ${error.message}`, 'error');
+            }
+        };
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', function() {
+            initChart();
+            generateSIPProfile(); // Start with an example
+        });
+
+    </script>
+</body>
+</html>

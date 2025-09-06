@@ -7,6 +7,13 @@ yarn-error.log*
 # Build outputs
 # dist/ - commented out to allow GitHub Pages demo to work
 
+# Development and temporary files
+temp/
+*.tmp
+*.temp
+debug-*.log
+scripts/debug/*.log
+
 # Environment variables and secrets
 .env
 .env.*
@@ -72,6 +79,7 @@ temp/
 .tmp/
 
 # Local project tracking (not for public repo)
+scripts/
 docs/
 PRIVACY_REVIEW.md
 **/privacy-review.*

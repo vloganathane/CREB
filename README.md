@@ -77,15 +77,27 @@ npm install creb-pubchem-js
 
 ```
 CREB/
-├── src/                 # Core CREB source code
+├── src/                    # Core CREB source code
+│   ├── performance/        # Performance optimizations
+│   ├── thermodynamics/     # Thermodynamics module
+│   ├── kinetics/          # Kinetics and safety analysis
+│   └── data/              # Data management and SQLite
 ├── packages/
-│   └── pubchem-js/     # PubChem integration package
-├── demos/              # Interactive demonstrations
-│   ├── demo.html       # Main comprehensive demo
-│   └── test-demo.html  # Test suite interface
-├── examples/           # Code examples and usage patterns  
-├── docs/              # Documentation and analysis
-└── dist/              # Built library files
+│   └── pubchem-js/        # PubChem integration package
+├── demos/                 # Interactive demonstrations
+│   ├── demo.html          # Main comprehensive demo  
+│   └── test-demo.html     # Test suite interface
+├── examples/              # Code examples and usage patterns
+│   ├── basic/             # Simple getting-started examples
+│   ├── advanced/          # Complex use cases and integrations
+│   └── modules/           # Module-specific examples
+├── docs/                  # Documentation and analysis
+│   ├── development/       # Development guides and progress
+│   ├── implementation/    # Feature implementation details
+│   └── analysis/          # Technical analysis and research
+├── scripts/               # Development and debugging scripts
+│   └── debug/             # Debug and test scripts
+└── dist/                  # Built library files
 ```
 
 ## 🎮 Try the Live Demos

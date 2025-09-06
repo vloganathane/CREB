@@ -14,6 +14,6 @@
     "sourceMap": true,
     "moduleResolution": "node"
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "examples/advanced/enhanced-typescript-demo.ts"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }

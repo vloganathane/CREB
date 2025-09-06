@@ -601,6 +601,237 @@
     }
 
     /**
+     * Advanced TypeScript Support for CREB Library
+     * Enhanced type definitions with generic constraints and branded types
+     * Provides superior IntelliSense and type safety for chemical data structures
+     */
+    // ============================================================================
+    // Advanced Type Guards and Validation
+    // ============================================================================
+    /**
+     * Type guard for chemical formulas
+     */
+    function isChemicalFormula(value) {
+        return typeof value === 'string' && value.length > 0 && /[A-Z]/.test(value);
+    }
+    /**
+     * Type guard for element symbols
+     */
+    function isElementSymbol(value) {
+        const validElements = new Set([
+            'H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne',
+            'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar', 'K', 'Ca',
+            'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn',
+            'Ga', 'Ge', 'As', 'Se', 'Br', 'Kr', 'Rb', 'Sr', 'Y', 'Zr',
+            'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 'Sn',
+            'Sb', 'Te', 'I', 'Xe', 'Cs', 'Ba', 'La', 'Ce', 'Pr', 'Nd',
+            'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb',
+            'Lu', 'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg',
+            'Tl', 'Pb', 'Bi', 'Po', 'At', 'Rn', 'Fr', 'Ra', 'Ac', 'Th',
+            'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk', 'Cf', 'Es', 'Fm',
+            'Md', 'No', 'Lr', 'Rf', 'Db', 'Sg', 'Bh', 'Hs', 'Mt', 'Ds',
+            'Rg', 'Cn', 'Nh', 'Fl', 'Mc', 'Lv', 'Ts', 'Og'
+        ]);
+        return validElements.has(value);
+    }
+    /**
+     * Type guard for balanced equations
+     */
+    function isBalancedEquation(value) {
+        return value.includes('->') || value.includes('→');
+    }
+    // ============================================================================
+    // Factory Functions with Type Safety
+    // ============================================================================
+    /**
+     * Create a chemical formula with compile-time validation
+     */
+    function createChemicalFormula(formula) {
+        if (!isChemicalFormula(formula)) {
+            throw new Error(`Invalid chemical formula: ${formula}`);
+        }
+        return formula;
+    }
+    /**
+     * Create an element symbol with validation
+     */
+    function createElementSymbol(symbol) {
+        if (!isElementSymbol(symbol)) {
+            throw new Error(`Invalid element symbol: ${symbol}`);
+        }
+        return symbol;
+    }
+    // ============================================================================
+    // Utility Functions for Type-Safe Operations
+    // ============================================================================
+    /**
+     * Parse a chemical formula into element counts
+     */
+    function parseFormula(formula) {
+        const result = {};
+        // Handle parentheses first by expanding them
+        let expandedFormula = formula;
+        // Find patterns like (OH)2 and expand them
+        const parenthesesPattern = /\(([^)]+)\)(\d*)/g;
+        expandedFormula = expandedFormula.replace(parenthesesPattern, (match, group, multiplier) => {
+            const mult = multiplier ? parseInt(multiplier, 10) : 1;
+            let expanded = '';
+            for (let i = 0; i < mult; i++) {
+                expanded += group;
+            }
+            return expanded;
+        });
+        // Now parse the expanded formula
+        const matches = expandedFormula.match(/([A-Z][a-z]?)(\d*)/g);
+        if (matches) {
+            for (const match of matches) {
+                const elementMatch = match.match(/([A-Z][a-z]?)(\d*)/);
+                if (elementMatch) {
+                    const element = elementMatch[1];
+                    const count = elementMatch[2] ? parseInt(elementMatch[2], 10) : 1;
+                    if (isElementSymbol(element)) {
+                        result[element] = (result[element] || 0) + count;
+                    }
+                }
+            }
+        }
+        return result;
+    }
+    // ============================================================================
+    // Enhanced Error Types
+    // ============================================================================
+    /**
+     * Type-safe error for chemical formula validation
+     */
+    class ChemicalFormulaError extends Error {
+        constructor(formula, reason) {
+            super(`Invalid chemical formula "${formula}": ${reason}`);
+            this.formula = formula;
+            this.reason = reason;
+            this.name = 'ChemicalFormulaError';
+        }
+    }
+    /**
+     * Type-safe error for equation balancing
+     */
+    class EquationBalancingError extends Error {
+        constructor(equation, reason) {
+            super(`Cannot balance equation "${equation}": ${reason}`);
+            this.equation = equation;
+            this.reason = reason;
+            this.name = 'EquationBalancingError';
+        }
+    }
+
+    /**
+     * Enhanced Chemical Equation Balancer with Advanced TypeScript Support
+     * Simplified version that provides compound analysis and type safety
+     */
+    /**
+     * Enhanced balancer with type-safe compound analysis
+     */
+    class EnhancedBalancer {
+        constructor() {
+            this.balancer = new ChemicalEquationBalancer();
+        }
+        /**
+         * Balance equation with enhanced compound information
+         */
+        balance(equation) {
+            try {
+                // Use the detailed balancer for more information
+                const result = this.balancer.balanceDetailed(equation);
+                // Extract all unique formulas from reactants and products
+                const allFormulas = new Set();
+                // Add formulas from the result structure
+                if (result.reactants && result.reactants.length > 0) {
+                    result.reactants.forEach((formula) => allFormulas.add(formula));
+                }
+                if (result.products && result.products.length > 0) {
+                    result.products.forEach((formula) => allFormulas.add(formula));
+                }
+                // Analyze each compound
+                const compounds = Array.from(allFormulas).map(formula => this.analyzeCompound(formula)).filter(compound => compound.formula !== ''); // Filter out empty results
+                // Determine if the equation was balanced by checking if it changed
+                const wasBalanced = result.equation !== equation;
+                return {
+                    equation: result.equation,
+                    isBalanced: wasBalanced,
+                    compounds,
+                    coefficients: result.coefficients,
+                    reactants: result.reactants,
+                    products: result.products
+                };
+            }
+            catch (error) {
+                console.error('Error in enhanced balancer:', error);
+                return {
+                    equation,
+                    isBalanced: false,
+                    compounds: [],
+                    coefficients: [],
+                    reactants: [],
+                    products: []
+                };
+            }
+        }
+        /**
+         * Analyze a single compound for detailed information
+         */
+        analyzeCompound(formula) {
+            try {
+                const elementCounter = new ElementCounter(formula);
+                const elementCount = elementCounter.parseFormula();
+                const elements = Object.keys(elementCount);
+                const molarMass = this.calculateMolarMass(elementCount);
+                return {
+                    formula,
+                    molarMass,
+                    elements,
+                    elementCount
+                };
+            }
+            catch (error) {
+                return {
+                    formula,
+                    molarMass: 0,
+                    elements: [],
+                    elementCount: {}
+                };
+            }
+        }
+        /**
+         * Calculate molar mass from element count
+         */
+        calculateMolarMass(elementCount) {
+            // Atomic masses (simplified)
+            const atomicMasses = {
+                'H': 1.008, 'He': 4.003, 'Li': 6.941, 'Be': 9.012, 'B': 10.811,
+                'C': 12.011, 'N': 14.007, 'O': 15.999, 'F': 18.998, 'Ne': 20.180,
+                'Na': 22.990, 'Mg': 24.305, 'Al': 26.982, 'Si': 28.086, 'P': 30.974,
+                'S': 32.065, 'Cl': 35.453, 'Ar': 39.948, 'K': 39.098, 'Ca': 40.078,
+                'Fe': 55.845, 'Cu': 63.546, 'Zn': 65.38, 'Ag': 107.868, 'Au': 196.966
+                // Add more as needed
+            };
+            let totalMass = 0;
+            for (const [element, count] of Object.entries(elementCount)) {
+                const atomicMass = atomicMasses[element];
+                if (atomicMass) {
+                    totalMass += atomicMass * (count || 0);
+                }
+            }
+            return totalMass;
+        }
+        /**
+         * Simple formula validation
+         */
+        isValidFormula(formula) {
+            // Basic validation - contains at least one capital letter
+            return /[A-Z]/.test(formula) && formula.length > 0;
+        }
+    }
+
+    /**
      * Enhanced Chemical Equation Balancer with PubChem integration
      * Provides compound validation, molecular weight verification, and enriched data
      */
@@ -2178,6 +2409,443 @@
     }
 
     /**
+     * Energy Profile Generator
+     * Creates visualization-ready energy profile data for chemical reactions
+     * Part of CREB-JS v1.6.0 - Energy Profile Visualization Feature
+     */
+    class EnergyProfileGenerator {
+        constructor() {
+            this.temperature = 298.15; // Default 25°C
+            this.pressure = 101325; // Default 1 atm
+        }
+        /**
+         * Generate energy profile from thermodynamics and kinetics data
+         */
+        generateProfile(thermodynamics, kinetics, customSteps) {
+            const points = [];
+            let activationEnergyForward = 0;
+            let activationEnergyReverse = 0;
+            // Start with reactants at energy = 0
+            points.push({
+                coordinate: 0,
+                energy: 0,
+                type: 'reactant',
+                label: 'Reactants',
+                species: this.extractReactants(thermodynamics)
+            });
+            // Add transition states and intermediates
+            if (kinetics?.mechanism && kinetics.mechanism.length > 0) {
+                this.addMechanismSteps(points, kinetics.mechanism, thermodynamics.deltaH);
+                activationEnergyForward = kinetics.activationEnergy;
+                activationEnergyReverse = kinetics.activationEnergy + thermodynamics.deltaH;
+            }
+            else if (customSteps) {
+                this.addCustomSteps(points, customSteps);
+            }
+            else if (kinetics) {
+                // Simple single-step reaction with kinetics data
+                this.addSimpleTransitionState(points, thermodynamics, kinetics.activationEnergy);
+                activationEnergyForward = kinetics.activationEnergy;
+                activationEnergyReverse = kinetics.activationEnergy + thermodynamics.deltaH;
+            }
+            else {
+                // Simple single-step reaction
+                this.addSimpleTransitionState(points, thermodynamics);
+                activationEnergyForward = this.estimateActivationEnergy(thermodynamics);
+                activationEnergyReverse = activationEnergyForward + thermodynamics.deltaH;
+            }
+            // End with products
+            points.push({
+                coordinate: 1,
+                energy: thermodynamics.deltaH,
+                type: 'product',
+                label: 'Products',
+                species: this.extractProducts(thermodynamics)
+            });
+            // Find rate-determining step
+            const rateDeterminingStep = this.findRateDeterminingStep(points);
+            return {
+                points,
+                deltaE: thermodynamics.deltaH,
+                activationEnergyForward,
+                activationEnergyReverse,
+                steps: points.filter(p => p.type === 'transition-state').length,
+                rateDeterminingStep,
+                temperature: this.temperature,
+                pressure: this.pressure,
+                isExothermic: thermodynamics.deltaH < 0
+            };
+        }
+        /**
+         * Generate energy profile for multi-step mechanism
+         */
+        generateMechanismProfile(mechanism, overallThermodynamics) {
+            const points = [];
+            let currentEnergy = 0;
+            // Reactants
+            points.push({
+                coordinate: 0,
+                energy: 0,
+                type: 'reactant',
+                label: 'Reactants'
+            });
+            // Process each step
+            mechanism.forEach((step, index) => {
+                const stepCoordinate = (index + 0.5) / mechanism.length;
+                const nextCoordinate = (index + 1) / mechanism.length;
+                // Estimate step energetics
+                const stepDeltaH = overallThermodynamics.deltaH / mechanism.length;
+                const stepActivationE = this.estimateStepActivationEnergy(step, stepDeltaH);
+                // Transition state
+                points.push({
+                    coordinate: stepCoordinate,
+                    energy: currentEnergy + stepActivationE,
+                    type: 'transition-state',
+                    label: `TS${index + 1}`,
+                    species: this.extractSpeciesFromEquation(step.equation)
+                });
+                // Intermediate or product
+                currentEnergy += stepDeltaH;
+                if (index < mechanism.length - 1) {
+                    points.push({
+                        coordinate: nextCoordinate,
+                        energy: currentEnergy,
+                        type: 'intermediate',
+                        label: `Intermediate${index + 1}`
+                    });
+                }
+            });
+            // Final products
+            points.push({
+                coordinate: 1,
+                energy: overallThermodynamics.deltaH,
+                type: 'product',
+                label: 'Products'
+            });
+            return {
+                points,
+                deltaE: overallThermodynamics.deltaH,
+                activationEnergyForward: Math.max(...points.filter(p => p.type === 'transition-state').map(p => p.energy)),
+                activationEnergyReverse: Math.max(...points.filter(p => p.type === 'transition-state').map(p => p.energy)) + overallThermodynamics.deltaH,
+                steps: mechanism.length,
+                rateDeterminingStep: this.findRateDeterminingStep(points),
+                temperature: this.temperature,
+                pressure: this.pressure,
+                isExothermic: overallThermodynamics.deltaH < 0
+            };
+        }
+        /**
+         * Generate temperature-dependent energy profiles
+         */
+        generateTemperatureProfiles(thermodynamics, temperatures, kinetics) {
+            return temperatures.map(temp => {
+                this.temperature = temp;
+                // Adjust thermodynamics for temperature
+                const adjustedThermo = this.adjustThermodynamicsForTemperature(thermodynamics, temp);
+                // Adjust kinetics for temperature
+                let adjustedKinetics = kinetics;
+                if (kinetics && kinetics.temperatureDependence) {
+                    adjustedKinetics = this.adjustKineticsForTemperature(kinetics, temp);
+                }
+                const profile = this.generateProfile(adjustedThermo, adjustedKinetics);
+                return { temperature: temp, profile };
+            });
+        }
+        /**
+         * Generate reaction coordinate data
+         */
+        generateReactionCoordinate(reactionType) {
+            const coordinates = {
+                'SN1': {
+                    description: 'C-leaving group distance',
+                    units: 'Å',
+                    physicalMeaning: 'Bond breaking leads to carbocation formation',
+                    range: [1.5, 3.5]
+                },
+                'SN2': {
+                    description: 'Nucleophile-C-leaving group angle',
+                    units: 'degrees',
+                    physicalMeaning: 'Backside attack through linear transition state',
+                    range: [109, 180]
+                },
+                'E1': {
+                    description: 'C-leaving group distance',
+                    units: 'Å',
+                    physicalMeaning: 'Elimination via carbocation intermediate',
+                    range: [1.5, 3.5]
+                },
+                'E2': {
+                    description: 'Base-H and C-leaving group distances',
+                    units: 'Å',
+                    physicalMeaning: 'Concerted elimination mechanism',
+                    range: [1.0, 3.0]
+                },
+                'addition': {
+                    description: 'C=C bond length',
+                    units: 'Å',
+                    physicalMeaning: 'Double bond breaking during addition',
+                    range: [1.34, 1.54]
+                },
+                'elimination': {
+                    description: 'C-C bond distance',
+                    units: 'Å',
+                    physicalMeaning: 'Bond formation during elimination',
+                    range: [1.54, 1.34]
+                },
+                'substitution': {
+                    description: 'Bond forming/breaking ratio',
+                    units: 'dimensionless',
+                    physicalMeaning: 'Extent of bond formation vs. breaking',
+                    range: [0, 1]
+                }
+            };
+            return coordinates[reactionType];
+        }
+        /**
+         * Export profile data for visualization libraries
+         */
+        exportForVisualization(profile, format) {
+            switch (format) {
+                case 'plotly':
+                    return this.exportForPlotly(profile);
+                case 'chartjs':
+                    return this.exportForChartJS(profile);
+                case 'd3':
+                    return this.exportForD3(profile);
+                case 'csv':
+                    return this.exportForCSV(profile);
+                default:
+                    throw new Error(`Unsupported export format: ${format}`);
+            }
+        }
+        // Private helper methods
+        addMechanismSteps(points, mechanism, deltaH) {
+            const stepDeltaH = deltaH / mechanism.length;
+            let currentEnergy = 0;
+            mechanism.forEach((step, index) => {
+                const coordinate = (index + 0.5) / (mechanism.length + 1);
+                const activationE = this.estimateStepActivationEnergy(step, stepDeltaH);
+                points.push({
+                    coordinate,
+                    energy: currentEnergy + activationE,
+                    type: 'transition-state',
+                    label: `TS${index + 1}`,
+                    species: this.extractSpeciesFromEquation(step.equation)
+                });
+                if (index < mechanism.length - 1) {
+                    currentEnergy += stepDeltaH;
+                    points.push({
+                        coordinate: (index + 1) / (mechanism.length + 1),
+                        energy: currentEnergy,
+                        type: 'intermediate',
+                        label: `Int${index + 1}`
+                    });
+                }
+            });
+        }
+        addCustomSteps(points, customSteps) {
+            customSteps.forEach((ts, index) => {
+                points.push({
+                    coordinate: ts.coordinate,
+                    energy: ts.energy,
+                    type: 'transition-state',
+                    label: `TS${index + 1}`,
+                    species: ts.involvedSpecies
+                });
+            });
+        }
+        addSimpleTransitionState(points, thermodynamics, providedActivationE) {
+            const activationE = providedActivationE !== undefined ? providedActivationE : this.estimateActivationEnergy(thermodynamics);
+            points.push({
+                coordinate: 0.5,
+                energy: activationE,
+                type: 'transition-state',
+                label: 'Transition State'
+            });
+        }
+        estimateActivationEnergy(thermodynamics) {
+            // Hammond's postulate: endothermic reactions have late transition states
+            const baseActivation = 80; // kJ/mol baseline
+            const hammondCorrection = Math.max(0, thermodynamics.deltaH * 0.3);
+            return baseActivation + hammondCorrection;
+        }
+        estimateStepActivationEnergy(step, stepDeltaH) {
+            const baseActivation = 60; // kJ/mol for elementary steps
+            const thermodynamicCorrection = Math.max(0, stepDeltaH * 0.3);
+            // Adjust based on step type
+            const typeFactors = {
+                'elementary': 1.0,
+                'fast-equilibrium': 0.7,
+                'rate-determining': 1.5
+            };
+            return (baseActivation + thermodynamicCorrection) * typeFactors[step.type];
+        }
+        findRateDeterminingStep(points) {
+            const transitionStates = points.filter(p => p.type === 'transition-state');
+            if (transitionStates.length === 0)
+                return 0;
+            const highestEnergy = Math.max(...transitionStates.map(p => p.energy));
+            return transitionStates.findIndex(p => p.energy === highestEnergy);
+        }
+        extractReactants(thermodynamics) {
+            // This would need to be implemented based on the actual equation structure
+            return ['Reactants'];
+        }
+        extractProducts(thermodynamics) {
+            // This would need to be implemented based on the actual equation structure
+            return ['Products'];
+        }
+        extractSpeciesFromEquation(equation) {
+            // Parse equation to extract species
+            const parts = equation.split('->')[0].trim().split('+');
+            return parts.map(part => part.trim());
+        }
+        adjustThermodynamicsForTemperature(original, temperature) {
+            // Simplified temperature dependence
+            const tempRatio = temperature / 298.15;
+            return {
+                ...original,
+                deltaH: original.deltaH * tempRatio,
+                deltaG: original.deltaG + original.deltaS * (temperature - 298.15) / 1000,
+                conditions: { ...original.conditions, temperature }
+            };
+        }
+        adjustKineticsForTemperature(original, temperature) {
+            const arrhenius = original.temperatureDependence;
+            const R = 8.314; // J/(mol·K)
+            // Arrhenius equation: k = A * exp(-Ea/RT)
+            const newRateConstant = arrhenius.preExponentialFactor *
+                Math.exp(-arrhenius.activationEnergy * 1000 / (R * temperature));
+            return {
+                ...original,
+                rateConstant: newRateConstant,
+                conditions: { ...original.conditions, temperature }
+            };
+        }
+        exportForPlotly(profile) {
+            return {
+                data: [{
+                        x: profile.points.map(p => p.coordinate),
+                        y: profile.points.map(p => p.energy),
+                        type: 'scatter',
+                        mode: 'lines+markers',
+                        name: 'Energy Profile',
+                        line: { shape: 'spline' },
+                        marker: {
+                            size: profile.points.map(p => p.type === 'transition-state' ? 10 : 6),
+                            color: profile.points.map(p => {
+                                switch (p.type) {
+                                    case 'reactant': return 'blue';
+                                    case 'product': return 'green';
+                                    case 'transition-state': return 'red';
+                                    case 'intermediate': return 'orange';
+                                    default: return 'gray';
+                                }
+                            })
+                        }
+                    }],
+                layout: {
+                    title: 'Reaction Energy Profile',
+                    xaxis: { title: 'Reaction Coordinate' },
+                    yaxis: { title: 'Energy (kJ/mol)' },
+                    annotations: profile.points.map(p => ({
+                        x: p.coordinate,
+                        y: p.energy,
+                        text: p.label,
+                        showarrow: true,
+                        arrowhead: 2
+                    }))
+                }
+            };
+        }
+        exportForChartJS(profile) {
+            return {
+                type: 'line',
+                data: {
+                    labels: profile.points.map(p => p.coordinate.toFixed(2)),
+                    datasets: [{
+                            label: 'Energy Profile',
+                            data: profile.points.map(p => p.energy),
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            tension: 0.4
+                        }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { title: { display: true, text: 'Reaction Coordinate' } },
+                        y: { title: { display: true, text: 'Energy (kJ/mol)' } }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                title: (context) => profile.points[context[0].dataIndex].label || '',
+                                label: (context) => `Energy: ${context.parsed.y.toFixed(2)} kJ/mol`
+                            }
+                        }
+                    }
+                }
+            };
+        }
+        exportForD3(profile) {
+            return {
+                nodes: profile.points.map((p, i) => ({
+                    id: i,
+                    x: p.coordinate * 100,
+                    y: 100 - (p.energy / Math.max(...profile.points.map(pt => pt.energy))) * 80,
+                    type: p.type,
+                    label: p.label,
+                    energy: p.energy
+                })),
+                links: profile.points.slice(0, -1).map((_, i) => ({
+                    source: i,
+                    target: i + 1
+                }))
+            };
+        }
+        exportForCSV(profile) {
+            const header = 'Coordinate,Energy(kJ/mol),Type,Label';
+            const rows = profile.points.map(p => `${p.coordinate},${p.energy},${p.type},"${p.label || ''}"`);
+            return [header, ...rows].join('\n');
+        }
+        /**
+         * Set calculation conditions
+         */
+        setConditions(temperature, pressure) {
+            this.temperature = temperature;
+            this.pressure = pressure;
+        }
+        /**
+         * Generate energy profile with bond-by-bond analysis
+         */
+        generateDetailedProfile(thermodynamics, bondChanges) {
+            const profile = this.generateProfile(thermodynamics);
+            return {
+                ...profile,
+                bondAnalysis: bondChanges
+            };
+        }
+    }
+    /**
+     * Convenience function to create energy profile
+     */
+    function createEnergyProfile(thermodynamics, kinetics, options) {
+        const generator = new EnergyProfileGenerator();
+        if (options?.temperature || options?.pressure) {
+            generator.setConditions(options.temperature || 298.15, options.pressure || 101325);
+        }
+        return generator.generateProfile(thermodynamics, kinetics);
+    }
+    /**
+     * Export energy profile for popular visualization libraries
+     */
+    function exportEnergyProfile(profile, format) {
+        const generator = new EnergyProfileGenerator();
+        return generator.exportForVisualization(profile, format);
+    }
+
+    /**
      * CREB Reaction Kinetics Calculator
      * Core calculator for reaction kinetics analysis
      */
@@ -3364,14 +4032,1481 @@
         }
     }
 
+    /**
+     * Enhanced Chemical Database Manager
+     * Provides comprehensive data integration and management capabilities
+     */
+    class ChemicalDatabaseManager {
+        constructor() {
+            this.compounds = new Map();
+            this.sources = new Map();
+            this.validationRules = [];
+            this.cache = new Map();
+            this.initializeDefaultSources();
+            this.initializeValidationRules();
+            this.loadDefaultCompounds();
+        }
+        /**
+         * Initialize default database sources
+         */
+        initializeDefaultSources() {
+            const defaultSources = [
+                {
+                    id: 'nist',
+                    name: 'NIST WebBook',
+                    url: 'https://webbook.nist.gov/chemistry/',
+                    priority: 1,
+                    enabled: true,
+                    cacheTimeout: 86400 // 24 hours
+                },
+                {
+                    id: 'pubchem',
+                    name: 'PubChem',
+                    url: 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/',
+                    priority: 2,
+                    enabled: true,
+                    cacheTimeout: 43200 // 12 hours
+                },
+                {
+                    id: 'local',
+                    name: 'Local Database',
+                    priority: 3,
+                    enabled: true,
+                    cacheTimeout: 0 // No cache timeout for local data
+                }
+            ];
+            defaultSources.forEach(source => {
+                this.sources.set(source.id, source);
+            });
+        }
+        /**
+         * Initialize data validation rules
+         */
+        initializeValidationRules() {
+            this.validationRules = [
+                {
+                    field: 'formula',
+                    type: 'required',
+                    rule: true,
+                    message: 'Chemical formula is required'
+                },
+                {
+                    field: 'molecularWeight',
+                    type: 'range',
+                    rule: { min: 0.1, max: 10000 },
+                    message: 'Molecular weight must be between 0.1 and 10000 g/mol'
+                },
+                {
+                    field: 'thermodynamicProperties.deltaHf',
+                    type: 'range',
+                    rule: { min: -5e3, max: 5000 },
+                    message: 'Enthalpy of formation must be between -5000 and 5000 kJ/mol'
+                },
+                {
+                    field: 'thermodynamicProperties.entropy',
+                    type: 'range',
+                    rule: { min: 0, max: 1000 },
+                    message: 'Entropy must be between 0 and 1000 J/(mol·K)'
+                },
+                {
+                    field: 'thermodynamicProperties.temperatureRange',
+                    type: 'custom',
+                    rule: (range) => range[0] < range[1] && range[0] > 0,
+                    message: 'Temperature range must be valid (min < max, both > 0)'
+                }
+            ];
+        }
+        /**
+         * Load default compound database
+         */
+        loadDefaultCompounds() {
+            const defaultCompounds = [
+                {
+                    formula: 'H2O',
+                    name: 'Water',
+                    commonName: 'Water',
+                    casNumber: '7732-18-5',
+                    smiles: 'O',
+                    molecularWeight: 18.015,
+                    thermodynamicProperties: {
+                        deltaHf: -285.8,
+                        deltaGf: -237.1,
+                        entropy: 69.95,
+                        heatCapacity: 75.3,
+                        temperatureRange: [273.15, 647.1],
+                        meltingPoint: 273.15,
+                        boilingPoint: 373.15,
+                        criticalTemperature: 647.1,
+                        criticalPressure: 22064000,
+                        vaporPressure: [
+                            { temperature: 273.15, pressure: 611.7 },
+                            { temperature: 298.15, pressure: 3173 },
+                            { temperature: 373.15, pressure: 101325 }
+                        ]
+                    },
+                    physicalProperties: {
+                        density: 997.0,
+                        viscosity: 0.001,
+                        thermalConductivity: 0.606,
+                        refractiveIndex: 1.333,
+                        dielectricConstant: 80.1,
+                        surfaceTension: 0.0728
+                    },
+                    sources: ['nist', 'local'],
+                    lastUpdated: new Date(),
+                    confidence: 1.0
+                },
+                {
+                    formula: 'CO2',
+                    name: 'Carbon dioxide',
+                    commonName: 'Carbon dioxide',
+                    casNumber: '124-38-9',
+                    smiles: 'O=C=O',
+                    molecularWeight: 44.010,
+                    thermodynamicProperties: {
+                        deltaHf: -393.5,
+                        deltaGf: -394.4,
+                        entropy: 213.8,
+                        heatCapacity: 37.1,
+                        temperatureRange: [200, 2000],
+                        meltingPoint: 216.6,
+                        boilingPoint: 194.7, // Sublimation point at 1 atm
+                        criticalTemperature: 304.13,
+                        criticalPressure: 7375000
+                    },
+                    physicalProperties: {
+                        density: 1.98, // gas at STP
+                        thermalConductivity: 0.0146,
+                        solubility: {
+                            water: 1.7 // g/L at 20°C
+                        }
+                    },
+                    sources: ['nist', 'local'],
+                    lastUpdated: new Date(),
+                    confidence: 1.0
+                },
+                {
+                    formula: 'CH4',
+                    name: 'Methane',
+                    commonName: 'Methane',
+                    casNumber: '74-82-8',
+                    smiles: 'C',
+                    molecularWeight: 16.043,
+                    thermodynamicProperties: {
+                        deltaHf: -74.6,
+                        deltaGf: -50.5,
+                        entropy: 186.3,
+                        heatCapacity: 35.7,
+                        temperatureRange: [200, 1500],
+                        meltingPoint: 90.7,
+                        boilingPoint: 111.7,
+                        criticalTemperature: 190.6,
+                        criticalPressure: 4599000
+                    },
+                    physicalProperties: {
+                        density: 0.717, // gas at STP
+                        viscosity: 0.0000103,
+                        thermalConductivity: 0.0332
+                    },
+                    safetyData: {
+                        hazardSymbols: ['GHS02', 'GHS04'],
+                        hazardStatements: ['H220', 'H280'],
+                        precautionaryStatements: ['P210', 'P377', 'P381'],
+                        autoignitionTemperature: 810,
+                        explosiveLimits: {
+                            lower: 5.0,
+                            upper: 15.0
+                        }
+                    },
+                    sources: ['nist', 'local'],
+                    lastUpdated: new Date(),
+                    confidence: 1.0
+                }
+            ];
+            defaultCompounds.forEach((compound, index) => {
+                if (compound.formula) {
+                    this.compounds.set(compound.formula, compound);
+                }
+            });
+        }
+        /**
+         * Query compounds from the database
+         */
+        async query(query) {
+            const results = [];
+            // Search local database first
+            for (const [formula, compound] of this.compounds) {
+                if (this.matchesQuery(compound, query)) {
+                    results.push(compound);
+                }
+            }
+            // If no local results and external providers are requested
+            if (results.length === 0 && query.provider && query.provider !== 'local') {
+                try {
+                    const externalResults = await this.queryExternalSource(query);
+                    results.push(...externalResults);
+                }
+                catch (error) {
+                    console.warn(`External database query failed: ${error}`);
+                }
+            }
+            // Sort by confidence and limit results
+            results.sort((a, b) => b.confidence - a.confidence);
+            if (query.maxResults) {
+                return results.slice(0, query.maxResults);
+            }
+            return results;
+        }
+        /**
+         * Check if compound matches query criteria
+         */
+        matchesQuery(compound, query) {
+            if (query.formula && compound.formula !== query.formula)
+                return false;
+            if (query.name && !compound.name.toLowerCase().includes(query.name.toLowerCase()))
+                return false;
+            if (query.casNumber && compound.casNumber !== query.casNumber)
+                return false;
+            if (query.smiles && compound.smiles !== query.smiles)
+                return false;
+            if (query.inchi && compound.inchi !== query.inchi)
+                return false;
+            if (!query.includeUncertain && compound.confidence < 0.8)
+                return false;
+            return true;
+        }
+        /**
+         * Query external data sources
+         */
+        async queryExternalSource(query) {
+            // This would implement actual API calls to NIST, PubChem, etc.
+            // For now, return empty array as placeholder
+            return [];
+        }
+        /**
+         * Add or update a compound in the database
+         */
+        async addCompound(compound) {
+            try {
+                // Validate the compound data
+                const validationErrors = this.validateCompound(compound);
+                if (validationErrors.length > 0) {
+                    throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
+                }
+                // Fill in missing fields
+                const fullCompound = {
+                    formula: compound.formula,
+                    name: compound.name || compound.formula,
+                    molecularWeight: compound.molecularWeight || 0,
+                    thermodynamicProperties: compound.thermodynamicProperties || this.getDefaultThermodynamicProperties(),
+                    physicalProperties: compound.physicalProperties || {},
+                    sources: compound.sources || ['custom'],
+                    lastUpdated: new Date(),
+                    confidence: compound.confidence || 0.8,
+                    ...compound
+                };
+                this.compounds.set(fullCompound.formula, fullCompound);
+                return true;
+            }
+            catch (error) {
+                console.error(`Failed to add compound: ${error}`);
+                return false;
+            }
+        }
+        /**
+         * Get default thermodynamic properties for validation
+         */
+        getDefaultThermodynamicProperties() {
+            return {
+                deltaHf: 0,
+                entropy: 0,
+                heatCapacity: 25, // Approximate value for many compounds
+                temperatureRange: [298, 1000]
+            };
+        }
+        /**
+         * Validate compound data against rules
+         */
+        validateCompound(compound) {
+            const errors = [];
+            for (const rule of this.validationRules) {
+                const value = this.getNestedProperty(compound, rule.field);
+                switch (rule.type) {
+                    case 'required':
+                        if (value === undefined || value === null) {
+                            errors.push(rule.message);
+                        }
+                        break;
+                    case 'range':
+                        if (typeof value === 'number') {
+                            const { min, max } = rule.rule;
+                            if (value < min || value > max) {
+                                errors.push(rule.message);
+                            }
+                        }
+                        break;
+                    case 'custom':
+                        if (value !== undefined && !rule.rule(value)) {
+                            errors.push(rule.message);
+                        }
+                        break;
+                }
+            }
+            return errors;
+        }
+        /**
+         * Get nested property value by dot notation
+         */
+        getNestedProperty(obj, path) {
+            return path.split('.').reduce((current, key) => current?.[key], obj);
+        }
+        /**
+         * Import compounds from various data formats
+         */
+        async importData(data, format) {
+            const result = {
+                success: true,
+                imported: 0,
+                failed: 0,
+                errors: [],
+                warnings: []
+            };
+            try {
+                let compounds = [];
+                switch (format) {
+                    case 'json':
+                        compounds = Array.isArray(data) ? data : [data];
+                        break;
+                    case 'csv':
+                        compounds = this.parseCSV(data);
+                        break;
+                    case 'sdf':
+                        compounds = this.parseSDF(data);
+                        break;
+                    default:
+                        throw new Error(`Unsupported format: ${format}`);
+                }
+                for (const compound of compounds) {
+                    try {
+                        const success = await this.addCompound(compound);
+                        if (success) {
+                            result.imported++;
+                        }
+                        else {
+                            result.failed++;
+                            result.errors.push({
+                                compound: compound.formula || 'unknown',
+                                error: 'Failed to add compound'
+                            });
+                        }
+                    }
+                    catch (error) {
+                        result.failed++;
+                        result.errors.push({
+                            compound: compound.formula || 'unknown',
+                            error: error instanceof Error ? error.message : 'Unknown error'
+                        });
+                    }
+                }
+                result.success = result.failed === 0;
+            }
+            catch (error) {
+                result.success = false;
+                result.errors.push({
+                    compound: 'all',
+                    error: error instanceof Error ? error.message : 'Import failed'
+                });
+            }
+            return result;
+        }
+        /**
+         * Parse CSV data into compound objects
+         */
+        parseCSV(csvData) {
+            const lines = csvData.split('\n');
+            const headers = lines[0].split(',').map(h => h.trim());
+            const compounds = [];
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',').map(v => v.trim());
+                if (values.length === headers.length) {
+                    const compound = {};
+                    headers.forEach((header, index) => {
+                        const value = values[index];
+                        // Map common CSV headers to compound properties
+                        switch (header.toLowerCase()) {
+                            case 'formula':
+                                compound.formula = value;
+                                break;
+                            case 'name':
+                                compound.name = value;
+                                break;
+                            case 'molecular_weight':
+                            case 'molecularweight':
+                                compound.molecularWeight = parseFloat(value);
+                                break;
+                            case 'deltahf':
+                            case 'enthalpy_formation':
+                                compound.thermodynamicProperties = compound.thermodynamicProperties || {};
+                                compound.thermodynamicProperties.deltaHf = parseFloat(value);
+                                break;
+                            case 'entropy':
+                                compound.thermodynamicProperties = compound.thermodynamicProperties || {};
+                                compound.thermodynamicProperties.entropy = parseFloat(value);
+                                break;
+                            case 'heat_capacity':
+                            case 'heatcapacity':
+                                compound.thermodynamicProperties = compound.thermodynamicProperties || {};
+                                compound.thermodynamicProperties.heatCapacity = parseFloat(value);
+                                break;
+                        }
+                    });
+                    if (compound.formula) {
+                        compounds.push(compound);
+                    }
+                }
+            }
+            return compounds;
+        }
+        /**
+         * Parse SDF (Structure Data File) format
+         */
+        parseSDF(sdfData) {
+            // Basic SDF parsing - would need more sophisticated implementation for production
+            const compounds = [];
+            const molecules = sdfData.split('$$$$');
+            for (const molecule of molecules) {
+                if (molecule.trim()) {
+                    const compound = {};
+                    // Extract name from first line
+                    const lines = molecule.split('\n');
+                    if (lines.length > 0) {
+                        compound.name = lines[0].trim();
+                    }
+                    // Look for additional properties in the data fields
+                    const dataSection = molecule.split('> <');
+                    for (const section of dataSection) {
+                        if (section.includes('MOLECULAR_FORMULA')) {
+                            const formula = section.split('\n')[1]?.trim();
+                            if (formula)
+                                compound.formula = formula;
+                        }
+                        if (section.includes('MOLECULAR_WEIGHT')) {
+                            const weight = parseFloat(section.split('\n')[1]?.trim() || '0');
+                            if (weight > 0)
+                                compound.molecularWeight = weight;
+                        }
+                    }
+                    if (compound.formula) {
+                        compounds.push(compound);
+                    }
+                }
+            }
+            return compounds;
+        }
+        /**
+         * Export compound data in various formats
+         */
+        exportData(options) {
+            let compounds = Array.from(this.compounds.values());
+            // Apply filter if provided
+            if (options.filter) {
+                compounds = compounds.filter(options.filter);
+            }
+            switch (options.format) {
+                case 'json':
+                    return this.exportJSON(compounds, options);
+                case 'csv':
+                    return this.exportCSV(compounds, options);
+                case 'xlsx':
+                    return this.exportXLSX(compounds, options);
+                default:
+                    throw new Error(`Unsupported export format: ${options.format}`);
+            }
+        }
+        /**
+         * Export as JSON
+         */
+        exportJSON(compounds, options) {
+            const data = options.fields ?
+                compounds.map(c => this.selectFields(c, options.fields)) :
+                compounds;
+            const exportData = {
+                metadata: options.includeMetadata ? {
+                    exportDate: new Date().toISOString(),
+                    totalCompounds: compounds.length,
+                    version: '1.0'
+                } : undefined,
+                compounds: data
+            };
+            return JSON.stringify(exportData, null, 2);
+        }
+        /**
+         * Export as CSV
+         */
+        exportCSV(compounds, options) {
+            if (compounds.length === 0)
+                return '';
+            const fields = options.fields || ['formula', 'name', 'molecularWeight'];
+            const headers = fields.join(',');
+            const rows = compounds.map(compound => {
+                return fields.map(field => {
+                    const value = this.getNestedProperty(compound, field);
+                    return typeof value === 'string' ? `"${value}"` : value || '';
+                }).join(',');
+            });
+            return [headers, ...rows].join('\n');
+        }
+        /**
+         * Export as XLSX (placeholder - would need external library)
+         */
+        exportXLSX(compounds, options) {
+            // This would require a library like xlsx or exceljs
+            throw new Error('XLSX export not yet implemented - use JSON or CSV');
+        }
+        /**
+         * Select specific fields from compound
+         */
+        selectFields(compound, fields) {
+            const result = {};
+            for (const field of fields) {
+                const value = this.getNestedProperty(compound, field);
+                if (value !== undefined) {
+                    this.setNestedProperty(result, field, value);
+                }
+            }
+            return result;
+        }
+        /**
+         * Set nested property value by dot notation
+         */
+        setNestedProperty(obj, path, value) {
+            const keys = path.split('.');
+            const lastKey = keys.pop();
+            let current = obj;
+            for (const key of keys) {
+                if (!(key in current)) {
+                    current[key] = {};
+                }
+                current = current[key];
+            }
+            current[lastKey] = value;
+        }
+        /**
+         * Get compound by formula with backward compatibility
+         */
+        async getCompound(formula) {
+            const compounds = await this.query({ formula, maxResults: 1 });
+            if (compounds.length > 0) {
+                const compound = compounds[0];
+                // Convert to legacy format for backward compatibility
+                return {
+                    deltaHf: compound.thermodynamicProperties.deltaHf,
+                    entropy: compound.thermodynamicProperties.entropy,
+                    heatCapacity: compound.thermodynamicProperties.heatCapacity,
+                    temperatureRange: compound.thermodynamicProperties.temperatureRange
+                };
+            }
+            return null;
+        }
+        /**
+         * Get all available compounds
+         */
+        getAllCompounds() {
+            return Array.from(this.compounds.values());
+        }
+        /**
+         * Get database statistics
+         */
+        getStatistics() {
+            const compounds = this.getAllCompounds();
+            const sourceCounts = {};
+            const confidenceDistribution = {
+                'high': 0, // > 0.8
+                'medium': 0, // 0.6-0.8
+                'low': 0 // < 0.6
+            };
+            let lastUpdate = new Date(0);
+            compounds.forEach(compound => {
+                // Count sources
+                compound.sources.forEach(source => {
+                    sourceCounts[source] = (sourceCounts[source] || 0) + 1;
+                });
+                // Confidence distribution
+                if (compound.confidence > 0.8) {
+                    confidenceDistribution.high++;
+                }
+                else if (compound.confidence > 0.6) {
+                    confidenceDistribution.medium++;
+                }
+                else {
+                    confidenceDistribution.low++;
+                }
+                // Track latest update
+                if (compound.lastUpdated > lastUpdate) {
+                    lastUpdate = compound.lastUpdated;
+                }
+            });
+            return {
+                totalCompounds: compounds.length,
+                sourceCounts,
+                confidenceDistribution,
+                lastUpdate
+            };
+        }
+    }
+
+    /**
+     * NIST WebBook Integration for Enhanced Data
+     * Provides real-time access to NIST thermodynamic database
+     */
+    class NISTWebBookIntegration {
+        constructor(apiKey) {
+            this.baseURL = 'https://webbook.nist.gov/cgi/cbook.cgi';
+            this.cache = new Map();
+            this.cacheTimeout = 86400000; // 24 hours in ms
+            this.apiKey = apiKey;
+        }
+        /**
+         * Query NIST WebBook for compound data
+         */
+        async queryCompound(identifier, type = 'formula') {
+            try {
+                // Check cache first
+                const cacheKey = `${type}:${identifier}`;
+                const cached = this.cache.get(cacheKey);
+                if (cached && (Date.now() - cached.timestamp) < this.cacheTimeout) {
+                    return this.convertNISTToCompound(cached.data);
+                }
+                // Make API request
+                const response = await this.makeNISTRequest(identifier, type);
+                if (response) {
+                    // Cache the response
+                    this.cache.set(cacheKey, {
+                        data: response,
+                        timestamp: Date.now()
+                    });
+                    return this.convertNISTToCompound(response);
+                }
+                return null;
+            }
+            catch (error) {
+                console.warn(`NIST WebBook query failed: ${error}`);
+                return null;
+            }
+        }
+        /**
+         * Make request to NIST WebBook API
+         */
+        async makeNISTRequest(identifier, type) {
+            // Note: This is a simplified implementation
+            // The actual NIST WebBook doesn't have a public REST API
+            // This would need to be implemented using web scraping or a proxy service
+            const params = new URLSearchParams({
+                cbook: 'main',
+                [type === 'formula' ? 'Formula' : type === 'name' ? 'Name' : 'ID']: identifier,
+                Units: 'SI',
+                Mask: '1' // Thermochemical data
+            });
+            try {
+                // This is a placeholder implementation
+                // In practice, you would either:
+                // 1. Use web scraping with libraries like Puppeteer
+                // 2. Use a proxy service that provides API access to NIST
+                // 3. Use cached NIST data that's periodically updated
+                const url = `${this.baseURL}?${params}`;
+                console.log(`Would query NIST at: ${url}`);
+                // Return mock data for demonstration
+                return this.getMockNISTData(identifier);
+            }
+            catch (error) {
+                throw new Error(`NIST request failed: ${error}`);
+            }
+        }
+        /**
+         * Convert NIST response to CompoundDatabase format
+         */
+        convertNISTToCompound(nistData) {
+            const thermodynamicProperties = {
+                deltaHf: nistData.thermodynamics?.enthalpy_formation || 0,
+                entropy: nistData.thermodynamics?.entropy || 0,
+                heatCapacity: nistData.thermodynamics?.heat_capacity || 25,
+                temperatureRange: nistData.thermodynamics?.temperature_range || [298, 1000],
+                meltingPoint: nistData.phase_data?.melting_point,
+                boilingPoint: nistData.phase_data?.boiling_point,
+                criticalTemperature: nistData.phase_data?.critical_temperature,
+                criticalPressure: nistData.phase_data?.critical_pressure,
+                uncertainties: nistData.uncertainties ? {
+                    deltaHf: nistData.uncertainties.enthalpy_formation,
+                    entropy: nistData.uncertainties.entropy
+                } : undefined
+            };
+            return {
+                formula: nistData.formula,
+                name: nistData.name,
+                casNumber: nistData.cas,
+                molecularWeight: this.calculateMolecularWeight(nistData.formula),
+                thermodynamicProperties,
+                physicalProperties: {},
+                sources: ['nist'],
+                lastUpdated: new Date(),
+                confidence: 0.95 // NIST data is highly reliable
+            };
+        }
+        /**
+         * Calculate molecular weight from formula (simplified)
+         */
+        calculateMolecularWeight(formula) {
+            // Simple atomic weights for common elements
+            const atomicWeights = {
+                'H': 1.008, 'C': 12.011, 'N': 14.007, 'O': 15.999,
+                'F': 18.998, 'Na': 22.990, 'Mg': 24.305, 'Al': 26.982,
+                'Si': 28.085, 'P': 30.974, 'S': 32.065, 'Cl': 35.453,
+                'K': 39.098, 'Ca': 40.078, 'Fe': 55.845, 'Cu': 63.546,
+                'Zn': 65.38, 'Br': 79.904, 'I': 126.904
+            };
+            let weight = 0;
+            let i = 0;
+            while (i < formula.length) {
+                if (formula[i] === '(' || formula[i] === ')') {
+                    i++;
+                    continue;
+                }
+                // Get element symbol (starts with uppercase)
+                if (!/[A-Z]/.test(formula[i])) {
+                    i++;
+                    continue;
+                }
+                let element = formula[i];
+                i++;
+                // Check for two-letter elements (second letter is lowercase)
+                if (i < formula.length && /[a-z]/.test(formula[i])) {
+                    element += formula[i];
+                    i++;
+                }
+                // Get count
+                let count = '';
+                while (i < formula.length && /\d/.test(formula[i])) {
+                    count += formula[i];
+                    i++;
+                }
+                const elementWeight = atomicWeights[element] || 0;
+                const elementCount = count ? parseInt(count) : 1;
+                weight += elementWeight * elementCount;
+            }
+            return Math.round(weight * 1000) / 1000; // Round to 3 decimal places
+        }
+        /**
+         * Get mock NIST data for testing/demonstration
+         */
+        getMockNISTData(identifier) {
+            const mockData = {
+                'H2O': {
+                    formula: 'H2O',
+                    name: 'Water',
+                    cas: '7732-18-5',
+                    thermodynamics: {
+                        enthalpy_formation: -285.8,
+                        entropy: 69.95,
+                        heat_capacity: 75.3,
+                        temperature_range: [273.15, 647.1]
+                    },
+                    phase_data: {
+                        melting_point: 273.15,
+                        boiling_point: 373.15,
+                        critical_temperature: 647.1,
+                        critical_pressure: 22064000
+                    },
+                    uncertainties: {
+                        enthalpy_formation: 0.4,
+                        entropy: 0.1
+                    }
+                },
+                'CO2': {
+                    formula: 'CO2',
+                    name: 'Carbon dioxide',
+                    cas: '124-38-9',
+                    thermodynamics: {
+                        enthalpy_formation: -393.5,
+                        entropy: 213.8,
+                        heat_capacity: 37.1,
+                        temperature_range: [200, 2000]
+                    },
+                    phase_data: {
+                        melting_point: 216.6,
+                        boiling_point: 194.7,
+                        critical_temperature: 304.13,
+                        critical_pressure: 7375000
+                    },
+                    uncertainties: {
+                        enthalpy_formation: 0.1,
+                        entropy: 0.3
+                    }
+                },
+                'CH4': {
+                    formula: 'CH4',
+                    name: 'Methane',
+                    cas: '74-82-8',
+                    thermodynamics: {
+                        enthalpy_formation: -74.6,
+                        entropy: 186.3,
+                        heat_capacity: 35.7,
+                        temperature_range: [200, 1500]
+                    },
+                    phase_data: {
+                        melting_point: 90.7,
+                        boiling_point: 111.7,
+                        critical_temperature: 190.6,
+                        critical_pressure: 4599000
+                    },
+                    uncertainties: {
+                        enthalpy_formation: 0.2,
+                        entropy: 0.2
+                    }
+                },
+                'O2': {
+                    formula: 'O2',
+                    name: 'Oxygen',
+                    cas: '7782-44-7',
+                    thermodynamics: {
+                        enthalpy_formation: 0,
+                        entropy: 205.2,
+                        heat_capacity: 29.4,
+                        temperature_range: [200, 3000]
+                    },
+                    phase_data: {
+                        melting_point: 54.4,
+                        boiling_point: 90.2,
+                        critical_temperature: 154.6,
+                        critical_pressure: 5043000
+                    },
+                    uncertainties: {
+                        enthalpy_formation: 0,
+                        entropy: 0.1
+                    }
+                },
+                'N2': {
+                    formula: 'N2',
+                    name: 'Nitrogen',
+                    cas: '7727-37-9',
+                    thermodynamics: {
+                        enthalpy_formation: 0,
+                        entropy: 191.6,
+                        heat_capacity: 29.1,
+                        temperature_range: [200, 3000]
+                    },
+                    phase_data: {
+                        melting_point: 63.1,
+                        boiling_point: 77.4,
+                        critical_temperature: 126.2,
+                        critical_pressure: 3396000
+                    },
+                    uncertainties: {
+                        enthalpy_formation: 0,
+                        entropy: 0.1
+                    }
+                }
+            };
+            return mockData[identifier] || null;
+        }
+        /**
+         * Batch query multiple compounds
+         */
+        async batchQuery(identifiers, type = 'formula') {
+            const results = [];
+            // Process in batches to avoid overwhelming the API
+            const batchSize = 10;
+            for (let i = 0; i < identifiers.length; i += batchSize) {
+                const batch = identifiers.slice(i, i + batchSize);
+                const batchPromises = batch.map(identifier => this.queryCompound(identifier, type));
+                const batchResults = await Promise.allSettled(batchPromises);
+                batchResults.forEach(result => {
+                    if (result.status === 'fulfilled' && result.value) {
+                        results.push(result.value);
+                    }
+                });
+                // Add delay between batches to be respectful to the API
+                if (i + batchSize < identifiers.length) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+            return results;
+        }
+        /**
+         * Clear the cache
+         */
+        clearCache() {
+            this.cache.clear();
+        }
+        /**
+         * Get cache statistics
+         */
+        getCacheStats() {
+            let oldestTimestamp = Infinity;
+            let newestTimestamp = 0;
+            for (const entry of this.cache.values()) {
+                if (entry.timestamp < oldestTimestamp) {
+                    oldestTimestamp = entry.timestamp;
+                }
+                if (entry.timestamp > newestTimestamp) {
+                    newestTimestamp = entry.timestamp;
+                }
+            }
+            return {
+                size: this.cache.size,
+                oldestEntry: oldestTimestamp === Infinity ? null : new Date(oldestTimestamp),
+                newestEntry: newestTimestamp === 0 ? null : new Date(newestTimestamp)
+            };
+        }
+    }
+
+    /**
+     * Advanced Data Validation Service
+     * Provides comprehensive validation for chemical data integrity
+     */
+    class DataValidationService {
+        constructor(config = {}) {
+            this.config = {
+                enablePhysicsChecks: true,
+                enableConsistencyChecks: true,
+                enableRangeChecks: true,
+                enableCorrelationChecks: true,
+                strictMode: false,
+                ...config
+            };
+        }
+        /**
+         * Validate a complete compound entry
+         */
+        validateCompound(compound) {
+            const errors = [];
+            const warnings = [];
+            // Basic structure validation
+            errors.push(...this.validateBasicStructure(compound));
+            // Chemical formula validation
+            errors.push(...this.validateFormula(compound.formula));
+            // Thermodynamic properties validation
+            if (compound.thermodynamicProperties) {
+                const thermoResult = this.validateThermodynamicProperties(compound.thermodynamicProperties, compound.formula);
+                errors.push(...thermoResult.errors);
+                warnings.push(...thermoResult.warnings);
+            }
+            // Physical properties validation
+            if (compound.physicalProperties) {
+                const physResult = this.validatePhysicalProperties(compound.physicalProperties, compound.thermodynamicProperties);
+                errors.push(...physResult.errors);
+                warnings.push(...physResult.warnings);
+            }
+            // Safety data validation
+            if (compound.safetyData) {
+                errors.push(...this.validateSafetyData(compound.safetyData));
+            }
+            // Cross-property consistency checks
+            if (this.config.enableConsistencyChecks) {
+                const consistencyResult = this.validateConsistency(compound);
+                errors.push(...consistencyResult.errors);
+                warnings.push(...consistencyResult.warnings);
+            }
+            // Calculate quality score
+            const score = this.calculateQualityScore(compound, errors, warnings);
+            return {
+                isValid: errors.filter(e => e.severity === 'critical' || e.severity === 'major').length === 0,
+                errors,
+                warnings,
+                score
+            };
+        }
+        /**
+         * Validate basic compound structure
+         */
+        validateBasicStructure(compound) {
+            const errors = [];
+            if (!compound.formula || compound.formula.trim() === '') {
+                errors.push({
+                    field: 'formula',
+                    message: 'Chemical formula is required',
+                    severity: 'critical',
+                    suggestedFix: 'Provide a valid chemical formula'
+                });
+            }
+            if (!compound.name || compound.name.trim() === '') {
+                errors.push({
+                    field: 'name',
+                    message: 'Compound name is required',
+                    severity: 'major',
+                    suggestedFix: 'Provide a compound name'
+                });
+            }
+            if (compound.molecularWeight <= 0) {
+                errors.push({
+                    field: 'molecularWeight',
+                    message: 'Molecular weight must be positive',
+                    severity: 'critical',
+                    suggestedFix: 'Calculate molecular weight from formula'
+                });
+            }
+            if (compound.molecularWeight < 0.1 || compound.molecularWeight > 10000) {
+                errors.push({
+                    field: 'molecularWeight',
+                    message: 'Molecular weight must be between 0.1 and 10000 g/mol',
+                    severity: 'critical',
+                    suggestedFix: 'Check molecular weight calculation or formula'
+                });
+            }
+            if (compound.confidence < 0 || compound.confidence > 1) {
+                errors.push({
+                    field: 'confidence',
+                    message: 'Confidence must be between 0 and 1',
+                    severity: 'minor',
+                    suggestedFix: 'Set confidence to 0.8 if uncertain'
+                });
+            }
+            return errors;
+        }
+        /**
+         * Validate chemical formula syntax and composition
+         */
+        validateFormula(formula) {
+            const errors = [];
+            if (!formula)
+                return errors;
+            // Check for valid characters (letters, numbers, parentheses)
+            if (!/^[A-Za-z0-9()]+$/.test(formula)) {
+                errors.push({
+                    field: 'formula',
+                    message: 'Formula contains invalid characters',
+                    severity: 'critical',
+                    suggestedFix: 'Use only element symbols, numbers, and parentheses'
+                });
+            }
+            // Check balanced parentheses
+            let parenCount = 0;
+            for (const char of formula) {
+                if (char === '(')
+                    parenCount++;
+                if (char === ')')
+                    parenCount--;
+                if (parenCount < 0) {
+                    errors.push({
+                        field: 'formula',
+                        message: 'Unbalanced parentheses in formula',
+                        severity: 'critical'
+                    });
+                    break;
+                }
+            }
+            if (parenCount !== 0) {
+                errors.push({
+                    field: 'formula',
+                    message: 'Unbalanced parentheses in formula',
+                    severity: 'critical'
+                });
+            }
+            // Check for valid element symbols
+            const elementPattern = /[A-Z][a-z]?/g;
+            const elements = formula.match(elementPattern) || [];
+            const validElements = new Set([
+                'H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne',
+                'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar', 'K', 'Ca',
+                'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn',
+                'Ga', 'Ge', 'As', 'Se', 'Br', 'Kr', 'Rb', 'Sr', 'Y', 'Zr',
+                'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 'Sn',
+                'Sb', 'Te', 'I', 'Xe', 'Cs', 'Ba', 'La', 'Ce', 'Pr', 'Nd',
+                'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb',
+                'Lu', 'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg',
+                'Tl', 'Pb', 'Bi', 'Po', 'At', 'Rn'
+            ]);
+            for (const element of elements) {
+                if (!validElements.has(element)) {
+                    errors.push({
+                        field: 'formula',
+                        message: `Invalid element symbol: ${element}`,
+                        severity: 'critical',
+                        suggestedFix: 'Check periodic table for correct element symbols'
+                    });
+                }
+            }
+            return errors;
+        }
+        /**
+         * Validate thermodynamic properties
+         */
+        validateThermodynamicProperties(props, formula) {
+            const errors = [];
+            const warnings = [];
+            // Range checks
+            if (this.config.enableRangeChecks) {
+                if (props.deltaHf < -5e3 || props.deltaHf > 5000) {
+                    errors.push({
+                        field: 'thermodynamicProperties.deltaHf',
+                        message: 'Enthalpy of formation outside reasonable range (-5000 to 5000 kJ/mol)',
+                        severity: 'major'
+                    });
+                }
+                if (props.entropy < 0 || props.entropy > 1000) {
+                    errors.push({
+                        field: 'thermodynamicProperties.entropy',
+                        message: 'Entropy outside reasonable range (0 to 1000 J/(mol·K))',
+                        severity: 'major'
+                    });
+                }
+                if (props.heatCapacity < 0 || props.heatCapacity > 500) {
+                    errors.push({
+                        field: 'thermodynamicProperties.heatCapacity',
+                        message: 'Heat capacity outside reasonable range (0 to 500 J/(mol·K))',
+                        severity: 'major'
+                    });
+                }
+            }
+            // Temperature range validation
+            if (props.temperatureRange) {
+                if (props.temperatureRange[0] >= props.temperatureRange[1]) {
+                    errors.push({
+                        field: 'thermodynamicProperties.temperatureRange',
+                        message: 'Temperature range minimum must be less than maximum',
+                        severity: 'critical'
+                    });
+                }
+                if (props.temperatureRange[0] < 0) {
+                    errors.push({
+                        field: 'thermodynamicProperties.temperatureRange',
+                        message: 'Temperature cannot be below absolute zero',
+                        severity: 'critical'
+                    });
+                }
+            }
+            // Physics-based checks
+            if (this.config.enablePhysicsChecks) {
+                // Third law of thermodynamics: entropy approaches zero at 0K
+                if (props.entropy < 0) {
+                    errors.push({
+                        field: 'thermodynamicProperties.entropy',
+                        message: 'Entropy cannot be negative (Third Law of Thermodynamics)',
+                        severity: 'critical'
+                    });
+                }
+                // Check for reasonable heat capacity
+                const atomCount = this.estimateAtomCount(formula);
+                const expectedCp = atomCount * 20; // Rough estimate: ~20 J/(mol·K) per atom
+                if (Math.abs(props.heatCapacity - expectedCp) > expectedCp * 0.5) {
+                    warnings.push({
+                        field: 'thermodynamicProperties.heatCapacity',
+                        message: `Heat capacity seems unusual for ${atomCount} atoms`,
+                        recommendation: `Expected around ${expectedCp.toFixed(1)} J/(mol·K)`
+                    });
+                }
+            }
+            // Phase transition consistency
+            if (props.meltingPoint && props.boilingPoint) {
+                if (props.meltingPoint >= props.boilingPoint) {
+                    errors.push({
+                        field: 'thermodynamicProperties.meltingPoint',
+                        message: 'Melting point must be less than boiling point',
+                        severity: 'major'
+                    });
+                }
+            }
+            // Critical point validation
+            if (props.criticalTemperature && props.boilingPoint) {
+                if (props.criticalTemperature <= props.boilingPoint) {
+                    errors.push({
+                        field: 'thermodynamicProperties.criticalTemperature',
+                        message: 'Critical temperature must be greater than boiling point',
+                        severity: 'major'
+                    });
+                }
+            }
+            return { errors, warnings };
+        }
+        /**
+         * Validate physical properties
+         */
+        validatePhysicalProperties(props, thermoProps) {
+            const errors = [];
+            const warnings = [];
+            // Density checks
+            if (props.density !== undefined) {
+                if (props.density <= 0) {
+                    errors.push({
+                        field: 'physicalProperties.density',
+                        message: 'Density must be positive',
+                        severity: 'critical'
+                    });
+                }
+                if (props.density > 50000) { // Osmium density is ~22,590 kg/m³
+                    warnings.push({
+                        field: 'physicalProperties.density',
+                        message: 'Density seems unusually high',
+                        recommendation: 'Verify units and measurement conditions'
+                    });
+                }
+            }
+            // Viscosity checks
+            if (props.viscosity !== undefined) {
+                if (props.viscosity < 0) {
+                    errors.push({
+                        field: 'physicalProperties.viscosity',
+                        message: 'Viscosity cannot be negative',
+                        severity: 'critical'
+                    });
+                }
+            }
+            // Thermal conductivity checks
+            if (props.thermalConductivity !== undefined) {
+                if (props.thermalConductivity < 0) {
+                    errors.push({
+                        field: 'physicalProperties.thermalConductivity',
+                        message: 'Thermal conductivity cannot be negative',
+                        severity: 'critical'
+                    });
+                }
+            }
+            // Refractive index checks
+            if (props.refractiveIndex !== undefined) {
+                if (props.refractiveIndex < 1) {
+                    errors.push({
+                        field: 'physicalProperties.refractiveIndex',
+                        message: 'Refractive index must be at least 1',
+                        severity: 'critical'
+                    });
+                }
+            }
+            return { errors, warnings };
+        }
+        /**
+         * Validate safety data
+         */
+        validateSafetyData(safetyData) {
+            const errors = [];
+            // Flash point vs autoignition temperature
+            if (safetyData.flashPoint && safetyData.autoignitionTemperature) {
+                if (safetyData.flashPoint >= safetyData.autoignitionTemperature) {
+                    errors.push({
+                        field: 'safetyData.flashPoint',
+                        message: 'Flash point must be less than autoignition temperature',
+                        severity: 'major'
+                    });
+                }
+            }
+            // Explosive limits
+            if (safetyData.explosiveLimits) {
+                if (safetyData.explosiveLimits.lower >= safetyData.explosiveLimits.upper) {
+                    errors.push({
+                        field: 'safetyData.explosiveLimits',
+                        message: 'Lower explosive limit must be less than upper limit',
+                        severity: 'major'
+                    });
+                }
+                if (safetyData.explosiveLimits.lower < 0 || safetyData.explosiveLimits.upper > 100) {
+                    errors.push({
+                        field: 'safetyData.explosiveLimits',
+                        message: 'Explosive limits must be between 0 and 100 vol%',
+                        severity: 'major'
+                    });
+                }
+            }
+            return errors;
+        }
+        /**
+         * Validate cross-property consistency
+         */
+        validateConsistency(compound) {
+            const errors = [];
+            const warnings = [];
+            const molecular = this.calculateMolecularWeight(compound.formula);
+            // Molecular weight consistency
+            if (Math.abs(compound.molecularWeight - molecular) > 0.1) {
+                errors.push({
+                    field: 'molecularWeight',
+                    message: `Molecular weight inconsistent with formula (calculated: ${molecular.toFixed(3)})`,
+                    severity: 'major',
+                    suggestedFix: `Update to ${molecular.toFixed(3)} g/mol`
+                });
+            }
+            // Source-confidence correlation
+            if (compound.sources.includes('nist') && compound.confidence < 0.9) {
+                warnings.push({
+                    field: 'confidence',
+                    message: 'NIST data typically has high confidence',
+                    recommendation: 'Consider increasing confidence score'
+                });
+            }
+            return { errors, warnings };
+        }
+        /**
+         * Calculate quality score (0-100)
+         */
+        calculateQualityScore(compound, errors, warnings) {
+            let score = 100;
+            // Deduct points for errors
+            errors.forEach(error => {
+                switch (error.severity) {
+                    case 'critical':
+                        score -= 25;
+                        break;
+                    case 'major':
+                        score -= 10;
+                        break;
+                    case 'minor':
+                        score -= 5;
+                        break;
+                }
+            });
+            // Deduct points for warnings
+            score -= warnings.length * 2;
+            // Bonus points for completeness
+            if (compound.thermodynamicProperties.deltaGf !== undefined)
+                score += 2;
+            if (compound.thermodynamicProperties.uncertainties)
+                score += 3;
+            if (compound.physicalProperties.density !== undefined)
+                score += 2;
+            if (compound.safetyData)
+                score += 5;
+            if (compound.sources.includes('nist'))
+                score += 5;
+            return Math.max(0, Math.min(100, score));
+        }
+        /**
+         * Estimate atom count from formula
+         */
+        estimateAtomCount(formula) {
+            let count = 0;
+            let i = 0;
+            while (i < formula.length) {
+                if (formula[i] === '(') {
+                    // Skip to matching closing parenthesis
+                    let parenCount = 1;
+                    i++;
+                    while (i < formula.length && parenCount > 0) {
+                        if (formula[i] === '(')
+                            parenCount++;
+                        if (formula[i] === ')')
+                            parenCount--;
+                        i++;
+                    }
+                    continue;
+                }
+                if (/[A-Z]/.test(formula[i])) {
+                    count++;
+                    i++;
+                    // Skip lowercase letters
+                    while (i < formula.length && /[a-z]/.test(formula[i])) {
+                        i++;
+                    }
+                    // Skip numbers
+                    while (i < formula.length && /\d/.test(formula[i])) {
+                        i++;
+                    }
+                }
+                else {
+                    i++;
+                }
+            }
+            return count;
+        }
+        /**
+         * Calculate molecular weight from formula
+         */
+        calculateMolecularWeight(formula) {
+            const atomicWeights = {
+                'H': 1.008, 'He': 4.003, 'Li': 6.941, 'Be': 9.012, 'B': 10.811,
+                'C': 12.011, 'N': 14.007, 'O': 15.999, 'F': 18.998, 'Ne': 20.180,
+                'Na': 22.990, 'Mg': 24.305, 'Al': 26.982, 'Si': 28.085, 'P': 30.974,
+                'S': 32.065, 'Cl': 35.453, 'Ar': 39.948, 'K': 39.098, 'Ca': 40.078,
+                'Fe': 55.845, 'Cu': 63.546, 'Zn': 65.38, 'Br': 79.904, 'I': 126.904
+            };
+            let weight = 0;
+            let i = 0;
+            while (i < formula.length) {
+                // Get element symbol - starts with uppercase letter
+                let element = formula[i];
+                i++;
+                // Check for two-letter elements (lowercase letter after uppercase)
+                if (i < formula.length && /[a-z]/.test(formula[i])) {
+                    element += formula[i];
+                    i++;
+                }
+                // Get count - sequence of digits
+                let count = '';
+                while (i < formula.length && /\d/.test(formula[i])) {
+                    count += formula[i];
+                    i++;
+                }
+                const elementWeight = atomicWeights[element] || 0;
+                const elementCount = count ? parseInt(count) : 1;
+                weight += elementWeight * elementCount;
+            }
+            return Math.round(weight * 1000) / 1000;
+        }
+        /**
+         * Batch validate multiple compounds
+         */
+        batchValidate(compounds) {
+            const results = new Map();
+            compounds.forEach(compound => {
+                const result = this.validateCompound(compound);
+                results.set(compound.formula, result);
+            });
+            return results;
+        }
+        /**
+         * Get validation summary statistics
+         */
+        getValidationSummary(results) {
+            let totalCompounds = 0;
+            let validCompounds = 0;
+            let totalScore = 0;
+            let criticalErrors = 0;
+            let majorErrors = 0;
+            let minorErrors = 0;
+            let warnings = 0;
+            for (const result of results.values()) {
+                totalCompounds++;
+                if (result.isValid)
+                    validCompounds++;
+                totalScore += result.score;
+                warnings += result.warnings.length;
+                result.errors.forEach(error => {
+                    switch (error.severity) {
+                        case 'critical':
+                            criticalErrors++;
+                            break;
+                        case 'major':
+                            majorErrors++;
+                            break;
+                        case 'minor':
+                            minorErrors++;
+                            break;
+                    }
+                });
+            }
+            return {
+                totalCompounds,
+                validCompounds,
+                averageScore: totalCompounds > 0 ? totalScore / totalCompounds : 0,
+                criticalErrors,
+                majorErrors,
+                minorErrors,
+                warnings
+            };
+        }
+    }
+
     exports.AdvancedKineticsAnalyzer = AdvancedKineticsAnalyzer;
+    exports.ChemicalDatabaseManager = ChemicalDatabaseManager;
     exports.ChemicalEquationBalancer = ChemicalEquationBalancer;
+    exports.ChemicalFormulaError = ChemicalFormulaError;
+    exports.DataValidationService = DataValidationService;
     exports.ELEMENTS_LIST = ELEMENTS_LIST;
     exports.ElementCounter = ElementCounter;
+    exports.EnergyProfileGenerator = EnergyProfileGenerator;
+    exports.EnhancedBalancer = EnhancedBalancer;
     exports.EnhancedChemicalEquationBalancer = EnhancedChemicalEquationBalancer;
     exports.EnhancedStoichiometry = EnhancedStoichiometry;
+    exports.EquationBalancingError = EquationBalancingError;
     exports.EquationParser = EquationParser;
     exports.MechanismAnalyzer = MechanismAnalyzer;
+    exports.NISTWebBookIntegration = NISTWebBookIntegration;
     exports.PARAMETER_SYMBOLS = PARAMETER_SYMBOLS;
     exports.PERIODIC_TABLE = PERIODIC_TABLE;
     exports.ReactionKinetics = ReactionKinetics;
@@ -3380,6 +5515,14 @@
     exports.ThermodynamicsCalculator = ThermodynamicsCalculator;
     exports.ThermodynamicsEquationBalancer = ThermodynamicsEquationBalancer;
     exports.calculateMolarWeight = calculateMolarWeight;
+    exports.createChemicalFormula = createChemicalFormula;
+    exports.createElementSymbol = createElementSymbol;
+    exports.createEnergyProfile = createEnergyProfile;
+    exports.exportEnergyProfile = exportEnergyProfile;
+    exports.isBalancedEquation = isBalancedEquation;
+    exports.isChemicalFormula = isChemicalFormula;
+    exports.isElementSymbol = isElementSymbol;
+    exports.parseFormula = parseFormula;
 
 }));
 //# sourceMappingURL=index.umd.js.map
