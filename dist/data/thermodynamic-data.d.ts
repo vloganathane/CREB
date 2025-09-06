@@ -1,0 +1,1 @@
+//# sourceMappingURL=thermodynamic-data.d.ts.map

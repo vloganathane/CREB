@@ -25,3 +25,28 @@ export {
   type ThermodynamicProperties,
   type TemperatureProfile
 } from './thermodynamics';
+
+// Advanced Kinetics & Analytics Module (Phase 2 - v1.5.0)
+export {
+  ReactionKinetics,
+  MechanismAnalyzer,
+  ReactionSafetyAnalyzer,
+  AdvancedKineticsAnalyzer,
+  type ArrheniusData,
+  type KineticsResult,
+  type CatalystData,
+  type MechanismStep,
+  type MechanismAnalysis,
+  type PathwayComparison,
+  type SafetyData,
+  type ToxicityData,
+  type ReactivityData,
+  type ReactionSafetyAssessment,
+  type ThermalHazard,
+  type ChemicalHazard,
+  type PhysicalHazard,
+  type EnvironmentalHazard,
+  type SafetyRecommendation,
+  type ReactionClass,
+  type RateLawType
+} from './kinetics';

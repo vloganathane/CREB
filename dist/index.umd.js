@@ -2177,14 +2177,1205 @@
         }
     }
 
+    /**
+     * CREB Reaction Kinetics Calculator
+     * Core calculator for reaction kinetics analysis
+     */
+    class ReactionKinetics {
+        /**
+         * Calculate reaction rate constant using Arrhenius equation
+         * k = A * exp(-Ea / (R * T))
+         */
+        static calculateRateConstant(arrhenius, temperature) {
+            const { preExponentialFactor, activationEnergy } = arrhenius;
+            const energyJoules = activationEnergy * 1000; // Convert kJ/mol to J/mol
+            return preExponentialFactor * Math.exp(-energyJoules / (this.GAS_CONSTANT * temperature));
+        }
+        /**
+         * Calculate activation energy from rate constants at two temperatures
+         * Ea = R * ln(k2/k1) / (1/T1 - 1/T2)
+         */
+        static calculateActivationEnergy(k1, T1, k2, T2) {
+            const lnRatio = Math.log(k2 / k1);
+            const tempTerm = (1 / T1) - (1 / T2);
+            return (this.GAS_CONSTANT * lnRatio / tempTerm) / 1000; // Convert to kJ/mol
+        }
+        /**
+         * Generate temperature profile for reaction kinetics
+         */
+        static generateTemperatureProfile(arrhenius, tempRange, points = 20) {
+            const [minTemp, maxTemp] = tempRange;
+            const step = (maxTemp - minTemp) / (points - 1);
+            return Array.from({ length: points }, (_, i) => {
+                const temperature = minTemp + (i * step);
+                const rateConstant = this.calculateRateConstant(arrhenius, temperature);
+                return {
+                    temperature,
+                    rateConstant,
+                    reactionRate: rateConstant // Base rate (will be modified by concentrations)
+                };
+            });
+        }
+        /**
+         * Determine reaction class from chemical equation
+         */
+        static classifyReaction(equation) {
+            try {
+                const parser = new EquationParser(equation);
+                const parsed = parser.parse();
+                const reactantCount = parsed.reactants.length;
+                // Basic classification based on number of reactants
+                if (reactantCount === 1)
+                    return 'unimolecular';
+                if (reactantCount === 2)
+                    return 'bimolecular';
+                if (reactantCount === 3)
+                    return 'termolecular';
+                return 'complex';
+            }
+            catch {
+                return 'complex';
+            }
+        }
+        /**
+         * Calculate half-life for first-order reactions
+         * t₁/₂ = ln(2) / k
+         */
+        static calculateHalfLife(rateConstant, order = 1) {
+            if (order === 1) {
+                return Math.log(2) / rateConstant;
+            }
+            // For other orders, half-life depends on initial concentration
+            // Return NaN to indicate additional parameters needed
+            return NaN;
+        }
+        /**
+         * Estimate pre-exponential factor using transition state theory
+         * A ≈ (kB * T / h) * exp(ΔS‡ / R)
+         */
+        static estimatePreExponentialFactor(temperature, entropyOfActivation = 0 // J/(mol·K), default assumes no entropy change
+        ) {
+            const kB = 1.381e-23; // Boltzmann constant (J/K)
+            const h = 6.626e-34; // Planck constant (J·s)
+            const frequencyFactor = (kB * temperature) / h;
+            const entropyTerm = Math.exp(entropyOfActivation / this.GAS_CONSTANT);
+            return frequencyFactor * entropyTerm;
+        }
+        /**
+         * Apply catalyst effect to reaction kinetics
+         */
+        static applyCatalystEffect(baseKinetics, catalyst) {
+            const { effectOnRate, effectOnActivationEnergy } = catalyst;
+            return {
+                ...baseKinetics,
+                rateConstant: (baseKinetics.rateConstant || 0) * effectOnRate,
+                activationEnergy: (baseKinetics.activationEnergy || 0) + effectOnActivationEnergy,
+                catalystEffect: catalyst
+            };
+        }
+        /**
+         * Generate rate law expression
+         */
+        static generateRateLaw(equation, orders, rateConstant) {
+            try {
+                const parser = new EquationParser(equation);
+                const parsed = parser.parse();
+                const reactants = parsed.reactants;
+                let rateLaw = `Rate = ${rateConstant.toExponential(3)}`;
+                for (const reactant of reactants) {
+                    const order = orders[reactant] || 1;
+                    if (order === 1) {
+                        rateLaw += `[${reactant}]`;
+                    }
+                    else if (order !== 0) {
+                        rateLaw += `[${reactant}]^${order}`;
+                    }
+                }
+                return rateLaw;
+            }
+            catch {
+                return `Rate = ${rateConstant.toExponential(3)}[A]^n[B]^m`;
+            }
+        }
+        /**
+         * Comprehensive kinetics analysis
+         */
+        static analyzeKinetics(equation, conditions, arrheniusData) {
+            const reactionClass = this.classifyReaction(equation);
+            // If no Arrhenius data provided, estimate based on reaction type
+            const arrhenius = arrheniusData || this.estimateArrheniusParameters(equation, reactionClass);
+            const rateConstant = this.calculateRateConstant(arrhenius, conditions.temperature);
+            const halfLife = this.calculateHalfLife(rateConstant);
+            // Generate basic reaction orders (1 for each reactant by default)
+            const parser = new EquationParser(equation);
+            const parsed = parser.parse();
+            const orders = parsed.reactants.reduce((acc, reactant) => {
+                acc[reactant] = 1; // Assume first order in each reactant
+                return acc;
+            }, {});
+            const overallOrder = Object.values(orders).reduce((sum, order) => sum + order, 0);
+            const rateLaw = this.generateRateLaw(equation, orders, rateConstant);
+            return {
+                equation,
+                rateConstant,
+                activationEnergy: arrhenius.activationEnergy,
+                reactionOrder: overallOrder,
+                mechanism: [{
+                        equation,
+                        type: 'elementary',
+                        rateConstant,
+                        order: orders,
+                        mechanism: 'Single-step elementary reaction'
+                    }],
+                temperatureDependence: arrhenius,
+                rateLaw,
+                conditions,
+                halfLife: isFinite(halfLife) ? halfLife : undefined,
+                confidence: arrheniusData ? 0.8 : 0.5, // Lower confidence for estimates
+                dataSource: arrheniusData ? 'literature' : 'estimated'
+            };
+        }
+        /**
+         * Estimate Arrhenius parameters for unknown reactions
+         */
+        static estimateArrheniusParameters(equation, reactionClass) {
+            // Rough estimates based on reaction class
+            const estimates = {
+                unimolecular: { A: 1e13, Ea: 150 }, // s⁻¹, kJ/mol
+                bimolecular: { A: 1e10, Ea: 50 }, // M⁻¹s⁻¹, kJ/mol
+                termolecular: { A: 1e6, Ea: 25 }, // M⁻²s⁻¹, kJ/mol
+                'enzyme-catalyzed': { A: 1e7, Ea: 40 },
+                autocatalytic: { A: 1e8, Ea: 60 },
+                'chain-reaction': { A: 1e12, Ea: 30 },
+                oscillating: { A: 1e9, Ea: 70 },
+                complex: { A: 1e9, Ea: 80 }
+            };
+            const { A, Ea } = estimates[reactionClass] || estimates.complex;
+            return {
+                preExponentialFactor: A,
+                activationEnergy: Ea,
+                temperatureRange: [250, 500], // K
+                rSquared: 0.5 // Low confidence for estimates
+            };
+        }
+    }
+    ReactionKinetics.GAS_CONSTANT = 8.314; // J/(mol·K)
+    ReactionKinetics.KELVIN_CELSIUS_OFFSET = 273.15;
+
+    var calculator = /*#__PURE__*/Object.freeze({
+        __proto__: null,
+        ReactionKinetics: ReactionKinetics
+    });
+
+    /**
+     * CREB Reaction Mechanism Analyzer
+     * Analyzes complex reaction mechanisms and pathways
+     */
+    class MechanismAnalyzer {
+        /**
+         * Analyze a multi-step reaction mechanism
+         */
+        static analyzeMechanism(steps, conditions) {
+            // Find intermediates (species that appear as both products and reactants)
+            const intermediates = this.findIntermediates(steps);
+            // Find catalysts (species that appear on both sides but are not consumed)
+            const catalysts = this.findCatalysts(steps);
+            // Determine rate-determining step
+            const rateDeterminingStep = this.findRateDeterminingStep(steps);
+            // Generate overall reaction equation
+            const overallReaction = this.deriveOverallReaction(steps);
+            // Apply steady-state approximation
+            const rateExpression = this.deriveSteadyStateRateExpression(steps, intermediates);
+            // Determine valid approximations
+            const approximations = this.identifyValidApproximations(steps, conditions);
+            return {
+                mechanism: steps,
+                overallReaction,
+                rateExpression,
+                rateDeterminingStep,
+                intermediates,
+                catalysts,
+                approximations,
+                validity: {
+                    steadyState: intermediates.length > 0,
+                    preEquilibrium: this.hasPreEquilibrium(steps),
+                    rateApproximation: rateDeterminingStep >= 0
+                },
+                confidence: this.calculateMechanismConfidence(steps, approximations)
+            };
+        }
+        /**
+         * Compare two competing reaction pathways
+         */
+        static comparePathways(pathway1, pathway2, conditions) {
+            const analysis1 = this.analyzeMechanism(pathway1, conditions);
+            const analysis2 = this.analyzeMechanism(pathway2, conditions);
+            // Calculate overall rate constants for comparison
+            const rate1 = this.calculateOverallRate(pathway1, conditions);
+            const rate2 = this.calculateOverallRate(pathway2, conditions);
+            const selectivityFactor = rate1 / rate2;
+            const preferredPathway = rate1 > rate2 ? 1 : 2;
+            const reasons = this.generateComparisonReasons(analysis1, analysis2, rate1, rate2);
+            return {
+                pathway1: analysis1,
+                pathway2: analysis2,
+                preferredPathway,
+                reasons,
+                selectivityFactor
+            };
+        }
+        /**
+         * Apply pre-equilibrium approximation
+         */
+        static applyPreEquilibriumApproximation(steps, equilibriumSteps) {
+            // For fast pre-equilibrium steps, assume rapid equilibrium
+            // K_eq = k_forward / k_reverse
+            let rateExpression = "Rate = ";
+            const slowStep = steps.find(step => !equilibriumSteps.includes(step.stepNumber));
+            if (slowStep) {
+                rateExpression += `k${slowStep.stepNumber}`;
+                // Add concentration terms modified by equilibrium constants
+                equilibriumSteps.forEach(stepNum => {
+                    const step = steps.find(s => s.stepNumber === stepNum);
+                    if (step && step.reverseRateConstant) {
+                        const keq = step.rateConstant / step.reverseRateConstant;
+                        rateExpression += ` × K${stepNum}(${keq.toExponential(2)})`;
+                    }
+                });
+            }
+            return rateExpression;
+        }
+        /**
+         * Apply steady-state approximation
+         */
+        static applySteadyStateApproximation(steps, steadyStateSpecies) {
+            // For steady-state species: d[I]/dt = 0
+            // Rate of formation = Rate of consumption
+            let rateExpression = "Rate = ";
+            // Simplified: find the slowest step
+            const slowestStep = steps.reduce((prev, current) => prev.rateConstant < current.rateConstant ? prev : current);
+            rateExpression += `k${slowestStep.stepNumber}`;
+            // Add pre-equilibrium factors if applicable
+            steadyStateSpecies.forEach(species => {
+                rateExpression += `[${species}]_ss`;
+            });
+            return rateExpression;
+        }
+        /**
+         * Find species that appear as both products and reactants (intermediates)
+         */
+        static findIntermediates(steps) {
+            const products = new Set();
+            const reactants = new Set();
+            steps.forEach(step => {
+                try {
+                    const parser = new EquationParser(step.equation);
+                    const parsed = parser.parse();
+                    parsed.reactants.forEach(r => reactants.add(r));
+                    parsed.products.forEach(p => products.add(p));
+                }
+                catch {
+                    // Skip invalid equations
+                }
+            });
+            // Intermediates appear in both sets
+            return Array.from(products).filter(species => reactants.has(species));
+        }
+        /**
+         * Find species that appear on both sides but are not consumed (catalysts)
+         */
+        static findCatalysts(steps) {
+            const speciesBalance = {};
+            steps.forEach(step => {
+                try {
+                    const parser = new EquationParser(step.equation);
+                    const parsed = parser.parse();
+                    // Subtract reactants, add products
+                    parsed.reactants.forEach(r => {
+                        speciesBalance[r] = (speciesBalance[r] || 0) - 1;
+                    });
+                    parsed.products.forEach(p => {
+                        speciesBalance[p] = (speciesBalance[p] || 0) + 1;
+                    });
+                }
+                catch {
+                    // Skip invalid equations
+                }
+            });
+            // Catalysts have net balance of zero
+            return Object.keys(speciesBalance).filter(species => speciesBalance[species] === 0);
+        }
+        /**
+         * Identify the rate-determining step (slowest step)
+         */
+        static findRateDeterminingStep(steps) {
+            let slowestStep = steps[0];
+            let slowestIndex = 0;
+            steps.forEach((step, index) => {
+                if (step.rateConstant < slowestStep.rateConstant) {
+                    slowestStep = step;
+                    slowestIndex = index;
+                }
+            });
+            return slowestIndex;
+        }
+        /**
+         * Derive overall reaction from mechanism steps
+         */
+        static deriveOverallReaction(steps) {
+            const netReactants = {};
+            const netProducts = {};
+            steps.forEach(step => {
+                try {
+                    const parser = new EquationParser(step.equation);
+                    const parsed = parser.parse();
+                    parsed.reactants.forEach(r => {
+                        netReactants[r] = (netReactants[r] || 0) + 1;
+                    });
+                    parsed.products.forEach(p => {
+                        netProducts[p] = (netProducts[p] || 0) + 1;
+                    });
+                }
+                catch {
+                    // Skip invalid equations
+                }
+            });
+            // Remove intermediates (species that appear on both sides)
+            const allSpecies = new Set([...Object.keys(netReactants), ...Object.keys(netProducts)]);
+            allSpecies.forEach(species => {
+                const reactantCount = netReactants[species] || 0;
+                const productCount = netProducts[species] || 0;
+                if (reactantCount > 0 && productCount > 0) {
+                    const minCount = Math.min(reactantCount, productCount);
+                    netReactants[species] -= minCount;
+                    netProducts[species] -= minCount;
+                    if (netReactants[species] === 0)
+                        delete netReactants[species];
+                    if (netProducts[species] === 0)
+                        delete netProducts[species];
+                }
+            });
+            // Build equation string
+            const reactantStr = Object.entries(netReactants)
+                .filter(([_, count]) => count > 0)
+                .map(([species, count]) => count > 1 ? `${count}${species}` : species)
+                .join(' + ');
+            const productStr = Object.entries(netProducts)
+                .filter(([_, count]) => count > 0)
+                .map(([species, count]) => count > 1 ? `${count}${species}` : species)
+                .join(' + ');
+            return `${reactantStr} = ${productStr}`;
+        }
+        /**
+         * Derive rate expression using steady-state approximation
+         */
+        static deriveSteadyStateRateExpression(steps, intermediates) {
+            if (intermediates.length === 0) {
+                // Simple elementary reaction
+                const step = steps[0];
+                return `Rate = k${step.stepNumber}[reactants]`;
+            }
+            // Complex mechanism - simplified steady-state treatment
+            const rateDeterminingStep = this.findRateDeterminingStep(steps);
+            const rdsStep = steps[rateDeterminingStep];
+            return `Rate = k${rdsStep.stepNumber}[reactants] (steady-state approximation)`;
+        }
+        /**
+         * Check if mechanism has pre-equilibrium steps
+         */
+        static hasPreEquilibrium(steps) {
+            return steps.some(step => step.type === 'fast-equilibrium' || step.reverseRateConstant !== undefined);
+        }
+        /**
+         * Identify valid approximations for the mechanism
+         */
+        static identifyValidApproximations(steps, conditions) {
+            const approximations = [];
+            // Check for pre-equilibrium
+            if (this.hasPreEquilibrium(steps)) {
+                approximations.push('Pre-equilibrium approximation');
+            }
+            // Check for steady-state intermediates
+            const intermediates = this.findIntermediates(steps);
+            if (intermediates.length > 0) {
+                approximations.push('Steady-state approximation');
+            }
+            // Check for rate-determining step
+            const rateDeterminingStep = this.findRateDeterminingStep(steps);
+            if (rateDeterminingStep >= 0) {
+                approximations.push('Rate-determining step approximation');
+            }
+            return approximations;
+        }
+        /**
+         * Calculate overall reaction rate for pathway comparison
+         */
+        static calculateOverallRate(steps, conditions) {
+            // Simplified: use the slowest step as the overall rate
+            const rateDeterminingStep = this.findRateDeterminingStep(steps);
+            const rdsStep = steps[rateDeterminingStep];
+            // Apply temperature dependence (simplified)
+            const temperatureFactor = Math.exp(-5e4 / (8.314 * conditions.temperature)); // Rough estimate
+            return rdsStep.rateConstant * temperatureFactor;
+        }
+        /**
+         * Generate reasons for pathway preference
+         */
+        static generateComparisonReasons(analysis1, analysis2, rate1, rate2) {
+            const reasons = [];
+            if (rate1 > rate2) {
+                reasons.push(`Pathway 1 is ${(rate1 / rate2).toFixed(2)}x faster`);
+            }
+            else {
+                reasons.push(`Pathway 2 is ${(rate2 / rate1).toFixed(2)}x faster`);
+            }
+            if (analysis1.intermediates.length < analysis2.intermediates.length) {
+                reasons.push('Pathway 1 has fewer intermediates');
+            }
+            else if (analysis2.intermediates.length < analysis1.intermediates.length) {
+                reasons.push('Pathway 2 has fewer intermediates');
+            }
+            if (analysis1.confidence > analysis2.confidence) {
+                reasons.push('Pathway 1 has higher mechanistic confidence');
+            }
+            else if (analysis2.confidence > analysis1.confidence) {
+                reasons.push('Pathway 2 has higher mechanistic confidence');
+            }
+            return reasons;
+        }
+        /**
+         * Calculate confidence in mechanism analysis
+         */
+        static calculateMechanismConfidence(steps, approximations) {
+            let confidence = 0.5; // Base confidence
+            // Higher confidence for well-defined mechanisms
+            if (steps.length > 1 && steps.length <= 5)
+                confidence += 0.2;
+            // Higher confidence if approximations are valid
+            if (approximations.length > 0)
+                confidence += 0.1 * approximations.length;
+            // Lower confidence for complex mechanisms
+            if (steps.length > 5)
+                confidence -= 0.1;
+            return Math.min(Math.max(confidence, 0), 1);
+        }
+    }
+
+    var mechanismAnalyzer = /*#__PURE__*/Object.freeze({
+        __proto__: null,
+        MechanismAnalyzer: MechanismAnalyzer
+    });
+
+    /**
+     * CREB Reaction Safety Analyzer
+     * Analyzes reaction safety and provides hazard assessments
+     */
+    class ReactionSafetyAnalyzer {
+        /**
+         * Perform comprehensive safety assessment of a reaction
+         */
+        static assessReactionSafety(equation, conditions, kineticsData) {
+            // Parse the reaction to identify compounds
+            const compounds = this.extractCompoundsFromEquation(equation);
+            // Assess individual compound hazards
+            const compoundHazards = compounds.map(compound => this.getCompoundSafetyData(compound)).filter(Boolean);
+            // Analyze thermal hazards
+            const thermalHazards = this.assessThermalHazards(equation, conditions, kineticsData);
+            // Analyze chemical hazards
+            const chemicalHazards = this.assessChemicalHazards(compoundHazards, conditions);
+            // Analyze physical hazards
+            const physicalHazards = this.assessPhysicalHazards(conditions, compoundHazards);
+            // Analyze environmental hazards
+            const environmentalHazards = this.assessEnvironmentalHazards(compoundHazards);
+            // Calculate overall risk
+            const riskScore = this.calculateRiskScore(thermalHazards, chemicalHazards, physicalHazards);
+            const overallRiskLevel = this.determineRiskLevel(riskScore);
+            // Generate recommendations
+            const recommendations = this.generateSafetyRecommendations(overallRiskLevel, thermalHazards, chemicalHazards, physicalHazards);
+            // Determine required PPE
+            const requiredPPE = this.determineRequiredPPE(compoundHazards, overallRiskLevel);
+            // Determine containment level
+            const containmentLevel = this.determineContainmentLevel(overallRiskLevel, compoundHazards);
+            // Identify monitoring parameters
+            const monitoringParameters = this.identifyMonitoringParameters(compoundHazards, conditions);
+            // Generate emergency procedures
+            const emergencyProcedures = this.generateEmergencyProcedures(overallRiskLevel, compoundHazards);
+            return {
+                equation,
+                overallRiskLevel,
+                conditions,
+                hazards: {
+                    thermal: thermalHazards,
+                    chemical: chemicalHazards,
+                    physical: physicalHazards,
+                    environmental: environmentalHazards
+                },
+                recommendations,
+                requiredPPE,
+                containmentLevel,
+                monitoringParameters,
+                emergencyProcedures,
+                riskScore
+            };
+        }
+        /**
+         * Extract all chemical compounds from equation
+         */
+        static extractCompoundsFromEquation(equation) {
+            try {
+                const parser = new EquationParser(equation);
+                const parsed = parser.parse();
+                return [...parsed.reactants, ...parsed.products];
+            }
+            catch {
+                return [];
+            }
+        }
+        /**
+         * Get safety data for a specific compound
+         */
+        static getCompoundSafetyData(compound) {
+            // Check our database first
+            if (this.HAZARDOUS_COMPOUNDS.has(compound)) {
+                return this.HAZARDOUS_COMPOUNDS.get(compound);
+            }
+            // Estimate safety data for unknown compounds
+            return this.estimateCompoundSafety(compound);
+        }
+        /**
+         * Estimate safety data for unknown compounds
+         */
+        static estimateCompoundSafety(compound) {
+            // Basic estimation based on molecular features
+            let hazardClass = 'moderate';
+            const physicalHazards = [];
+            const healthHazards = [];
+            const environmentalHazards = [];
+            // Simple heuristics
+            if (compound.includes('F')) {
+                hazardClass = 'high';
+                healthHazards.push('Potentially corrosive');
+            }
+            if (compound.includes('Cl') || compound.includes('Br')) {
+                hazardClass = 'moderate';
+                environmentalHazards.push('Potentially harmful to aquatic life');
+            }
+            if (compound.length === 2 && /^[A-Z][a-z]?$/.test(compound)) {
+                // Likely an element
+                physicalHazards.push('Elemental reactivity');
+            }
+            return {
+                compound,
+                hazardClass,
+                toxicity: {
+                    classification: 'harmful',
+                    carcinogen: false,
+                    mutagen: false,
+                    teratogen: false
+                },
+                reactivity: {
+                    incompatibilities: [],
+                    hazardousDecomposition: [],
+                    polymerization: 'stable',
+                    waterReactive: false,
+                    airSensitive: false,
+                    lightSensitive: false,
+                    shockSensitive: false
+                },
+                physicalHazards,
+                healthHazards,
+                environmentalHazards
+            };
+        }
+        /**
+         * Assess thermal hazards
+         */
+        static assessThermalHazards(equation, conditions, kineticsData) {
+            const hazards = [];
+            // High temperature warning
+            if (conditions.temperature > 373) { // Above 100°C
+                hazards.push({
+                    type: 'exothermic',
+                    severity: conditions.temperature > 573 ? 'high' : 'moderate',
+                    description: `High reaction temperature (${conditions.temperature - 273.15}°C)`,
+                    mitigationStrategies: [
+                        'Use appropriate heating equipment',
+                        'Monitor temperature continuously',
+                        'Ensure adequate cooling capability'
+                    ]
+                });
+            }
+            // Pressure hazard
+            if (conditions.pressure && conditions.pressure > 5) {
+                hazards.push({
+                    type: 'explosion',
+                    severity: conditions.pressure > 20 ? 'high' : 'moderate',
+                    description: `High pressure conditions (${conditions.pressure} atm)`,
+                    mitigationStrategies: [
+                        'Use pressure-rated equipment',
+                        'Install pressure relief systems',
+                        'Monitor pressure continuously'
+                    ]
+                });
+            }
+            // Runaway reaction potential
+            if (kineticsData && kineticsData.activationEnergy < 50) {
+                hazards.push({
+                    type: 'runaway',
+                    severity: 'high',
+                    description: 'Low activation energy may lead to runaway reaction',
+                    mitigationStrategies: [
+                        'Use thermal mass to moderate heating',
+                        'Install emergency cooling',
+                        'Monitor reaction rate carefully'
+                    ]
+                });
+            }
+            return hazards;
+        }
+        /**
+         * Assess chemical hazards
+         */
+        static assessChemicalHazards(compoundHazards, conditions) {
+            const hazards = [];
+            // Check for toxic compounds
+            const toxicCompounds = compoundHazards.filter(c => c.toxicity.classification === 'toxic' || c.toxicity.classification === 'very-toxic');
+            if (toxicCompounds.length > 0) {
+                hazards.push({
+                    type: 'toxic-gas',
+                    compounds: toxicCompounds.map(c => c.compound),
+                    severity: toxicCompounds.some(c => c.toxicity.classification === 'very-toxic') ? 'extreme' : 'high',
+                    description: 'Reaction involves toxic compounds',
+                    mitigationStrategies: [
+                        'Use in well-ventilated area or fume hood',
+                        'Wear appropriate respiratory protection',
+                        'Have antidotes/treatments readily available'
+                    ]
+                });
+            }
+            // Check for corrosive compounds
+            const corrosiveCompounds = compoundHazards.filter(c => c.physicalHazards.some(h => h.toLowerCase().includes('corrosive')));
+            if (corrosiveCompounds.length > 0) {
+                hazards.push({
+                    type: 'corrosive',
+                    compounds: corrosiveCompounds.map(c => c.compound),
+                    severity: 'high',
+                    description: 'Reaction involves corrosive materials',
+                    mitigationStrategies: [
+                        'Use corrosion-resistant equipment',
+                        'Wear acid-resistant PPE',
+                        'Have neutralizing agents available'
+                    ]
+                });
+            }
+            return hazards;
+        }
+        /**
+         * Assess physical hazards
+         */
+        static assessPhysicalHazards(conditions, compoundHazards) {
+            const hazards = [];
+            // Temperature hazards
+            if (conditions.temperature > 373 || conditions.temperature < 273) {
+                hazards.push({
+                    type: 'temperature',
+                    severity: Math.abs(conditions.temperature - 298) > 200 ? 'high' : 'moderate',
+                    description: 'Extreme temperature conditions',
+                    mitigationStrategies: [
+                        'Use appropriate temperature-rated equipment',
+                        'Protect against thermal burns/frostbite',
+                        'Monitor temperature continuously'
+                    ]
+                });
+            }
+            // Pressure hazards
+            if (conditions.pressure && conditions.pressure > 1) {
+                hazards.push({
+                    type: 'pressure',
+                    severity: conditions.pressure > 10 ? 'high' : 'moderate',
+                    description: 'Elevated pressure conditions',
+                    mitigationStrategies: [
+                        'Use pressure-rated vessels',
+                        'Install pressure relief devices',
+                        'Regular equipment inspection'
+                    ]
+                });
+            }
+            return hazards;
+        }
+        /**
+         * Assess environmental hazards
+         */
+        static assessEnvironmentalHazards(compoundHazards) {
+            const hazards = [];
+            const environmentallyHazardous = compoundHazards.filter(c => c.environmentalHazards.length > 0);
+            if (environmentallyHazardous.length > 0) {
+                hazards.push({
+                    type: 'aquatic-toxic',
+                    compounds: environmentallyHazardous.map(c => c.compound),
+                    severity: 'moderate',
+                    description: 'Compounds may be harmful to environment',
+                    mitigationStrategies: [
+                        'Proper waste disposal procedures',
+                        'Prevent release to environment',
+                        'Use containment measures'
+                    ]
+                });
+            }
+            return hazards;
+        }
+        /**
+         * Calculate overall risk score
+         */
+        static calculateRiskScore(thermal, chemical, physical) {
+            const severityToScore = { low: 10, moderate: 25, high: 50, extreme: 100 };
+            let score = 0;
+            thermal.forEach(h => score += severityToScore[h.severity]);
+            chemical.forEach(h => score += severityToScore[h.severity]);
+            physical.forEach(h => score += severityToScore[h.severity]);
+            return Math.min(score, 100);
+        }
+        /**
+         * Determine overall risk level from score
+         */
+        static determineRiskLevel(score) {
+            if (score >= 75)
+                return 'extreme';
+            if (score >= 50)
+                return 'high';
+            if (score >= 25)
+                return 'moderate';
+            return 'low';
+        }
+        /**
+         * Generate safety recommendations
+         */
+        static generateSafetyRecommendations(riskLevel, thermal, chemical, physical) {
+            const recommendations = [];
+            // Always include basic safety recommendations
+            recommendations.push({
+                category: 'equipment',
+                priority: 'medium',
+                description: 'Use appropriate personal protective equipment',
+                implementation: 'Ensure all personnel wear required PPE before handling chemicals'
+            });
+            recommendations.push({
+                category: 'procedure',
+                priority: 'medium',
+                description: 'Follow standard laboratory safety procedures',
+                implementation: 'Adhere to established protocols for chemical handling and storage'
+            });
+            // Risk-level based recommendations
+            if (riskLevel === 'extreme') {
+                recommendations.push({
+                    category: 'procedure',
+                    priority: 'critical',
+                    description: 'Expert supervision required',
+                    implementation: 'Ensure experienced personnel supervise all operations'
+                });
+            }
+            if (riskLevel === 'high' || riskLevel === 'extreme') {
+                recommendations.push({
+                    category: 'emergency',
+                    priority: 'high',
+                    description: 'Emergency response plan required',
+                    implementation: 'Develop and practice emergency procedures'
+                });
+            }
+            // Hazard-specific recommendations
+            thermal.forEach(hazard => {
+                hazard.mitigationStrategies.forEach(strategy => {
+                    recommendations.push({
+                        category: 'equipment',
+                        priority: hazard.severity === 'extreme' ? 'critical' : 'high',
+                        description: strategy,
+                        implementation: `Implement for thermal hazard: ${hazard.description}`
+                    });
+                });
+            });
+            return recommendations;
+        }
+        /**
+         * Determine required PPE
+         */
+        static determineRequiredPPE(compoundHazards, riskLevel) {
+            const ppe = new Set();
+            // Base PPE
+            ppe.add('Safety glasses');
+            ppe.add('Lab coat');
+            ppe.add('Closed-toe shoes');
+            // Risk-level based PPE
+            if (riskLevel === 'moderate' || riskLevel === 'high' || riskLevel === 'extreme') {
+                ppe.add('Chemical-resistant gloves');
+            }
+            if (riskLevel === 'high' || riskLevel === 'extreme') {
+                ppe.add('Face shield');
+                ppe.add('Respirator');
+            }
+            if (riskLevel === 'extreme') {
+                ppe.add('Full chemical suit');
+                ppe.add('Self-contained breathing apparatus');
+            }
+            // Compound-specific PPE
+            compoundHazards.forEach(compound => {
+                if (compound.toxicity.classification === 'very-toxic') {
+                    ppe.add('Respiratory protection');
+                }
+                if (compound.physicalHazards.some(h => h.includes('corrosive'))) {
+                    ppe.add('Acid-resistant apron');
+                }
+            });
+            return Array.from(ppe);
+        }
+        /**
+         * Determine containment level
+         */
+        static determineContainmentLevel(riskLevel, compoundHazards) {
+            if (riskLevel === 'extreme')
+                return 'specialized';
+            if (riskLevel === 'high')
+                return 'enhanced';
+            const hasHighlyToxic = compoundHazards.some(c => c.toxicity.classification === 'very-toxic');
+            return hasHighlyToxic ? 'enhanced' : 'standard';
+        }
+        /**
+         * Identify monitoring parameters
+         */
+        static identifyMonitoringParameters(compoundHazards, conditions) {
+            const parameters = new Set();
+            // Always monitor these
+            parameters.add('Temperature');
+            if (conditions.pressure && conditions.pressure > 1) {
+                parameters.add('Pressure');
+            }
+            // Compound-specific monitoring
+            compoundHazards.forEach(compound => {
+                if (compound.toxicity.classification === 'toxic' || compound.toxicity.classification === 'very-toxic') {
+                    parameters.add(`${compound.compound} concentration`);
+                }
+                if (compound.physicalHazards.some(h => h.includes('gas'))) {
+                    parameters.add('Gas leak detection');
+                }
+            });
+            return Array.from(parameters);
+        }
+        /**
+         * Generate emergency procedures
+         */
+        static generateEmergencyProcedures(riskLevel, compoundHazards) {
+            const procedures = [];
+            // Base procedures
+            procedures.push('Know location of emergency equipment');
+            procedures.push('Know evacuation routes');
+            if (riskLevel === 'moderate' || riskLevel === 'high' || riskLevel === 'extreme') {
+                procedures.push('Emergency shutdown procedures');
+                procedures.push('Spill cleanup procedures');
+            }
+            if (riskLevel === 'high' || riskLevel === 'extreme') {
+                procedures.push('Emergency decontamination procedures');
+                procedures.push('Emergency medical response');
+            }
+            // Compound-specific procedures
+            const hasToxic = compoundHazards.some(c => c.toxicity.classification === 'toxic' || c.toxicity.classification === 'very-toxic');
+            if (hasToxic) {
+                procedures.push('Exposure response procedures');
+                procedures.push('Antidote administration if applicable');
+            }
+            return procedures;
+        }
+    }
+    ReactionSafetyAnalyzer.HAZARDOUS_COMPOUNDS = new Map([
+        ['H2', {
+                compound: 'H2',
+                hazardClass: 'high',
+                flashPoint: -253,
+                autoIgnitionTemp: 500,
+                explosiveLimits: [4, 75],
+                toxicity: {
+                    classification: 'non-toxic',
+                    carcinogen: false,
+                    mutagen: false,
+                    teratogen: false
+                },
+                reactivity: {
+                    incompatibilities: ['F2', 'Cl2', 'O2', 'oxidizing agents'],
+                    hazardousDecomposition: [],
+                    polymerization: 'stable',
+                    waterReactive: false,
+                    airSensitive: false,
+                    lightSensitive: false,
+                    shockSensitive: false
+                },
+                physicalHazards: ['Flammable gas', 'Asphyxiant', 'Pressure hazard'],
+                healthHazards: ['Asphyxiant'],
+                environmentalHazards: []
+            }],
+        ['Cl2', {
+                compound: 'Cl2',
+                hazardClass: 'extreme',
+                toxicity: {
+                    lc50Inhalation: 0.293,
+                    classification: 'very-toxic',
+                    carcinogen: false,
+                    mutagen: false,
+                    teratogen: false
+                },
+                reactivity: {
+                    incompatibilities: ['H2', 'NH3', 'hydrocarbons', 'metals'],
+                    hazardousDecomposition: ['HCl'],
+                    polymerization: 'stable',
+                    waterReactive: true,
+                    airSensitive: false,
+                    lightSensitive: true,
+                    shockSensitive: false
+                },
+                physicalHazards: ['Corrosive gas', 'Pressure hazard'],
+                healthHazards: ['Severe respiratory irritant', 'Corrosive to tissues'],
+                environmentalHazards: ['Aquatic toxin', 'Ozone depleting']
+            }],
+        ['HF', {
+                compound: 'HF',
+                hazardClass: 'extreme',
+                toxicity: {
+                    ld50Oral: 15,
+                    ld50Dermal: 410,
+                    lc50Inhalation: 0.342,
+                    classification: 'very-toxic',
+                    carcinogen: false,
+                    mutagen: false,
+                    teratogen: false
+                },
+                reactivity: {
+                    incompatibilities: ['glass', 'metals', 'silicates'],
+                    hazardousDecomposition: ['F2'],
+                    polymerization: 'stable',
+                    waterReactive: false,
+                    airSensitive: false,
+                    lightSensitive: false,
+                    shockSensitive: false
+                },
+                physicalHazards: ['Highly corrosive'],
+                healthHazards: ['Severe burns', 'Bone and teeth damage', 'Systemic toxicity'],
+                environmentalHazards: ['Aquatic toxin']
+            }]
+    ]);
+
+    var safetyAnalyzer = /*#__PURE__*/Object.freeze({
+        __proto__: null,
+        ReactionSafetyAnalyzer: ReactionSafetyAnalyzer
+    });
+
+    /**
+     * CREB Advanced Kinetics & Analytics Module
+     * Entry point for reaction kinetics analysis, mechanism studies, and safety assessment
+     */
+    // Core kinetics calculator
+    /**
+     * Comprehensive Kinetics Analysis Suite
+     * Combines kinetics, mechanism, and safety analysis
+     */
+    class AdvancedKineticsAnalyzer {
+        /**
+         * Perform comprehensive analysis of a chemical reaction
+         * Includes kinetics, mechanism analysis, and safety assessment
+         */
+        static async analyzeReaction(equation, conditions, options = {}) {
+            const { includeKinetics = true, includeMechanism = false, includeSafety = true, mechanismSteps = [] } = options;
+            const results = {
+                equation,
+                conditions,
+                timestamp: new Date().toISOString()
+            };
+            try {
+                // Kinetics analysis
+                if (includeKinetics) {
+                    const { ReactionKinetics } = await Promise.resolve().then(function () { return calculator; });
+                    results.kinetics = ReactionKinetics.analyzeKinetics(equation, conditions);
+                }
+                // Mechanism analysis
+                if (includeMechanism && mechanismSteps.length > 0) {
+                    const { MechanismAnalyzer } = await Promise.resolve().then(function () { return mechanismAnalyzer; });
+                    results.mechanism = MechanismAnalyzer.analyzeMechanism(mechanismSteps, conditions);
+                }
+                // Safety analysis
+                if (includeSafety) {
+                    const { ReactionSafetyAnalyzer } = await Promise.resolve().then(function () { return safetyAnalyzer; });
+                    results.safety = ReactionSafetyAnalyzer.assessReactionSafety(equation, conditions, results.kinetics);
+                }
+                // Generate summary
+                results.summary = this.generateAnalysisSummary(results);
+                return results;
+            }
+            catch (error) {
+                return {
+                    ...results,
+                    error: error instanceof Error ? error.message : 'Unknown error occurred',
+                    success: false
+                };
+            }
+        }
+        /**
+         * Compare multiple reaction pathways
+         */
+        static async compareReactionPathways(pathways) {
+            const analyses = await Promise.all(pathways.map(pathway => this.analyzeReaction(pathway.equation, pathway.conditions, {
+                includeKinetics: true,
+                includeMechanism: !!pathway.mechanismSteps,
+                includeSafety: true,
+                mechanismSteps: pathway.mechanismSteps || []
+            })));
+            // Find the most favorable pathway
+            const rankedPathways = analyses
+                .map((analysis, index) => ({
+                index,
+                analysis,
+                score: this.calculatePathwayScore(analysis)
+            }))
+                .sort((a, b) => b.score - a.score);
+            return {
+                pathways: analyses,
+                recommendation: rankedPathways[0],
+                comparison: this.generatePathwayComparison(rankedPathways)
+            };
+        }
+        /**
+         * Generate temperature-dependent kinetics profile
+         */
+        static async generateTemperatureProfile(equation, temperatureRange, baseConditions, points = 10) {
+            const { ReactionKinetics } = await Promise.resolve().then(function () { return calculator; });
+            const [minTemp, maxTemp] = temperatureRange;
+            const step = (maxTemp - minTemp) / (points - 1);
+            const profile = [];
+            for (let i = 0; i < points; i++) {
+                const temperature = minTemp + (i * step);
+                const conditions = { ...baseConditions, temperature };
+                const kinetics = ReactionKinetics.analyzeKinetics(equation, conditions);
+                profile.push({
+                    temperature,
+                    temperatureCelsius: temperature - 273.15,
+                    rateConstant: kinetics.rateConstant,
+                    halfLife: kinetics.halfLife,
+                    activationEnergy: kinetics.activationEnergy
+                });
+            }
+            return {
+                equation,
+                temperatureRange,
+                profile,
+                summary: {
+                    temperatureRangeCelsius: [minTemp - 273.15, maxTemp - 273.15],
+                    rateConstantRange: [
+                        Math.min(...profile.map(p => p.rateConstant)),
+                        Math.max(...profile.map(p => p.rateConstant))
+                    ],
+                    averageActivationEnergy: profile.reduce((sum, p) => sum + p.activationEnergy, 0) / profile.length
+                }
+            };
+        }
+        /**
+         * Generate analysis summary
+         */
+        static generateAnalysisSummary(results) {
+            const summaryParts = [];
+            if (results.kinetics) {
+                const k = results.kinetics;
+                summaryParts.push(`Kinetics: Rate constant = ${k.rateConstant.toExponential(2)} at ${(k.conditions.temperature - 273.15).toFixed(1)}°C`);
+                summaryParts.push(`Activation energy = ${k.activationEnergy.toFixed(1)} kJ/mol`);
+                if (k.halfLife) {
+                    summaryParts.push(`Half-life = ${k.halfLife.toExponential(2)} s`);
+                }
+            }
+            if (results.mechanism) {
+                const m = results.mechanism;
+                summaryParts.push(`Mechanism: ${m.mechanism.length} steps, ${m.intermediates.length} intermediates`);
+                summaryParts.push(`Rate-determining step: ${m.rateDeterminingStep + 1}`);
+            }
+            if (results.safety) {
+                const s = results.safety;
+                summaryParts.push(`Safety: ${s.overallRiskLevel.toUpperCase()} risk (score: ${s.riskScore})`);
+                summaryParts.push(`PPE required: ${s.requiredPPE.join(', ')}`);
+                summaryParts.push(`Containment: ${s.containmentLevel}`);
+            }
+            return summaryParts.join('\n');
+        }
+        /**
+         * Calculate pathway score for comparison
+         */
+        static calculatePathwayScore(analysis) {
+            let score = 50; // Base score
+            // Kinetics factors
+            if (analysis.kinetics) {
+                const k = analysis.kinetics;
+                // Higher rate constant is better (within reason)
+                if (k.rateConstant > 1e-3 && k.rateConstant < 1e3) {
+                    score += 10;
+                }
+                // Moderate activation energy is preferred
+                if (k.activationEnergy > 20 && k.activationEnergy < 150) {
+                    score += 10;
+                }
+                // Higher confidence is better
+                score += k.confidence * 20;
+            }
+            // Safety factors
+            if (analysis.safety) {
+                const s = analysis.safety;
+                // Lower risk is better
+                const riskPenalty = {
+                    'low': 0,
+                    'moderate': -10,
+                    'high': -25,
+                    'extreme': -50
+                };
+                score += riskPenalty[s.overallRiskLevel] || 0;
+                // Fewer hazards is better
+                const totalHazards = s.hazards.thermal.length +
+                    s.hazards.chemical.length +
+                    s.hazards.physical.length;
+                score -= totalHazards * 5;
+            }
+            // Mechanism factors
+            if (analysis.mechanism) {
+                const m = analysis.mechanism;
+                // Simpler mechanisms are often preferred
+                score += Math.max(0, 20 - m.mechanism.length * 3);
+                // Higher confidence is better
+                score += m.confidence * 15;
+            }
+            return Math.max(0, Math.min(100, score));
+        }
+        /**
+         * Generate pathway comparison summary
+         */
+        static generatePathwayComparison(rankedPathways) {
+            if (rankedPathways.length < 2) {
+                return 'Insufficient pathways for comparison';
+            }
+            const best = rankedPathways[0];
+            const comparison = [];
+            comparison.push(`Recommended pathway: ${best.analysis.equation} (Score: ${best.score.toFixed(1)})`);
+            // Compare with next best
+            for (let i = 1; i < Math.min(3, rankedPathways.length); i++) {
+                const alt = rankedPathways[i];
+                const scoreDiff = best.score - alt.score;
+                comparison.push(`Alternative ${i}: ${alt.analysis.equation} (Score: ${alt.score.toFixed(1)}, ${scoreDiff.toFixed(1)} points lower)`);
+            }
+            return comparison.join('\n');
+        }
+    }
+
+    exports.AdvancedKineticsAnalyzer = AdvancedKineticsAnalyzer;
     exports.ChemicalEquationBalancer = ChemicalEquationBalancer;
     exports.ELEMENTS_LIST = ELEMENTS_LIST;
     exports.ElementCounter = ElementCounter;
     exports.EnhancedChemicalEquationBalancer = EnhancedChemicalEquationBalancer;
     exports.EnhancedStoichiometry = EnhancedStoichiometry;
     exports.EquationParser = EquationParser;
+    exports.MechanismAnalyzer = MechanismAnalyzer;
     exports.PARAMETER_SYMBOLS = PARAMETER_SYMBOLS;
     exports.PERIODIC_TABLE = PERIODIC_TABLE;
+    exports.ReactionKinetics = ReactionKinetics;
+    exports.ReactionSafetyAnalyzer = ReactionSafetyAnalyzer;
     exports.Stoichiometry = Stoichiometry;
     exports.ThermodynamicsCalculator = ThermodynamicsCalculator;
     exports.ThermodynamicsEquationBalancer = ThermodynamicsEquationBalancer;

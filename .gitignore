@@ -7,29 +7,52 @@ yarn-error.log*
 # Build outputs
 # dist/ - commented out to allow GitHub Pages demo to work
 
-# Environment variables
+# Environment variables and secrets
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+*.env
+**/secrets.*
+**/config/secrets.*
+*.key
+*.pem
+*.p12
+*.pfx
+*.keystore
+**/private/
+**/credentials/
+
+# API Keys and tokens
+**/api-keys.*
+**/tokens.*
+**/*-token.*
+**/*-secret.*
+**/*-key.*
 
 # IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
 # OS files
 .DS_Store
 Thumbs.db
+.Trashes
+ehthumbs.db
+Desktop.ini
 
 # Test coverage
 coverage/
+*.lcov
+.nyc_output/
 
 # Logs
 logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Runtime data
 pids
@@ -46,11 +69,61 @@ pids
 # Temporary folders
 tmp/
 temp/
+.tmp/
 
 # Local project tracking (not for public repo)
-docs/PROJECT_REVIEW.md
-docs/FUTURE_ROADMAP.md
-docs/PROGRESS_TRACKER.md
+docs/
+PRIVACY_REVIEW.md
+**/privacy-review.*
+**/security-audit.*
 
 # Marketing content (local strategy, not for public repo)
 marketing/
+**/marketing/
+**/campaign*/
+**/linkedin-posts/
+**/social-media/
+**/content-calendar.*
+**/campaign-tracker.*
+
+# Test scripts and experimental files
+test-scripts/
+**/test-scripts/
+**/*-test-script.*
+**/*-experiment.*
+fix_code_blocks.py
+
+# Marketing and temporary content
+linkedin-post.md
+**/linkedin-*.md
+**/social-*.md
+**/campaign-*.md
+
+# Personal information
+**/personal/
+**/private-notes/
+**/drafts/
+**/todo-personal.*
+**/contacts.*
+**/phone-numbers.*
+**/addresses.*
+
+# TypeScript
+*.tsbuildinfo
+
+# Backup files
+*.bak
+*.backup
+*.old
+*~
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+*.7z
