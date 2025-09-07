@@ -2166,7 +2166,7 @@ class EnhancedBalancer {
             };
         }
         catch (error) {
-            console.error('Error in enhanced balancer:', error);
+            // Note: Error in enhanced balancer - using fallback
             return {
                 equation,
                 isBalanced: false,
@@ -6671,8 +6671,8 @@ let ThermodynamicsCalculator = class ThermodynamicsCalculator {
                 data.set(formula, properties);
             }
             catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                console.warn(`Could not fetch or validate thermodynamic data for ${formula}: ${errorMessage}`);
+                error instanceof Error ? error.message : 'Unknown error';
+                // Note: Could not fetch thermodynamic data, using estimated values
                 // Use estimated values or throw error
                 const estimatedProperties = this.estimateThermodynamicProperties(formula);
                 // Validate estimated properties too
