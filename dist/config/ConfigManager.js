@@ -8,14 +8,25 @@
  * - Hot-reload capability
  * - Schema-based documentation generation
  */
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
 import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import { defaultConfig, validateConfig, crebConfigSchema, generateSchemaDocumentation } from './schemas/validation';
+import { ValidationError, SystemError } from '../core/errors/CREBError';
+import { Singleton } from '../core/decorators/Injectable';
 /**
  * Configuration Manager class
  * Provides type-safe configuration management with validation and hot-reload
  */
-export class ConfigManager extends EventEmitter {
+let ConfigManager = class ConfigManager extends EventEmitter {
     constructor(initialConfig) {
         super();
         this.watchers = [];
@@ -63,7 +74,7 @@ export class ConfigManager extends EventEmitter {
                 value = value[key];
             }
             else {
-                throw new Error(`Configuration path '${path}' not found`);
+                throw new ValidationError(`Configuration path '${path}' not found`, { path, keys, currentKey: key }, { field: 'configPath', value: path, constraint: 'path must exist in configuration' });
             }
         }
         return value;
@@ -84,7 +95,7 @@ export class ConfigManager extends EventEmitter {
         // Validate the change
         const validationResult = this.validateConfiguration(newConfig);
         if (!validationResult.isValid) {
-            throw new Error(`Configuration validation failed: ${validationResult.errors.map(e => e.message).join(', ')}`);
+            throw new ValidationError(`Configuration validation failed: ${validationResult.errors.map(e => e.message).join(', ')}`, { path, value, errors: validationResult.errors }, { field: 'configValue', value: value, constraint: 'must pass validation schema' });
         }
         // Apply the change
         this.config = newConfig;
@@ -133,11 +144,12 @@ export class ConfigManager extends EventEmitter {
             return result;
         }
         catch (error) {
+            const configError = new SystemError(`Failed to load config file: ${error instanceof Error ? error.message : 'Unknown error'}`, { filePath, operation: 'loadFromFile' }, { subsystem: 'configuration', resource: 'file-system' });
             return {
                 isValid: false,
                 errors: [{
                         path: '',
-                        message: `Failed to load config file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                        message: configError.message,
                         value: filePath
                     }],
                 warnings: []
@@ -405,7 +417,12 @@ ${this.toJSON()}
         });
         return Object.freeze(obj);
     }
-}
+};
+ConfigManager = __decorate([
+    Singleton(),
+    __metadata("design:paramtypes", [Object])
+], ConfigManager);
+export { ConfigManager };
 /**
  * Singleton configuration manager instance
  */

@@ -4,8 +4,18 @@
  * Production-ready cache with TTL, multiple eviction policies, metrics,
  * memory management, and thread safety.
  */
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
 import { EvictionPolicyFactory } from './EvictionPolicies';
 import { CacheMetricsCollector, CachePerformanceAnalyzer } from './CacheMetrics';
+import { Injectable } from '../../core/decorators/Injectable';
 /**
  * Default cache configuration
  */
@@ -24,7 +34,7 @@ const DEFAULT_CONFIG = {
 /**
  * Advanced cache implementation with comprehensive features
  */
-export class AdvancedCache {
+let AdvancedCache = class AdvancedCache {
     constructor(config = {}) {
         this.entries = new Map();
         this.listeners = new Map();
@@ -366,7 +376,12 @@ export class AdvancedCache {
             this.emitEvent('stats-update');
         }, this.config.metricsInterval);
     }
-}
+};
+AdvancedCache = __decorate([
+    Injectable(),
+    __metadata("design:paramtypes", [Object])
+], AdvancedCache);
+export { AdvancedCache };
 /**
  * Simple async mutex for thread safety
  */

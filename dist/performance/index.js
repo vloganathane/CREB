@@ -89,7 +89,8 @@ class PerformanceCache {
         }
     }
 }
-// Memory Management Utilities
+import { AdvancedCache } from './cache/AdvancedCache';
+// Memory Management System
 class MemoryManager {
     /**
      * Register object for memory monitoring
@@ -412,7 +413,11 @@ PerformanceMonitor.measurements = new Map();
 // Performance-optimized Chemical Equation Balancer
 class OptimizedBalancer {
     constructor() {
-        this.cache = PerformanceCache.getInstance();
+        this.cache = new AdvancedCache({
+            maxSize: 1000,
+            defaultTtl: 3600000, // 1 hour
+            evictionStrategy: 'lru'
+        });
         this.wasmInitialized = false;
         this.initializeWasm();
     }
@@ -431,12 +436,13 @@ class OptimizedBalancer {
     async balance(equation) {
         const cacheKey = `balance_${equation}`;
         // Check cache first
-        const cached = this.cache.get(cacheKey, 'equation');
-        if (cached) {
+        const cached = await this.cache.get(cacheKey);
+        if (cached.hit && cached.value) {
+            // Return cached result with updated fromCache flag and zero calculation time
             return {
-                ...cached,
+                ...cached.value,
                 fromCache: true,
-                calculationTime: 0
+                calculationTime: 0 // Cached results have zero calculation time
             };
         }
         // Measure performance
@@ -458,8 +464,14 @@ class OptimizedBalancer {
                 fromCache: false,
                 calculationTime
             };
-            // Cache the result
-            this.cache.set(cacheKey, result, 'equation');
+            // Cache the result (store without fromCache flag to avoid confusion)
+            const cacheableResult = {
+                coefficients,
+                balanced,
+                fromCache: false,
+                calculationTime
+            };
+            await this.cache.set(cacheKey, cacheableResult);
             return result;
         }
         catch (error) {
@@ -515,5 +527,9 @@ class OptimizedBalancer {
     }
 }
 // Export all performance optimization components
-export { PerformanceCache, MemoryManager, LazyLoader, WebAssemblyCalculator, PerformanceMonitor, OptimizedBalancer };
+export { 
+// Legacy PerformanceCache kept for backward compatibility
+PerformanceCache, MemoryManager, LazyLoader, WebAssemblyCalculator, PerformanceMonitor, OptimizedBalancer };
+// Export new Advanced Cache System as the recommended approach
+export { AdvancedCache, CacheFactory, CachedThermodynamicsCalculator, CachedChemicalDatabase, CachedEquationBalancer, MultiLevelCache } from './cache/CacheIntegration';
 //# sourceMappingURL=index.js.map

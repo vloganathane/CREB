@@ -1,4 +1,12 @@
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
 import { EquationParser, getElementsInReaction } from './utils';
+import { ComputationError } from './core/errors/CREBError';
+import { Injectable } from './core/decorators/Injectable';
 /**
  * Linear equation system generator and solver
  * Based on the Generator and FileMaker classes from the original CREB project
@@ -59,7 +67,7 @@ export class LinearEquationSolver {
                 return coefficients;
             }
         }
-        throw new Error('Unable to balance equation: Could not find integer coefficients');
+        throw new ComputationError('Unable to balance equation: Could not find integer coefficients', { maxCoeff, numSpecies, operation: 'equation_balancing' });
     }
     /**
      * Tries to find valid coefficients using a systematic approach
@@ -137,7 +145,7 @@ export class LinearEquationSolver {
  * Chemical equation balancer
  * Based on the main CREB functionality
  */
-export class ChemicalEquationBalancer {
+let ChemicalEquationBalancer = class ChemicalEquationBalancer {
     /**
      * Balances a chemical equation and returns the balanced equation string
      */
@@ -150,7 +158,7 @@ export class ChemicalEquationBalancer {
             return this.formatBalancedEquation(reactants, products, coefficients);
         }
         catch (error) {
-            throw new Error(`Failed to balance equation "${equation}": ${error}`);
+            throw new ComputationError(`Failed to balance equation "${equation}": ${error}`, { equation, operation: 'equation_balancing', originalError: error });
         }
     }
     /**
@@ -179,5 +187,9 @@ export class ChemicalEquationBalancer {
         const productSide = formatSide(products, reactants.length);
         return `${reactantSide} = ${productSide}`;
     }
-}
+};
+ChemicalEquationBalancer = __decorate([
+    Injectable()
+], ChemicalEquationBalancer);
+export { ChemicalEquationBalancer };
 //# sourceMappingURL=balancer.js.map

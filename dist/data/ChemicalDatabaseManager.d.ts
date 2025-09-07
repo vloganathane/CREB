@@ -8,8 +8,13 @@ export declare class ChemicalDatabaseManager {
     private compounds;
     private sources;
     private validationRules;
+    private readonly validationPipeline;
     private cache;
     constructor();
+    /**
+     * Initialize the validation pipeline with chemistry validators
+     */
+    private initializeValidationPipeline;
     /**
      * Initialize default database sources
      */
@@ -43,7 +48,7 @@ export declare class ChemicalDatabaseManager {
      */
     private getDefaultThermodynamicProperties;
     /**
-     * Validate compound data against rules
+     * Validate compound data using the advanced validation pipeline
      */
     private validateCompound;
     /**

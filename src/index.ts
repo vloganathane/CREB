@@ -4,6 +4,9 @@ export { ElementCounter, EquationParser, calculateMolarWeight } from './utils';
 export * from './types';
 export * from './constants';
 
+// Molecular Visualization System (NEW)
+export * from './visualization';
+
 // Enhanced TypeScript Support (NEW) - Selective exports to avoid conflicts
 export {
   // Branded Types
@@ -111,6 +114,31 @@ export {
   type ValidationError,
   type ValidationWarning,
   type DatabaseProvider
+} from './data';
+
+// Advanced Validation Pipeline (VP-001) - v1.7.0
+export {
+  ValidationPipeline,
+  createValidationPipeline,
+  createFastValidationPipeline,
+  createThoroughValidationPipeline,
+  validateChemicalFormula,
+  validateThermodynamicProperties,
+  ChemicalFormulaValidator,
+  ThermodynamicPropertiesValidator,
+  FluentValidationBuilder,
+  createValidator,
+  createCompositeValidator,
+  createChemistryValidator,
+  type IValidator,
+  type ICompositeValidator,
+  type ValidationRule,
+  type ValidationContext,
+  type ValidationPipelineConfig,
+  type ValidationMetrics,
+  type ValidationEvents,
+  type RuleResult,
+  type ValidationSeverity
 } from './data';
 
 // Dependency Injection Container (v1.6.0 - Architecture Improvement)
@@ -313,3 +341,135 @@ export {
   createWorkerId,
   createTaskId
 } from './performance/workers/types';
+
+// Plugin System (v1.7.0)
+export {
+  PluginManager,
+  type PluginManagerConfig
+} from './plugins/PluginManager';
+
+export {
+  BasePlugin,
+  SimplePlugin,
+  PluginBuilder
+} from './plugins/Plugin';
+
+export {
+  PluginAPIContextImpl,
+  PluginAPIContextFactory
+} from './plugins/APIContext';
+
+export {
+  type Plugin,
+  type PluginMetadata,
+  type PluginConfig,
+  type PluginState,
+  type PluginContext,
+  type PluginPermission,
+  type PluginPriority,
+  type PluginAPIVersion,
+  type PluginExtensionPoint,
+  type PluginResult,
+  type PluginHealthStatus,
+  type PluginManifest,
+  type PluginFactory,
+  type PluginAPIContext,
+  type PluginServiceRegistry,
+  type PluginEventSystem,
+  type PluginStorage,
+  type PluginHttpClient,
+  type PluginUtilities,
+  type PluginLogger,
+  type PluginError,
+  type PluginManagerEvents,
+  type PluginDiscoverySource,
+  type PluginMarketplaceEntry,
+  PluginContext as PluginContextEnum,
+  PluginPermission as PluginPermissionEnum,
+  PluginPriority as PluginPriorityEnum,
+  PluginState as PluginStateEnum
+} from './plugins/types';
+
+export {
+  createCustomBalancerPlugin,
+  createDataProviderPlugin,
+  createSpecializedCalculatorPlugin,
+  exampleMarketplaceEntries
+} from './plugins/examples';
+
+// Telemetry System (v1.8.0)
+export {
+  // Core Telemetry System
+  TelemetrySystem,
+  initializeTelemetry,
+  telemetry,
+  
+  // Structured Logging
+  StructuredLogger,
+  LoggerFactory,
+  ConsoleDestination,
+  FileDestination,
+  LevelFilter,
+  ModuleFilter,
+  logger,
+  createLogger,
+  createConsoleLogger,
+  createFileLogger,
+  createMultiDestinationLogger,
+  
+  // Metrics and Performance
+  MetricsRegistry,
+  PerformanceProfiler,
+  globalMetrics,
+  globalProfiler,
+  counter,
+  gauge,
+  histogram,
+  time,
+  timeAsync,
+  Profile,
+  
+  // Context Management
+  ContextManager,
+  ContextUtils,
+  globalContextManager,
+  getCurrentContext,
+  getCurrentCorrelationId,
+  setContext,
+  setCorrelationId,
+  runWithContext,
+  runWithContextAsync,
+  withContext,
+  
+  // Telemetry Types
+  type LogLevel,
+  type LogEntry,
+  type LogContext,
+  type LoggerConfig,
+  type LogDestination,
+  type LogFormatter,
+  type LogFilter,
+  type CorrelationId,
+  type ErrorInfo,
+  type PerformanceMetrics,
+  type Metric,
+  type MetricType,
+  type MetricCollector,
+  type ContextProvider,
+  type TelemetryEvents,
+  type ILogger,
+  type TelemetryConfig,
+  type MetricStats,
+  type ContextTrace,
+  type Timestamp,
+  
+  // Utility Functions
+  createCorrelationId,
+  createTimestamp,
+  isLogLevel,
+  isLogEntry,
+  isMetric,
+  LOG_LEVELS,
+  PERFORMANCE_THRESHOLDS,
+  DEFAULT_TELEMETRY_CONFIG
+} from './core/telemetry';

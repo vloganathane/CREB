@@ -6,13 +6,24 @@
  * This module implements a sophisticated task queue system with priority-based scheduling,
  * timeout management, and persistence capabilities for the CREB worker thread system.
  */
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
 import { EventEmitter } from 'events';
 import { promises as fs } from 'fs';
-import { TaskPriority, createTaskId } from './types.js';
+import { TaskPriority, createTaskId } from './types';
+import { ValidationError, SystemError } from '../../core/errors/CREBError';
+import { Injectable } from '../../core/decorators/Injectable';
 /**
  * Advanced task queue with priority management and persistence
  */
-export class TaskQueue extends EventEmitter {
+let TaskQueue = class TaskQueue extends EventEmitter {
     constructor(config = {}) {
         super();
         this.config = {
@@ -56,7 +67,7 @@ export class TaskQueue extends EventEmitter {
      */
     async enqueue(task) {
         if (this.size() >= this.config.maxSize) {
-            throw new Error(`Queue is full (max size: ${this.config.maxSize})`);
+            throw new ValidationError(`Queue is full (max size: ${this.config.maxSize})`, { maxSize: this.config.maxSize, currentSize: this.size() }, { field: 'queueSize', value: this.size(), constraint: `must be less than ${this.config.maxSize}` });
         }
         // Validate task
         this.validateTask(task);
@@ -65,7 +76,7 @@ export class TaskQueue extends EventEmitter {
         // Add to priority queue
         const priorityQueue = this.queues.get(task.priority);
         if (!priorityQueue) {
-            throw new Error(`Invalid priority level: ${task.priority}`);
+            throw new ValidationError(`Invalid priority level: ${task.priority}`, { priority: task.priority, validPriorities: Object.values(TaskPriority) }, { field: 'priority', value: task.priority, constraint: 'must be a valid TaskPriority enum value' });
         }
         const node = {
             task: { ...task },
@@ -285,16 +296,16 @@ export class TaskQueue extends EventEmitter {
     // ========================================
     validateTask(task) {
         if (!task.id || typeof task.id !== 'string') {
-            throw new Error('Task must have a valid string ID');
+            throw new ValidationError('Task must have a valid string ID', { taskId: task.id, taskType: typeof task.id }, { field: 'taskId', value: task.id, constraint: 'must be a non-empty string' });
         }
         if (this.taskMap.has(task.id)) {
-            throw new Error(`Task with ID ${task.id} already exists`);
+            throw new ValidationError(`Task with ID ${task.id} already exists`, { taskId: task.id, existingTasks: Array.from(this.taskMap.keys()) }, { field: 'taskId', value: task.id, constraint: 'must be unique' });
         }
         if (task.priority < 0 || task.priority >= this.config.priorityLevels) {
-            throw new Error(`Invalid priority: ${task.priority}`);
+            throw new ValidationError(`Invalid priority: ${task.priority}`, { priority: task.priority, maxPriority: this.config.priorityLevels - 1 }, { field: 'priority', value: task.priority, constraint: `must be between 0 and ${this.config.priorityLevels - 1}` });
         }
         if (task.timeout !== undefined && task.timeout < 0) {
-            throw new Error('Task timeout must be non-negative');
+            throw new ValidationError('Task timeout must be non-negative', { timeout: task.timeout }, { field: 'timeout', value: task.timeout, constraint: 'must be >= 0' });
         }
     }
     handleTaskTimeout(taskId) {
@@ -403,7 +414,7 @@ export class TaskQueue extends EventEmitter {
     }
     async persistQueue() {
         if (!this.config.queuePath) {
-            throw new Error('Queue path not configured for persistence');
+            throw new SystemError('Queue path not configured for persistence', { operation: 'persistQueue', config: this.config }, { subsystem: 'workers', resource: 'queue-persistence' });
         }
         try {
             const tasks = this.getAllTasks();
@@ -416,7 +427,12 @@ export class TaskQueue extends EventEmitter {
             throw error;
         }
     }
-}
+};
+TaskQueue = __decorate([
+    Injectable(),
+    __metadata("design:paramtypes", [Object])
+], TaskQueue);
+export { TaskQueue };
 /**
  * Task builder for fluent task creation
  */
@@ -461,10 +477,10 @@ export class TaskBuilder {
             this.task.id = createTaskId(`task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
         }
         if (!this.task.type) {
-            throw new Error('Task type is required');
+            throw new ValidationError('Task type is required', { task: this.task }, { field: 'type', value: this.task.type, constraint: 'must be specified' });
         }
         if (this.task.data === undefined) {
-            throw new Error('Task data is required');
+            throw new ValidationError('Task data is required', { task: this.task }, { field: 'data', value: this.task.data, constraint: 'must be defined' });
         }
         if (this.task.priority === undefined) {
             this.task.priority = TaskPriority.NORMAL;

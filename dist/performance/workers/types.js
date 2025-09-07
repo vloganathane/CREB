@@ -79,7 +79,7 @@ export var MessageType;
  * Type guard for worker tasks
  */
 export function isWorkerTask(obj) {
-    return (obj &&
+    return !!(obj &&
         typeof obj.id === 'string' &&
         typeof obj.type === 'string' &&
         obj.data !== undefined &&
@@ -90,7 +90,7 @@ export function isWorkerTask(obj) {
  * Type guard for task results
  */
 export function isTaskResult(obj) {
-    return (obj &&
+    return !!(obj &&
         typeof obj.taskId === 'string' &&
         typeof obj.success === 'boolean' &&
         typeof obj.executionTime === 'number' &&
@@ -100,7 +100,7 @@ export function isTaskResult(obj) {
  * Type guard for worker errors
  */
 export function isWorkerError(obj) {
-    return (obj &&
+    return !!(obj &&
         obj instanceof Error &&
         typeof obj.type === 'string' &&
         obj.timestamp instanceof Date);

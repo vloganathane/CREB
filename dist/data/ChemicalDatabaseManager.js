@@ -2,15 +2,44 @@
  * Enhanced Chemical Database Manager
  * Provides comprehensive data integration and management capabilities
  */
-export class ChemicalDatabaseManager {
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+import { AdvancedCache } from '../performance/cache/AdvancedCache';
+import { Injectable } from '../core/decorators/Injectable';
+import { createValidationPipeline, ChemicalFormulaValidator, ThermodynamicPropertiesValidator } from './validation';
+import { ValidationError } from '../core/errors/CREBError';
+let ChemicalDatabaseManager = class ChemicalDatabaseManager {
     constructor() {
         this.compounds = new Map();
         this.sources = new Map();
         this.validationRules = [];
-        this.cache = new Map();
+        this.cache = new AdvancedCache({
+            maxSize: 1000,
+            defaultTtl: 1800000, // 30 minutes
+            enableMetrics: true
+        });
+        this.validationPipeline = this.initializeValidationPipeline();
         this.initializeDefaultSources();
         this.initializeValidationRules();
         this.loadDefaultCompounds();
+    }
+    /**
+     * Initialize the validation pipeline with chemistry validators
+     */
+    initializeValidationPipeline() {
+        const pipeline = createValidationPipeline();
+        // Add chemical formula validator
+        pipeline.addValidator(new ChemicalFormulaValidator());
+        // Add thermodynamic properties validator
+        pipeline.addValidator(new ThermodynamicPropertiesValidator());
+        return pipeline;
     }
     /**
      * Initialize default database sources
@@ -255,9 +284,12 @@ export class ChemicalDatabaseManager {
     async addCompound(compound) {
         try {
             // Validate the compound data
-            const validationErrors = this.validateCompound(compound);
+            const validationErrors = await this.validateCompound(compound);
             if (validationErrors.length > 0) {
-                throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
+                throw new ValidationError(`Validation failed: ${validationErrors.join(', ')}`, {
+                    errors: validationErrors,
+                    compound: compound.formula || 'unknown'
+                });
             }
             // Fill in missing fields
             const fullCompound = {
@@ -291,32 +323,52 @@ export class ChemicalDatabaseManager {
         };
     }
     /**
-     * Validate compound data against rules
+     * Validate compound data using the advanced validation pipeline
      */
-    validateCompound(compound) {
+    async validateCompound(compound) {
         const errors = [];
-        for (const rule of this.validationRules) {
-            const value = this.getNestedProperty(compound, rule.field);
-            switch (rule.type) {
-                case 'required':
-                    if (value === undefined || value === null) {
-                        errors.push(rule.message);
-                    }
-                    break;
-                case 'range':
-                    if (typeof value === 'number') {
-                        const { min, max } = rule.rule;
-                        if (value < min || value > max) {
+        try {
+            // Validate chemical formula if present
+            if (compound.formula) {
+                const formulaResult = await this.validationPipeline.validate(compound.formula, ['ChemicalFormulaValidator']);
+                if (!formulaResult.isValid) {
+                    errors.push(...formulaResult.errors.map(e => e.message));
+                }
+            }
+            // Validate thermodynamic properties if present
+            if (compound.thermodynamicProperties) {
+                const thermoResult = await this.validationPipeline.validate(compound.thermodynamicProperties, ['ThermodynamicPropertiesValidator']);
+                if (!thermoResult.isValid) {
+                    errors.push(...thermoResult.errors.map(e => e.message));
+                }
+            }
+            // Legacy validation rules for backward compatibility
+            for (const rule of this.validationRules) {
+                const value = this.getNestedProperty(compound, rule.field);
+                switch (rule.type) {
+                    case 'required':
+                        if (value === undefined || value === null) {
                             errors.push(rule.message);
                         }
-                    }
-                    break;
-                case 'custom':
-                    if (value !== undefined && !rule.rule(value)) {
-                        errors.push(rule.message);
-                    }
-                    break;
+                        break;
+                    case 'range':
+                        if (typeof value === 'number') {
+                            const { min, max } = rule.rule;
+                            if (value < min || value > max) {
+                                errors.push(rule.message);
+                            }
+                        }
+                        break;
+                    case 'custom':
+                        if (value !== undefined && !rule.rule(value)) {
+                            errors.push(rule.message);
+                        }
+                        break;
+                }
             }
+        }
+        catch (error) {
+            errors.push(`Validation failed: ${error instanceof Error ? error.message : String(error)}`);
         }
         return errors;
     }
@@ -619,5 +671,10 @@ export class ChemicalDatabaseManager {
             lastUpdate
         };
     }
-}
+};
+ChemicalDatabaseManager = __decorate([
+    Injectable(),
+    __metadata("design:paramtypes", [])
+], ChemicalDatabaseManager);
+export { ChemicalDatabaseManager };
 //# sourceMappingURL=ChemicalDatabaseManager.js.map

@@ -2,10 +2,25 @@
  * NIST WebBook Integration for Enhanced Data
  * Provides real-time access to NIST thermodynamic database
  */
-export class NISTWebBookIntegration {
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+import { AdvancedCache } from '../performance/cache/AdvancedCache';
+import { Injectable } from '../core/decorators/Injectable';
+let NISTWebBookIntegration = class NISTWebBookIntegration {
     constructor(apiKey) {
         this.baseURL = 'https://webbook.nist.gov/cgi/cbook.cgi';
-        this.cache = new Map();
+        this.cache = new AdvancedCache({
+            maxSize: 1000,
+            defaultTtl: 86400000, // 24 hours
+            enableMetrics: true
+        });
         this.cacheTimeout = 86400000; // 24 hours in ms
         this.apiKey = apiKey;
     }
@@ -16,15 +31,15 @@ export class NISTWebBookIntegration {
         try {
             // Check cache first
             const cacheKey = `${type}:${identifier}`;
-            const cached = this.cache.get(cacheKey);
-            if (cached && (Date.now() - cached.timestamp) < this.cacheTimeout) {
-                return this.convertNISTToCompound(cached.data);
+            const cached = await this.cache.get(cacheKey);
+            if (cached.hit && cached.value && (Date.now() - cached.value.timestamp) < this.cacheTimeout) {
+                return this.convertNISTToCompound(cached.value.data);
             }
             // Make API request
             const response = await this.makeNISTRequest(identifier, type);
             if (response) {
                 // Cache the response
-                this.cache.set(cacheKey, {
+                await this.cache.set(cacheKey, {
                     data: response,
                     timestamp: Date.now()
                 });
@@ -284,21 +299,17 @@ export class NISTWebBookIntegration {
      * Get cache statistics
      */
     getCacheStats() {
-        let oldestTimestamp = Infinity;
-        let newestTimestamp = 0;
-        for (const entry of this.cache.values()) {
-            if (entry.timestamp < oldestTimestamp) {
-                oldestTimestamp = entry.timestamp;
-            }
-            if (entry.timestamp > newestTimestamp) {
-                newestTimestamp = entry.timestamp;
-            }
-        }
+        const metrics = this.cache.getMetrics();
         return {
-            size: this.cache.size,
-            oldestEntry: oldestTimestamp === Infinity ? null : new Date(oldestTimestamp),
-            newestEntry: newestTimestamp === 0 ? null : new Date(newestTimestamp)
+            size: this.cache.size(),
+            oldestEntry: null, // AdvancedCache doesn't expose entry timestamps directly
+            newestEntry: null // Would need to track separately if needed
         };
     }
-}
+};
+NISTWebBookIntegration = __decorate([
+    Injectable(),
+    __metadata("design:paramtypes", [String])
+], NISTWebBookIntegration);
+export { NISTWebBookIntegration };
 //# sourceMappingURL=NISTIntegration.js.map

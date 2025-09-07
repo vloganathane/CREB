@@ -4,6 +4,7 @@
  */
 import { ChemicalEquationBalancer } from './balancer';
 import { BalancedEquation } from './types';
+import { ValidationResult } from './data/validation';
 interface PubChemCompound {
     cid: number;
     molecularWeight: number | null;
@@ -17,6 +18,7 @@ export interface EnhancedBalancedEquation extends BalancedEquation {
         massBalanced: boolean;
         chargeBalanced: boolean;
         warnings: string[];
+        formulaValidation?: Record<string, ValidationResult>;
     };
     safetyWarnings?: SafetyWarning[];
 }

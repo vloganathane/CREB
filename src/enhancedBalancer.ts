@@ -14,6 +14,7 @@ import {
 } from './core/errors/CREBError';
 import { Injectable } from './core/decorators/Injectable';
 import { AdvancedCache } from './performance/cache/AdvancedCache';
+import { validateChemicalFormula, ValidationResult } from './data/validation';
 
 // Import type definitions for PubChem integration
 // Note: In production, this would import from 'creb-pubchem-js'
@@ -31,6 +32,7 @@ export interface EnhancedBalancedEquation extends BalancedEquation {
     massBalanced: boolean;
     chargeBalanced: boolean;
     warnings: string[];
+    formulaValidation?: Record<string, ValidationResult>;
   };
   safetyWarnings?: SafetyWarning[];
 }
@@ -450,12 +452,27 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
       validation: {
         massBalanced: true,
         chargeBalanced: true,
-        warnings: []
+        warnings: [],
+        formulaValidation: {}
       }
     };
 
     // Get all unique species from the equation
     const allSpecies = [...new Set([...balanced.reactants, ...balanced.products])];
+    
+    // Validate chemical formulas using the validation pipeline
+    for (const species of allSpecies) {
+      try {
+        const formulaValidation = await validateChemicalFormula(species);
+        enhanced.validation!.formulaValidation![species] = formulaValidation;
+        
+        if (!formulaValidation.isValid) {
+          enhanced.validation!.warnings.push(`Invalid formula ${species}: ${formulaValidation.errors.map(e => e.message).join(', ')}`);
+        }
+      } catch (error) {
+        enhanced.validation!.warnings.push(`Formula validation failed for ${species}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
     
     // Fetch PubChem data for each compound
     for (const species of allSpecies) {

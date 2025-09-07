@@ -18,6 +18,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 import { Container, createToken, ServiceLifetime } from '../core/Container';
 import { Injectable, Singleton } from '../core/decorators/Injectable';
+import { AdvancedCache } from '../performance/cache/AdvancedCache';
 // Define service tokens for better type safety
 const ILoggerToken = createToken('ILogger');
 const ICacheToken = createToken('ICache');
@@ -42,19 +43,24 @@ EnhancedLogger = __decorate([
 ], EnhancedLogger);
 let SimpleCache = class SimpleCache {
     constructor() {
-        this.cache = new Map();
+        this.cache = new AdvancedCache({
+            maxSize: 500,
+            defaultTtl: 1800000, // 30 minutes
+            enableMetrics: true
+        });
     }
-    get(key) {
-        return this.cache.get(key);
+    async get(key) {
+        const result = await this.cache.get(key);
+        return result.hit ? result.value : undefined;
     }
-    set(key, value) {
-        this.cache.set(key, value);
+    async set(key, value) {
+        await this.cache.set(key, value);
     }
-    clear() {
-        this.cache.clear();
+    async clear() {
+        await this.cache.clear();
     }
     size() {
-        return this.cache.size;
+        return this.cache.size();
     }
 };
 SimpleCache = __decorate([
@@ -137,7 +143,7 @@ export function setupDIContainer() {
     });
     // Register services using manual dependency specification
     container.registerClass(EnhancedLogger, [], ServiceLifetime.Singleton, ILoggerToken);
-    container.registerClass(SimpleCache, [], ServiceLifetime.Singleton, ICacheToken);
+    container.registerInstance(ICacheToken, new SimpleCache());
     container.registerClass(CachedCalculator, [ICacheToken, ILoggerToken], ServiceLifetime.Singleton, ICalculatorToken);
     container.registerClass(CREBApplication, [ICalculatorToken, ICacheToken, ILoggerToken], ServiceLifetime.Singleton);
     return container;
@@ -212,7 +218,7 @@ export function createTestContainer() {
     const container = new Container();
     // Register mock implementations for testing
     container.registerInstance(ILoggerToken, new MockLogger());
-    container.registerClass(SimpleCache, [], ServiceLifetime.Singleton, ICacheToken);
+    container.registerInstance(ICacheToken, new SimpleCache());
     container.registerClass(CachedCalculator, [ICacheToken, ILoggerToken], ServiceLifetime.Singleton, ICalculatorToken);
     container.registerClass(CREBApplication, [ICalculatorToken, ICacheToken, ILoggerToken], ServiceLifetime.Singleton);
     return container;

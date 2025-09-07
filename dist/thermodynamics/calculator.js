@@ -2,7 +2,16 @@
  * Core thermodynamics calculator for CREB-JS
  * Implements standard thermodynamic calculations for chemical reactions
  */
-export class ThermodynamicsCalculator {
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+import { Injectable } from '../core/decorators/Injectable';
+import { validateThermodynamicProperties } from '../data/validation';
+import { ValidationError } from '../core/errors/CREBError';
+let ThermodynamicsCalculator = class ThermodynamicsCalculator {
     constructor() {
         this.R = 8.314; // Gas constant J/(mol·K)
         this.standardTemperature = 298.15; // K
@@ -168,13 +177,31 @@ export class ThermodynamicsCalculator {
         for (const formula of uniqueFormulas) {
             try {
                 const properties = await this.fetchThermodynamicProperties(formula);
+                // Validate thermodynamic properties using the validation pipeline
+                const validationResult = await validateThermodynamicProperties(properties);
+                if (!validationResult.isValid) {
+                    const validationErrors = validationResult.errors.map(e => e.message).join(', ');
+                    throw new ValidationError(`Invalid thermodynamic properties for ${formula}: ${validationErrors}`, { formula, errors: validationResult.errors });
+                }
                 data.set(formula, properties);
             }
             catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                console.warn(`Could not fetch thermodynamic data for ${formula}: ${errorMessage}`);
+                console.warn(`Could not fetch or validate thermodynamic data for ${formula}: ${errorMessage}`);
                 // Use estimated values or throw error
-                data.set(formula, this.estimateThermodynamicProperties(formula));
+                const estimatedProperties = this.estimateThermodynamicProperties(formula);
+                // Validate estimated properties too
+                try {
+                    const estimatedValidation = await validateThermodynamicProperties(estimatedProperties);
+                    if (!estimatedValidation.isValid) {
+                        throw new ValidationError(`Both fetched and estimated thermodynamic properties invalid for ${formula}`, { formula, originalError: error });
+                    }
+                    data.set(formula, estimatedProperties);
+                }
+                catch (validationError) {
+                    // If both real and estimated data are invalid, re-throw the original error
+                    throw error;
+                }
             }
         }
         return data;
@@ -267,5 +294,9 @@ export class ThermodynamicsCalculator {
         };
         return this.calculateThermodynamics(equation, conditions);
     }
-}
+};
+ThermodynamicsCalculator = __decorate([
+    Injectable()
+], ThermodynamicsCalculator);
+export { ThermodynamicsCalculator };
 //# sourceMappingURL=calculator.js.map

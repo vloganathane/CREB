@@ -6,6 +6,9 @@ var fs = require('fs');
 var worker_threads = require('worker_threads');
 var url = require('url');
 var path = require('path');
+var crypto = require('crypto');
+var async_hooks = require('async_hooks');
+var perf_hooks = require('perf_hooks');
 
 var _documentCurrentScript = typeof document !== 'undefined' ? document.currentScript : null;
 function _interopNamespaceDefault(e) {
@@ -26,6 +29,7 @@ function _interopNamespaceDefault(e) {
 }
 
 var fs__namespace = /*#__PURE__*/_interopNamespaceDefault(fs);
+var path__namespace = /*#__PURE__*/_interopNamespaceDefault(path);
 
 /******************************************************************************
 Copyright (c) Microsoft Corporation.
@@ -1128,6 +1132,895 @@ exports.Stoichiometry = __decorate([
     Injectable(),
     __metadata("design:paramtypes", [String])
 ], exports.Stoichiometry);
+
+/**
+ * 2D Molecular Structure Renderer
+ * Canvas-based 2D molecular structure drawing
+ */
+class Canvas2DRenderer {
+    constructor(canvas, config = {}) {
+        this.molecule = null;
+        this.scale = 1;
+        this.offset = { x: 0, y: 0 };
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.config = {
+            width: 600,
+            height: 400,
+            backgroundColor: '#ffffff',
+            bondColor: '#333333',
+            atomColors: {
+                'C': '#000000',
+                'H': '#ffffff',
+                'O': '#ff0000',
+                'N': '#0000ff',
+                'S': '#ffff00',
+                'P': '#ffa500',
+                'Cl': '#00ff00',
+                'Br': '#a52a2a',
+                'I': '#9400d3'
+            },
+            bondWidth: 2,
+            atomRadius: 15,
+            fontSize: 12,
+            ...config
+        };
+        this.setupCanvas();
+        this.bindEvents();
+    }
+    setupCanvas() {
+        this.canvas.width = this.config.width;
+        this.canvas.height = this.config.height;
+        // Only set styles if we're in browser environment
+        try {
+            if (this.canvas.style) {
+                this.canvas.style.border = '1px solid #ccc';
+                this.canvas.style.borderRadius = '4px';
+            }
+        }
+        catch {
+            // Ignore style errors in non-browser environments
+        }
+    }
+    bindEvents() {
+        // Only bind events if we're in browser environment
+        try {
+            if (!this.canvas.addEventListener) {
+                return;
+            }
+        }
+        catch {
+            return;
+        }
+        let isMouseDown = false;
+        let lastMousePos = { x: 0, y: 0 };
+        this.canvas.addEventListener('mousedown', (e) => {
+            isMouseDown = true;
+            lastMousePos = { x: e.clientX, y: e.clientY };
+        });
+        this.canvas.addEventListener('mousemove', (e) => {
+            if (isMouseDown) {
+                const deltaX = e.clientX - lastMousePos.x;
+                const deltaY = e.clientY - lastMousePos.y;
+                this.offset.x += deltaX;
+                this.offset.y += deltaY;
+                lastMousePos = { x: e.clientX, y: e.clientY };
+                this.render();
+            }
+        });
+        this.canvas.addEventListener('mouseup', () => {
+            isMouseDown = false;
+        });
+        this.canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            this.scale *= scaleFactor;
+            this.render();
+        });
+    }
+    /**
+     * Load and render a molecule
+     */
+    loadMolecule(molecule) {
+        this.molecule = molecule;
+        this.centerMolecule();
+        this.render();
+    }
+    /**
+     * Center the molecule in the canvas
+     */
+    centerMolecule() {
+        if (!this.molecule || this.molecule.atoms.length === 0)
+            return;
+        // Calculate bounding box
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+        this.molecule.atoms.forEach(atom => {
+            minX = Math.min(minX, atom.position.x);
+            maxX = Math.max(maxX, atom.position.x);
+            minY = Math.min(minY, atom.position.y);
+            maxY = Math.max(maxY, atom.position.y);
+        });
+        // Calculate center offset
+        const molWidth = maxX - minX;
+        const molHeight = maxY - minY;
+        const molCenterX = (minX + maxX) / 2;
+        const molCenterY = (minY + maxY) / 2;
+        // Calculate scale to fit molecule
+        const scaleX = (this.config.width * 0.8) / molWidth;
+        const scaleY = (this.config.height * 0.8) / molHeight;
+        this.scale = Math.min(scaleX, scaleY, 1);
+        // Center the molecule
+        this.offset.x = this.config.width / 2 - molCenterX * this.scale;
+        this.offset.y = this.config.height / 2 - molCenterY * this.scale;
+    }
+    /**
+     * Render the current molecule
+     */
+    render() {
+        this.clear();
+        if (!this.molecule) {
+            this.renderPlaceholder();
+            return;
+        }
+        this.renderBonds();
+        this.renderAtoms();
+        this.renderLabels();
+    }
+    /**
+     * Clear the canvas
+     */
+    clear() {
+        this.ctx.fillStyle = this.config.backgroundColor;
+        this.ctx.fillRect(0, 0, this.config.width, this.config.height);
+    }
+    /**
+     * Render placeholder when no molecule is loaded
+     */
+    renderPlaceholder() {
+        this.ctx.fillStyle = '#f0f0f0';
+        this.ctx.fillRect(0, 0, this.config.width, this.config.height);
+        this.ctx.fillStyle = '#999999';
+        this.ctx.font = '24px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('2D Molecular Structure', this.config.width / 2, this.config.height / 2 - 20);
+        this.ctx.font = '14px Arial';
+        this.ctx.fillText('Load a molecule to visualize', this.config.width / 2, this.config.height / 2 + 20);
+    }
+    /**
+     * Render molecular bonds
+     */
+    renderBonds() {
+        if (!this.molecule)
+            return;
+        this.ctx.strokeStyle = this.config.bondColor;
+        this.ctx.lineWidth = this.config.bondWidth;
+        this.ctx.lineCap = 'round';
+        this.molecule.bonds.forEach(bond => {
+            const atom1 = this.molecule.atoms[bond.atom1];
+            const atom2 = this.molecule.atoms[bond.atom2];
+            const pos1 = this.transformPoint(atom1.position);
+            const pos2 = this.transformPoint(atom2.position);
+            this.drawBond(pos1, pos2, bond);
+        });
+    }
+    /**
+     * Draw a single bond
+     */
+    drawBond(pos1, pos2, bond) {
+        const dx = pos2.x - pos1.x;
+        const dy = pos2.y - pos1.y;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        const unitX = dx / length;
+        const unitY = dy / length;
+        // Offset for multiple bonds
+        const perpX = -unitY * 3;
+        const perpY = unitX * 3;
+        switch (bond.order) {
+            case 1:
+                this.drawSingleBond(pos1, pos2);
+                break;
+            case 2:
+                this.drawSingleBond({ x: pos1.x + perpX, y: pos1.y + perpY }, { x: pos2.x + perpX, y: pos2.y + perpY });
+                this.drawSingleBond({ x: pos1.x - perpX, y: pos1.y - perpY }, { x: pos2.x - perpX, y: pos2.y - perpY });
+                break;
+            case 3:
+                this.drawSingleBond(pos1, pos2);
+                this.drawSingleBond({ x: pos1.x + perpX, y: pos1.y + perpY }, { x: pos2.x + perpX, y: pos2.y + perpY });
+                this.drawSingleBond({ x: pos1.x - perpX, y: pos1.y - perpY }, { x: pos2.x - perpX, y: pos2.y - perpY });
+                break;
+        }
+        if (bond.type === 'aromatic') {
+            this.drawAromaticBond(pos1, pos2);
+        }
+    }
+    /**
+     * Draw a single bond line
+     */
+    drawSingleBond(pos1, pos2) {
+        this.ctx.beginPath();
+        this.ctx.moveTo(pos1.x, pos1.y);
+        this.ctx.lineTo(pos2.x, pos2.y);
+        this.ctx.stroke();
+    }
+    /**
+     * Draw aromatic bond (dashed)
+     */
+    drawAromaticBond(pos1, pos2) {
+        this.ctx.setLineDash([5, 5]);
+        this.drawSingleBond(pos1, pos2);
+        this.ctx.setLineDash([]);
+    }
+    /**
+     * Render atoms
+     */
+    renderAtoms() {
+        if (!this.molecule)
+            return;
+        this.molecule.atoms.forEach((atom, index) => {
+            const pos = this.transformPoint(atom.position);
+            this.drawAtom(atom, pos, index);
+        });
+    }
+    /**
+     * Draw a single atom
+     */
+    drawAtom(atom, pos, index) {
+        const color = this.config.atomColors[atom.element] || '#999999';
+        const radius = this.config.atomRadius * this.scale;
+        // Draw atom circle
+        this.ctx.fillStyle = color;
+        this.ctx.beginPath();
+        this.ctx.arc(pos.x, pos.y, radius, 0, 2 * Math.PI);
+        this.ctx.fill();
+        // Draw border
+        this.ctx.strokeStyle = '#333333';
+        this.ctx.lineWidth = 1;
+        this.ctx.stroke();
+        // Draw element symbol
+        this.ctx.fillStyle = atom.element === 'H' ? '#000000' : '#ffffff';
+        this.ctx.font = `${this.config.fontSize * this.scale}px Arial`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(atom.element, pos.x, pos.y);
+    }
+    /**
+     * Render atom labels and charges
+     */
+    renderLabels() {
+        if (!this.molecule)
+            return;
+        this.ctx.fillStyle = '#333333';
+        this.ctx.font = `${10 * this.scale}px Arial`;
+        this.molecule.atoms.forEach((atom, index) => {
+            if (atom.charge && atom.charge !== 0) {
+                const pos = this.transformPoint(atom.position);
+                const chargeText = atom.charge > 0 ? `+${atom.charge}` : `${atom.charge}`;
+                this.ctx.textAlign = 'left';
+                this.ctx.textBaseline = 'top';
+                this.ctx.fillText(chargeText, pos.x + this.config.atomRadius * this.scale, pos.y - this.config.atomRadius * this.scale);
+            }
+        });
+    }
+    /**
+     * Transform point from molecule coordinates to canvas coordinates
+     */
+    transformPoint(point) {
+        return {
+            x: point.x * this.scale + this.offset.x,
+            y: point.y * this.scale + this.offset.y
+        };
+    }
+    /**
+     * Convert SMILES to 2D coordinates (simplified)
+     */
+    static smilesToMolecule2D(smiles) {
+        // This is a very simplified implementation
+        // In production, you'd use RDKit-JS or similar
+        const molecule = {
+            atoms: [],
+            bonds: [],
+            name: `SMILES: ${smiles}`
+        };
+        // Simple water molecule example
+        if (smiles === 'O') {
+            molecule.atoms = [
+                { element: 'O', position: { x: 100, y: 100 }, bonds: [0, 1] },
+                { element: 'H', position: { x: 80, y: 120 }, bonds: [0] },
+                { element: 'H', position: { x: 120, y: 120 }, bonds: [0] }
+            ];
+            molecule.bonds = [
+                { atom1: 0, atom2: 1, order: 1, type: 'single' },
+                { atom1: 0, atom2: 2, order: 1, type: 'single' }
+            ];
+        }
+        // Methane example
+        else if (smiles === 'C') {
+            molecule.atoms = [
+                { element: 'C', position: { x: 100, y: 100 }, bonds: [0, 1, 2, 3] },
+                { element: 'H', position: { x: 80, y: 80 }, bonds: [0] },
+                { element: 'H', position: { x: 120, y: 80 }, bonds: [0] },
+                { element: 'H', position: { x: 80, y: 120 }, bonds: [0] },
+                { element: 'H', position: { x: 120, y: 120 }, bonds: [0] }
+            ];
+            molecule.bonds = [
+                { atom1: 0, atom2: 1, order: 1, type: 'single' },
+                { atom1: 0, atom2: 2, order: 1, type: 'single' },
+                { atom1: 0, atom2: 3, order: 1, type: 'single' },
+                { atom1: 0, atom2: 4, order: 1, type: 'single' }
+            ];
+        }
+        // Default: single carbon
+        else {
+            molecule.atoms = [
+                { element: 'C', position: { x: 100, y: 100 }, bonds: [] }
+            ];
+        }
+        return molecule;
+    }
+    /**
+     * Export canvas as image
+     */
+    exportImage(format = 'png') {
+        return this.canvas.toDataURL(`image/${format}`);
+    }
+    /**
+     * Reset view to default
+     */
+    resetView() {
+        this.scale = 1;
+        this.offset = { x: 0, y: 0 };
+        this.centerMolecule();
+        this.render();
+    }
+    /**
+     * Set molecule scale
+     */
+    setScale(scale) {
+        this.scale = Math.max(0.1, Math.min(5, scale));
+        this.render();
+    }
+    /**
+     * Get current molecule data
+     */
+    getMolecule() {
+        return this.molecule;
+    }
+}
+
+/**
+ * Simplified Molecular Visualization System
+ * Node.js and browser compatible implementation
+ */
+/**
+ * Main Molecular Visualization Engine
+ */
+class MolecularVisualization {
+    constructor(config) {
+        this.config = {
+            width: 600,
+            height: 400,
+            mode: 'both',
+            backgroundColor: '#ffffff',
+            interactive: true,
+            ...config
+        };
+        this.styleOptions = {
+            style: 'stick',
+            colorScheme: 'element',
+            showLabels: false,
+            atomScale: 1.0,
+            bondWidth: 2
+        };
+        this.initializeContainer();
+        this.setupVisualization();
+    }
+    /**
+     * Initialize the visualization container
+     */
+    initializeContainer() {
+        // Handle both string selector and direct element
+        if (typeof this.config.container === 'string') {
+            // In browser environment, try to find element
+            try {
+                const element = globalThis?.document?.getElementById?.(this.config.container);
+                this.container = element || this.createFallbackContainer();
+            }
+            catch {
+                this.container = this.createFallbackContainer();
+            }
+        }
+        else {
+            this.container = this.config.container || this.createFallbackContainer();
+        }
+    }
+    /**
+     * Create a fallback container for non-browser environments
+     */
+    createFallbackContainer() {
+        return {
+            width: this.config.width || 600,
+            height: this.config.height || 400,
+            appendChild: () => { },
+            innerHTML: '',
+            style: {}
+        };
+    }
+    /**
+     * Setup the visualization components
+     */
+    setupVisualization() {
+        if (this.config.mode === '2d' || this.config.mode === 'both') {
+            this.setup2DVisualization();
+        }
+        if (this.config.mode === '3d' || this.config.mode === 'both') {
+            this.setup3DVisualization();
+        }
+    }
+    /**
+     * Setup 2D canvas visualization
+     */
+    setup2DVisualization() {
+        try {
+            // Try to create canvas element
+            let canvas;
+            if (globalThis?.document?.createElement) {
+                canvas = globalThis.document.createElement('canvas');
+                canvas.width = this.config.width || 600;
+                canvas.height = this.config.height || 400;
+                if (this.container.appendChild) {
+                    this.container.appendChild(canvas);
+                }
+            }
+            else {
+                // Fallback for non-browser environments
+                canvas = {
+                    width: this.config.width || 600,
+                    height: this.config.height || 400,
+                    getContext: () => ({
+                        fillStyle: '',
+                        strokeStyle: '',
+                        lineWidth: 1,
+                        lineCap: 'round',
+                        font: '12px Arial',
+                        textAlign: 'center',
+                        textBaseline: 'middle',
+                        fillRect: () => { },
+                        fillText: () => { },
+                        beginPath: () => { },
+                        moveTo: () => { },
+                        lineTo: () => { },
+                        arc: () => { },
+                        fill: () => { },
+                        stroke: () => { },
+                        setLineDash: () => { }
+                    }),
+                    toDataURL: () => 'data:image/png;base64,',
+                    style: {}
+                };
+            }
+            this.canvas2d = new Canvas2DRenderer(canvas);
+        }
+        catch (error) {
+            console.warn('Could not initialize 2D visualization:', error);
+        }
+    }
+    /**
+     * Setup 3D visualization
+     */
+    setup3DVisualization() {
+        try {
+            // Check if 3Dmol.js is available
+            if (globalThis?.$3Dmol) {
+                this.initialize3DViewer();
+            }
+            else {
+                this.initializeFallback3D();
+            }
+        }
+        catch (error) {
+            console.warn('Could not initialize 3D visualization:', error);
+            this.initializeFallback3D();
+        }
+    }
+    /**
+     * Initialize 3Dmol.js viewer
+     */
+    initialize3DViewer() {
+        try {
+            const $3Dmol = globalThis.$3Dmol;
+            this.viewer3d = $3Dmol.createViewer(this.container, {
+                defaultcolors: $3Dmol.elementColors.defaultColors
+            });
+        }
+        catch (error) {
+            console.warn('Failed to create 3Dmol viewer:', error);
+            this.initializeFallback3D();
+        }
+    }
+    /**
+     * Initialize fallback 3D visualization
+     */
+    initializeFallback3D() {
+        this.viewer3d = {
+            addModel: () => ({ setStyle: () => { }, show: () => { } }),
+            setStyle: () => { },
+            zoomTo: () => { },
+            render: () => { },
+            clear: () => { },
+            resize: () => { }
+        };
+    }
+    /**
+     * Load and display a molecule
+     */
+    loadMolecule(data) {
+        this.currentMolecule = data;
+        if (this.config.mode === '2d' || this.config.mode === 'both') {
+            this.render2D(data);
+        }
+        if (this.config.mode === '3d' || this.config.mode === 'both') {
+            this.render3D(data);
+        }
+    }
+    /**
+     * Render molecule in 2D
+     */
+    render2D(data) {
+        if (!this.canvas2d)
+            return;
+        try {
+            let molecule2d;
+            if (data.smiles) {
+                molecule2d = Canvas2DRenderer.smilesToMolecule2D(data.smiles);
+            }
+            else if (data.atoms && data.bonds) {
+                molecule2d = {
+                    atoms: data.atoms.map((atom, i) => ({
+                        element: atom.element,
+                        position: { x: atom.x * 50 + 100, y: atom.y * 50 + 100 },
+                        bonds: data.bonds
+                            .filter(bond => bond.atom1 === i || bond.atom2 === i)
+                            .map((_, j) => j)
+                    })),
+                    bonds: data.bonds.map(bond => ({
+                        atom1: bond.atom1,
+                        atom2: bond.atom2,
+                        order: bond.order,
+                        type: bond.order === 1 ? 'single' : bond.order === 2 ? 'double' : 'triple'
+                    }))
+                };
+            }
+            else {
+                // Default fallback molecule
+                molecule2d = Canvas2DRenderer.smilesToMolecule2D('C');
+            }
+            this.canvas2d.loadMolecule(molecule2d);
+        }
+        catch (error) {
+            console.warn('Error rendering 2D molecule:', error);
+        }
+    }
+    /**
+     * Render molecule in 3D
+     */
+    render3D(data) {
+        if (!this.viewer3d)
+            return;
+        try {
+            this.viewer3d.clear();
+            if (data.pdb) {
+                const model = this.viewer3d.addModel(data.pdb, 'pdb');
+                model.setStyle({}, { [this.styleOptions.style || 'stick']: {} });
+                model.show();
+            }
+            else if (data.sdf) {
+                const model = this.viewer3d.addModel(data.sdf, 'sdf');
+                model.setStyle({}, { [this.styleOptions.style || 'stick']: {} });
+                model.show();
+            }
+            this.viewer3d.zoomTo();
+            this.viewer3d.render();
+        }
+        catch (error) {
+            console.warn('Error rendering 3D molecule:', error);
+        }
+    }
+    /**
+     * Update visualization style
+     */
+    updateStyle(options) {
+        this.styleOptions = { ...this.styleOptions, ...options };
+        if (this.currentMolecule) {
+            this.loadMolecule(this.currentMolecule);
+        }
+    }
+    /**
+     * Export current visualization as image
+     */
+    exportImage(format = 'png') {
+        if (this.canvas2d && (this.config.mode === '2d' || this.config.mode === 'both')) {
+            return this.canvas2d.exportImage(format);
+        }
+        return '';
+    }
+    /**
+     * Reset visualization to default view
+     */
+    resetView() {
+        if (this.canvas2d) {
+            this.canvas2d.resetView();
+        }
+        if (this.viewer3d && this.viewer3d.zoomTo) {
+            this.viewer3d.zoomTo();
+            this.viewer3d.render();
+        }
+    }
+    /**
+     * Resize the visualization
+     */
+    resize(width, height) {
+        this.config.width = width;
+        this.config.height = height;
+        if (this.viewer3d && this.viewer3d.resize) {
+            this.viewer3d.resize();
+        }
+        // For 2D, would need to recreate canvas
+        if (this.canvas2d) {
+            this.setup2DVisualization();
+            if (this.currentMolecule) {
+                this.render2D(this.currentMolecule);
+            }
+        }
+    }
+    /**
+     * Get current molecule data
+     */
+    getMolecule() {
+        return this.currentMolecule;
+    }
+    /**
+     * Clean up resources
+     */
+    destroy() {
+        if (this.viewer3d && this.viewer3d.clear) {
+            this.viewer3d.clear();
+        }
+        this.canvas2d = undefined;
+        this.viewer3d = undefined;
+        this.currentMolecule = undefined;
+    }
+}
+/**
+ * Utility functions for molecular data conversion
+ */
+class MolecularDataUtils {
+    /**
+     * Convert PDB string to basic atom/bond data
+     */
+    static parsePDB(pdbString) {
+        const atoms = [];
+        const bonds = [];
+        const lines = pdbString.split('\n');
+        for (const line of lines) {
+            if (line.startsWith('ATOM') || line.startsWith('HETATM')) {
+                const element = line.substring(76, 78).trim() || line.substring(12, 16).trim().charAt(0);
+                const x = parseFloat(line.substring(30, 38));
+                const y = parseFloat(line.substring(38, 46));
+                const z = parseFloat(line.substring(46, 54));
+                if (!isNaN(x) && !isNaN(y) && !isNaN(z)) {
+                    atoms.push({ element, x, y, z });
+                }
+            }
+        }
+        // Simple bond detection based on distance
+        for (let i = 0; i < atoms.length; i++) {
+            for (let j = i + 1; j < atoms.length; j++) {
+                const dx = atoms[i].x - atoms[j].x;
+                const dy = atoms[i].y - atoms[j].y;
+                const dz = atoms[i].z - atoms[j].z;
+                const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                // Typical bond distance thresholds
+                if (distance < 2.0) {
+                    bonds.push({ atom1: i, atom2: j, order: 1 });
+                }
+            }
+        }
+        return { pdb: pdbString, atoms, bonds };
+    }
+    /**
+     * Generate sample molecules for testing
+     */
+    static generateSampleMolecule(type = 'water') {
+        switch (type) {
+            case 'water':
+                return {
+                    smiles: 'O',
+                    atoms: [
+                        { element: 'O', x: 0, y: 0, z: 0 },
+                        { element: 'H', x: 0.757, y: 0.587, z: 0 },
+                        { element: 'H', x: -0.757, y: 0.587, z: 0 }
+                    ],
+                    bonds: [
+                        { atom1: 0, atom2: 1, order: 1 },
+                        { atom1: 0, atom2: 2, order: 1 }
+                    ]
+                };
+            case 'methane':
+                return {
+                    smiles: 'C',
+                    atoms: [
+                        { element: 'C', x: 0, y: 0, z: 0 },
+                        { element: 'H', x: 1.089, y: 0, z: 0 },
+                        { element: 'H', x: -0.363, y: 1.027, z: 0 },
+                        { element: 'H', x: -0.363, y: -0.513, z: 0.889 },
+                        { element: 'H', x: -0.363, y: -0.513, z: -0.889 }
+                    ],
+                    bonds: [
+                        { atom1: 0, atom2: 1, order: 1 },
+                        { atom1: 0, atom2: 2, order: 1 },
+                        { atom1: 0, atom2: 3, order: 1 },
+                        { atom1: 0, atom2: 4, order: 1 }
+                    ]
+                };
+            case 'benzene':
+                return {
+                    smiles: 'c1ccccc1',
+                    atoms: [
+                        { element: 'C', x: 1.4, y: 0, z: 0 },
+                        { element: 'C', x: 0.7, y: 1.2, z: 0 },
+                        { element: 'C', x: -0.7, y: 1.2, z: 0 },
+                        { element: 'C', x: -1.4, y: 0, z: 0 },
+                        { element: 'C', x: -0.7, y: -1.2, z: 0 },
+                        { element: 'C', x: 0.7, y: -1.2, z: 0 }
+                    ],
+                    bonds: [
+                        { atom1: 0, atom2: 1, order: 1 },
+                        { atom1: 1, atom2: 2, order: 2 },
+                        { atom1: 2, atom2: 3, order: 1 },
+                        { atom1: 3, atom2: 4, order: 2 },
+                        { atom1: 4, atom2: 5, order: 1 },
+                        { atom1: 5, atom2: 0, order: 2 }
+                    ]
+                };
+            default:
+                return this.generateSampleMolecule('water');
+        }
+    }
+}
+
+/**
+ * Integration with CREB Core Types and Systems
+ */
+/**
+ * Convert CREB-style molecule to visualization format
+ */
+function convertMoleculeToVisualization(molecule) {
+    const atoms = molecule.elements.map((element, index) => ({
+        element,
+        x: Math.random() * 4 - 2, // Random coordinates for now
+        y: Math.random() * 4 - 2,
+        z: Math.random() * 4 - 2
+    }));
+    // Simple bond generation based on element count
+    const bonds = [];
+    for (let i = 0; i < atoms.length - 1; i++) {
+        bonds.push({
+            atom1: i,
+            atom2: i + 1,
+            order: 1
+        });
+    }
+    return {
+        atoms,
+        bonds,
+        smiles: molecule.formula || `${molecule.elements.join('')}`
+    };
+}
+/**
+ * Create molecular visualization from molecule data
+ */
+function createMolecularVisualization(container, molecule, options) {
+    const config = {
+        container,
+        width: 600,
+        height: 400,
+        mode: 'both',
+        ...options
+    };
+    const visualization = new MolecularVisualization(config);
+    const moleculeData = convertMoleculeToVisualization(molecule);
+    visualization.loadMolecule(moleculeData);
+    return visualization;
+}
+/**
+ * Enhanced visualization utilities for CREB
+ */
+class CREBVisualizationUtils {
+    /**
+     * Create 2D structure from molecule data
+     */
+    static create2DStructure(molecule, canvas) {
+        if (!canvas) {
+            // Create fallback canvas
+            canvas = {
+                width: 400,
+                height: 300,
+                getContext: () => ({
+                    fillStyle: '',
+                    strokeStyle: '',
+                    lineWidth: 1,
+                    lineCap: 'round',
+                    font: '12px Arial',
+                    textAlign: 'center',
+                    textBaseline: 'middle',
+                    fillRect: () => { },
+                    fillText: () => { },
+                    beginPath: () => { },
+                    moveTo: () => { },
+                    lineTo: () => { },
+                    arc: () => { },
+                    fill: () => { },
+                    stroke: () => { },
+                    setLineDash: () => { }
+                }),
+                toDataURL: () => 'data:image/png;base64,',
+                style: {}
+            };
+        }
+        const renderer = new Canvas2DRenderer(canvas);
+        // Convert molecule to 2D format
+        const molecule2d = Canvas2DRenderer.smilesToMolecule2D(molecule.formula || 'C');
+        renderer.loadMolecule(molecule2d);
+        return renderer;
+    }
+    /**
+     * Generate sample molecules for different chemical reactions
+     */
+    static generateReactionMolecules() {
+        return {
+            reactants: [
+                MolecularDataUtils.generateSampleMolecule('water'),
+                MolecularDataUtils.generateSampleMolecule('methane')
+            ],
+            products: [
+                MolecularDataUtils.generateSampleMolecule('benzene')
+            ]
+        };
+    }
+    /**
+     * Visualize chemical reaction
+     */
+    static visualizeReaction(container, reactants, products) {
+        const visualization = new MolecularVisualization({
+            container,
+            width: 800,
+            height: 400,
+            mode: '2d'
+        });
+        // For now, just show the first reactant
+        if (reactants.length > 0) {
+            const moleculeData = convertMoleculeToVisualization(reactants[0]);
+            visualization.loadMolecule(moleculeData);
+        }
+        return visualization;
+    }
+    /**
+     * Create molecule from element count data
+     */
+    static createMoleculeFromElementCount(elementCount) {
+        const elements = [];
+        let formula = '';
+        for (const [element, count] of Object.entries(elementCount)) {
+            for (let i = 0; i < count; i++) {
+                elements.push(element);
+            }
+            formula += count > 1 ? `${element}${count}` : element;
+        }
+        return { elements, formula };
+    }
+}
 
 /**
  * Advanced TypeScript Support for CREB Library
@@ -2446,6 +3339,2212 @@ CacheFactory.presets = {
 };
 
 /**
+ * @fileoverview Type definitions for the CREB Validation Pipeline
+ *
+ * Provides comprehensive type definitions for:
+ * - Validation results and errors
+ * - Validator interfaces and compositions
+ * - Rule definitions and dependencies
+ * - Performance metrics and caching
+ * - Chemical-specific validation types
+ *
+ * @version 1.0.0
+ * @author CREB Team
+ */
+// ============================================================================
+// Core Validation Types
+// ============================================================================
+/**
+ * Severity levels for validation errors
+ */
+var ValidationSeverity;
+(function (ValidationSeverity) {
+    ValidationSeverity["INFO"] = "info";
+    ValidationSeverity["WARNING"] = "warning";
+    ValidationSeverity["ERROR"] = "error";
+    ValidationSeverity["CRITICAL"] = "critical";
+})(ValidationSeverity || (ValidationSeverity = {}));
+/**
+ * Type guard for validators
+ */
+function isValidator(obj) {
+    return obj &&
+        typeof obj.name === 'string' &&
+        obj.config &&
+        Array.isArray(obj.dependencies) &&
+        typeof obj.validate === 'function' &&
+        typeof obj.canValidate === 'function' &&
+        typeof obj.getSchema === 'function';
+}
+/**
+ * Type guard for validation rules
+ */
+function isValidationRule(obj) {
+    return obj &&
+        typeof obj.name === 'string' &&
+        typeof obj.description === 'string' &&
+        Array.isArray(obj.dependencies) &&
+        typeof obj.priority === 'number' &&
+        typeof obj.execute === 'function' &&
+        typeof obj.appliesTo === 'function';
+}
+
+/**
+ * @fileoverview ValidationPipeline - Core validation orchestration system
+ *
+ * The ValidationPipeline provides a comprehensive data validation framework with:
+ * - Validator composition and dependency management
+ * - Async validation support with timeout handling
+ * - Rule dependency resolution and execution ordering
+ * - Performance optimization with caching and parallelization
+ * - Chemical-specific validation capabilities
+ * - Extensible architecture for custom validators and rules
+ *
+ * @version 1.0.0
+ * @author CREB Team
+ */
+/**
+ * Core validation pipeline for orchestrating complex validation workflows
+ */
+class ValidationPipeline extends events.EventEmitter {
+    constructor(config = {}) {
+        super();
+        this.validators = new Map();
+        this.rules = new Map();
+        this.dependencyGraph = new Map();
+        this.performanceMetrics = new Map();
+        this.config = {
+            timeout: 5000,
+            enableCaching: true,
+            cacheTTL: 300000, // 5 minutes
+            maxCacheSize: 1000,
+            continueOnError: true,
+            parallel: {
+                enabled: true,
+                maxConcurrency: 4
+            },
+            monitoring: {
+                enabled: true,
+                sampleRate: 0.1
+            },
+            ...config
+        };
+        this.cache = new exports.AdvancedCache({
+            maxSize: this.config.maxCacheSize,
+            defaultTtl: this.config.cacheTTL,
+            evictionStrategy: 'lru'
+        });
+        this.setupErrorHandling();
+    }
+    // ============================================================================
+    // Validator Management
+    // ============================================================================
+    /**
+     * Register a validator with the pipeline
+     * @param validator Validator to register
+     */
+    addValidator(validator) {
+        if (!isValidator(validator)) {
+            throw new ValidationError('Invalid validator provided', {
+                validator: validator?.name || 'unknown',
+                errorCode: 'VALIDATION_INVALID_VALIDATOR'
+            });
+        }
+        if (this.validators.has(validator.name)) {
+            throw new ValidationError(`Validator '${validator.name}' already registered`, {
+                validator: validator.name,
+                errorCode: 'VALIDATION_DUPLICATE_VALIDATOR'
+            });
+        }
+        this.validators.set(validator.name, validator);
+        this.validateDependencies(validator);
+        this.emit('validator:registered', { name: validator.name });
+    }
+    /**
+     * Remove a validator from the pipeline
+     * @param name Name of validator to remove
+     */
+    removeValidator(name) {
+        const removed = this.validators.delete(name);
+        if (removed) {
+            this.emit('validator:unregistered', { name });
+        }
+        return removed;
+    }
+    /**
+     * Get a registered validator
+     * @param name Validator name
+     */
+    getValidator(name) {
+        return this.validators.get(name);
+    }
+    /**
+     * Get all registered validators
+     */
+    getValidators() {
+        return Array.from(this.validators.values());
+    }
+    // ============================================================================
+    // Rule Management
+    // ============================================================================
+    /**
+     * Register a validation rule
+     * @param rule Rule to register
+     */
+    addRule(rule) {
+        if (!isValidationRule(rule)) {
+            throw new ValidationError('Invalid validation rule provided', {
+                rule: rule?.name || 'unknown',
+                errorCode: 'VALIDATION_INVALID_RULE'
+            });
+        }
+        if (this.rules.has(rule.name)) {
+            throw new ValidationError(`Rule '${rule.name}' already registered`, {
+                rule: rule.name,
+                errorCode: 'VALIDATION_DUPLICATE_RULE'
+            });
+        }
+        this.rules.set(rule.name, rule);
+        this.updateDependencyGraph(rule);
+        this.emit('rule:registered', { name: rule.name });
+    }
+    /**
+     * Remove a validation rule
+     * @param name Name of rule to remove
+     */
+    removeRule(name) {
+        const removed = this.rules.delete(name);
+        if (removed) {
+            this.dependencyGraph.delete(name);
+            this.emit('rule:unregistered', { name });
+        }
+        return removed;
+    }
+    /**
+     * Get a registered rule
+     * @param name Rule name
+     */
+    getRule(name) {
+        return this.rules.get(name);
+    }
+    /**
+     * Get all registered rules
+     */
+    getRules() {
+        return Array.from(this.rules.values());
+    }
+    // ============================================================================
+    // Core Validation
+    // ============================================================================
+    /**
+     * Validate a value using all applicable validators and rules
+     * @param value Value to validate
+     * @param validatorNames Specific validators to use (optional)
+     * @returns Promise resolving to validation result
+     */
+    async validate(value, validatorNames) {
+        const startTime = Date.now();
+        const context = this.createValidationContext([], value, value);
+        try {
+            this.emit('validation:started', {
+                target: value,
+                validators: validatorNames || Array.from(this.validators.keys())
+            });
+            // Determine which validators to use
+            const applicableValidators = this.getApplicableValidators(value, validatorNames);
+            if (applicableValidators.length === 0) {
+                // Handle edge cases where no validators are applicable
+                if (value === null || value === undefined || value === '') {
+                    return this.createFailureResult(context, startTime, [this.createError('NO_VALIDATORS_APPLICABLE', `Invalid input: ${value === null ? 'null' : value === undefined ? 'undefined' : 'empty string'}`, [], ValidationSeverity.ERROR, ['Provide a valid input value'], { value }, value)]);
+                }
+                return this.createSuccessResult(context, startTime);
+            }
+            // Execute validators
+            const validatorResults = await this.executeValidators(value, applicableValidators, context);
+            // Execute applicable rules
+            const ruleResults = await this.executeRules(value, context);
+            // Combine results
+            const result = this.combineResults(validatorResults, ruleResults, context, startTime);
+            this.emit('validation:completed', { result });
+            this.recordPerformanceMetrics(result);
+            return result;
+        }
+        catch (error) {
+            const validationError = error instanceof CREBError ? error :
+                new ValidationError('Validation pipeline failed', {
+                    originalError: error,
+                    errorCode: 'VALIDATION_PIPELINE_ERROR'
+                });
+            this.emit('validation:error', { error: validationError });
+            throw validationError;
+        }
+    }
+    /**
+     * Validate multiple values in parallel
+     * @param values Values to validate
+     * @param validatorNames Specific validators to use (optional)
+     * @returns Promise resolving to array of validation results
+     */
+    async validateBatch(values, validatorNames) {
+        if (!this.config.parallel.enabled) {
+            // Sequential validation
+            const results = [];
+            for (const value of values) {
+                results.push(await this.validate(value, validatorNames));
+            }
+            return results;
+        }
+        // Parallel validation with concurrency limit
+        const results = [];
+        const concurrency = Math.min(this.config.parallel.maxConcurrency, values.length);
+        for (let i = 0; i < values.length; i += concurrency) {
+            const batch = values.slice(i, i + concurrency);
+            const batchPromises = batch.map(value => this.validate(value, validatorNames));
+            const batchResults = await Promise.all(batchPromises);
+            results.push(...batchResults);
+        }
+        return results;
+    }
+    // ============================================================================
+    // Private Methods - Validator Execution
+    // ============================================================================
+    getApplicableValidators(value, validatorNames) {
+        const validators = validatorNames
+            ? validatorNames.map(name => this.validators.get(name)).filter(Boolean)
+            : Array.from(this.validators.values());
+        return validators.filter(validator => validator.canValidate(value));
+    }
+    async executeValidators(value, validators, context) {
+        const results = [];
+        for (const validator of validators) {
+            try {
+                // Check cache first
+                const cacheKey = this.createCacheKey(validator, value);
+                const cachedResult = await this.getCachedResult(cacheKey);
+                if (cachedResult) {
+                    this.emit('cache:hit', { key: cacheKey });
+                    results.push(cachedResult.result);
+                    continue;
+                }
+                this.emit('cache:miss', { key: cacheKey });
+                // Execute validator with timeout
+                const result = await this.executeWithTimeout(() => validator.validate(value, context), this.config.timeout, `Validator '${validator.name}' timed out`);
+                // Cache result if cacheable
+                if (validator.config.cacheable && this.config.enableCaching) {
+                    await this.cacheResult(cacheKey, result);
+                }
+                results.push(result);
+                this.emit('validator:executed', { validator: validator.name, result });
+            }
+            catch (error) {
+                if (!this.config.continueOnError) {
+                    throw error;
+                }
+                // Create error result
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                const errorResult = {
+                    isValid: false,
+                    errors: [{
+                            code: 'VALIDATOR_EXECUTION_ERROR',
+                            message: `Validator '${validator.name}' failed: ${errorMessage}`,
+                            path: context.path,
+                            severity: ValidationSeverity.ERROR,
+                            suggestions: ['Check validator configuration', 'Verify input data format'],
+                            context: { validator: validator.name, error: errorMessage }
+                        }],
+                    warnings: [],
+                    metrics: context.metrics,
+                    timestamp: new Date()
+                };
+                results.push(errorResult);
+            }
+        }
+        return results;
+    }
+    // ============================================================================
+    // Private Methods - Rule Execution
+    // ============================================================================
+    async executeRules(value, context) {
+        // Get applicable rules
+        const applicableRules = Array.from(this.rules.values())
+            .filter(rule => rule.appliesTo(value));
+        if (applicableRules.length === 0) {
+            return [];
+        }
+        // Sort rules by dependency order
+        const sortedRules = this.sortRulesByDependencies(applicableRules);
+        const results = [];
+        for (const rule of sortedRules) {
+            try {
+                const ruleStartTime = Date.now();
+                // Check cache for rule result
+                const cacheKey = this.createRuleCacheKey(rule, value);
+                const cachedRuleResult = await this.getCachedRuleResult(cacheKey);
+                if (cachedRuleResult) {
+                    results.push(cachedRuleResult);
+                    continue;
+                }
+                // Execute rule
+                const result = await this.executeWithTimeout(() => rule.execute(value, context), this.config.timeout, `Rule '${rule.name}' timed out`);
+                result.duration = Date.now() - ruleStartTime;
+                result.cached = false;
+                // Cache result if cacheable
+                if (rule.cacheable && this.config.enableCaching) {
+                    await this.cacheRuleResult(cacheKey, result);
+                }
+                results.push(result);
+                this.emit('rule:executed', { rule: rule.name, result });
+            }
+            catch (error) {
+                if (!this.config.continueOnError) {
+                    throw error;
+                }
+                // Create error result
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                const errorResult = {
+                    passed: false,
+                    error: {
+                        code: 'RULE_EXECUTION_ERROR',
+                        message: `Rule '${rule.name}' failed: ${errorMessage}`,
+                        path: context.path,
+                        severity: ValidationSeverity.ERROR,
+                        suggestions: ['Check rule configuration', 'Verify input data'],
+                        context: { rule: rule.name, error: errorMessage }
+                    },
+                    duration: 0,
+                    cached: false
+                };
+                results.push(errorResult);
+            }
+        }
+        return results;
+    }
+    // ============================================================================
+    // Private Methods - Dependency Management
+    // ============================================================================
+    validateDependencies(validator) {
+        for (const dependency of validator.dependencies) {
+            if (!this.validators.has(dependency)) {
+                throw new ValidationError(`Validator '${validator.name}' depends on '${dependency}' which is not registered`, {
+                    validator: validator.name,
+                    dependency,
+                    errorCode: 'VALIDATION_MISSING_DEPENDENCY'
+                });
+            }
+        }
+    }
+    updateDependencyGraph(rule) {
+        const node = {
+            name: rule.name,
+            dependencies: [...rule.dependencies],
+            dependents: [],
+            order: 0
+        };
+        this.dependencyGraph.set(rule.name, node);
+        this.recomputeDependencyOrder();
+    }
+    recomputeDependencyOrder() {
+        const visited = new Set();
+        const visiting = new Set();
+        const sorted = [];
+        const visit = (ruleName) => {
+            if (visiting.has(ruleName)) {
+                throw new ValidationError(`Circular dependency detected involving rule '${ruleName}'`, {
+                    rule: ruleName,
+                    errorCode: 'VALIDATION_CIRCULAR_DEPENDENCY'
+                });
+            }
+            if (visited.has(ruleName)) {
+                return;
+            }
+            visiting.add(ruleName);
+            const node = this.dependencyGraph.get(ruleName);
+            if (node) {
+                for (const dependency of node.dependencies) {
+                    visit(dependency);
+                }
+            }
+            visiting.delete(ruleName);
+            visited.add(ruleName);
+            sorted.push(ruleName);
+        };
+        for (const ruleName of this.dependencyGraph.keys()) {
+            if (!visited.has(ruleName)) {
+                visit(ruleName);
+            }
+        }
+        // Update execution order
+        sorted.forEach((ruleName, index) => {
+            const node = this.dependencyGraph.get(ruleName);
+            if (node) {
+                node.order = index;
+            }
+        });
+    }
+    sortRulesByDependencies(rules) {
+        return rules.sort((a, b) => {
+            const nodeA = this.dependencyGraph.get(a.name);
+            const nodeB = this.dependencyGraph.get(b.name);
+            if (!nodeA || !nodeB) {
+                return a.priority - b.priority;
+            }
+            // First sort by dependency order, then by priority
+            const orderDiff = nodeA.order - nodeB.order;
+            return orderDiff !== 0 ? orderDiff : b.priority - a.priority;
+        });
+    }
+    // ============================================================================
+    // Private Methods - Caching
+    // ============================================================================
+    createCacheKey(validator, value) {
+        return {
+            validator: validator.name,
+            valueHash: this.hashValue(value),
+            configHash: this.hashValue(validator.config),
+            schemaVersion: validator.getSchema().version
+        };
+    }
+    createRuleCacheKey(rule, value) {
+        return `rule:${rule.name}:${this.hashValue(value)}`;
+    }
+    async getCachedResult(key) {
+        if (!this.config.enableCaching) {
+            return null;
+        }
+        const cacheKeyString = JSON.stringify(key);
+        const cached = await this.cache.get(cacheKeyString);
+        if (cached.success && cached.value && cached.value.expiresAt > new Date()) {
+            cached.value.hitCount++;
+            cached.value.result.fromCache = true;
+            return cached.value;
+        }
+        return null;
+    }
+    async getCachedRuleResult(key) {
+        if (!this.config.enableCaching) {
+            return null;
+        }
+        const cached = await this.cache.get(key);
+        if (cached.success && cached.value && cached.value.expiresAt > new Date()) {
+            // For rules, we need to extract the RuleResult from ValidationResult
+            return {
+                passed: cached.value.result.isValid,
+                error: cached.value.result.errors[0],
+                duration: cached.value.result.metrics.duration,
+                cached: true
+            };
+        }
+        return null;
+    }
+    async cacheResult(key, result) {
+        const cacheKeyString = JSON.stringify(key);
+        const cached = {
+            result,
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + this.config.cacheTTL),
+            hitCount: 0
+        };
+        await this.cache.set(cacheKeyString, cached);
+    }
+    async cacheRuleResult(key, result) {
+        // Convert RuleResult to ValidationResult format for caching
+        const validationResult = {
+            isValid: result.passed,
+            errors: result.error ? [result.error] : [],
+            warnings: [],
+            metrics: {
+                duration: result.duration,
+                rulesExecuted: 1,
+                validatorsUsed: 0,
+                cacheStats: { hits: 0, misses: 0, hitRate: 0 }
+            },
+            timestamp: new Date()
+        };
+        const cached = {
+            result: validationResult,
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + this.config.cacheTTL),
+            hitCount: 0
+        };
+        await this.cache.set(key, cached);
+    }
+    // ============================================================================
+    // Private Methods - Utilities
+    // ============================================================================
+    createValidationContext(path, value, root, parent) {
+        return {
+            path,
+            root,
+            parent,
+            config: {
+                enabled: true,
+                priority: 0,
+                cacheable: true
+            },
+            shared: new Map(),
+            metrics: {
+                duration: 0,
+                rulesExecuted: 0,
+                validatorsUsed: 0,
+                cacheStats: { hits: 0, misses: 0, hitRate: 0 }
+            }
+        };
+    }
+    combineResults(validatorResults, ruleResults, context, startTime) {
+        const allErrors = [];
+        const allWarnings = [];
+        let totalRulesExecuted = 0;
+        let totalCacheHits = 0;
+        let totalCacheMisses = 0;
+        // Collect validator results
+        for (const result of validatorResults) {
+            allErrors.push(...result.errors);
+            allWarnings.push(...result.warnings);
+            totalRulesExecuted += result.metrics.rulesExecuted;
+            totalCacheHits += result.metrics.cacheStats.hits;
+            totalCacheMisses += result.metrics.cacheStats.misses;
+        }
+        // Collect rule results
+        for (const result of ruleResults) {
+            if (!result.passed && result.error) {
+                allErrors.push(result.error);
+            }
+            totalRulesExecuted++;
+            if (result.cached) {
+                totalCacheHits++;
+            }
+            else {
+                totalCacheMisses++;
+            }
+        }
+        const totalCache = totalCacheHits + totalCacheMisses;
+        const metrics = {
+            duration: Date.now() - startTime,
+            rulesExecuted: totalRulesExecuted,
+            validatorsUsed: validatorResults.length,
+            cacheStats: {
+                hits: totalCacheHits,
+                misses: totalCacheMisses,
+                hitRate: totalCache > 0 ? totalCacheHits / totalCache : 0
+            }
+        };
+        return {
+            isValid: allErrors.length === 0,
+            errors: allErrors,
+            warnings: allWarnings,
+            metrics,
+            timestamp: new Date()
+        };
+    }
+    createSuccessResult(context, startTime) {
+        return {
+            isValid: true,
+            errors: [],
+            warnings: [],
+            metrics: {
+                duration: Date.now() - startTime,
+                rulesExecuted: 0,
+                validatorsUsed: 0,
+                cacheStats: { hits: 0, misses: 0, hitRate: 0 }
+            },
+            timestamp: new Date()
+        };
+    }
+    async executeWithTimeout(operation, timeout, timeoutMessage) {
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                reject(new ValidationError(timeoutMessage, {
+                    timeout,
+                    errorCode: 'VALIDATION_TIMEOUT'
+                }));
+            }, timeout);
+            operation()
+                .then(result => {
+                clearTimeout(timer);
+                resolve(result);
+            })
+                .catch(error => {
+                clearTimeout(timer);
+                reject(error);
+            });
+        });
+    }
+    hashValue(value) {
+        // Simple hash function for caching
+        return btoa(JSON.stringify(value, null, 0))
+            .replace(/[+/=]/g, '')
+            .substring(0, 16);
+    }
+    recordPerformanceMetrics(result) {
+        if (!this.config.monitoring.enabled) {
+            return;
+        }
+        if (Math.random() > this.config.monitoring.sampleRate) {
+            return;
+        }
+        // Record duration metrics
+        const durations = this.performanceMetrics.get('duration') || [];
+        durations.push(result.metrics.duration);
+        if (durations.length > 1000) {
+            durations.shift(); // Keep only last 1000 measurements
+        }
+        this.performanceMetrics.set('duration', durations);
+        // Check performance thresholds
+        const avgDuration = durations.reduce((a, b) => a + b, 0) / durations.length;
+        if (avgDuration > 1000) { // 1 second threshold
+            this.emit('performance:threshold', {
+                metric: 'duration',
+                value: avgDuration,
+                threshold: 1000
+            });
+        }
+    }
+    setupErrorHandling() {
+        this.on('error', (error) => {
+            console.error('ValidationPipeline error:', error);
+        });
+    }
+    // ============================================================================
+    // Public Utility Methods
+    // ============================================================================
+    /**
+     * Get pipeline statistics
+     */
+    getStats() {
+        const durations = this.performanceMetrics.get('duration') || [];
+        const avgDuration = durations.length > 0
+            ? durations.reduce((a, b) => a + b, 0) / durations.length
+            : 0;
+        return {
+            validators: this.validators.size,
+            rules: this.rules.size,
+            cacheSize: this.cache.size(),
+            cacheHitRate: this.cache.getStats().hitRate,
+            avgDuration
+        };
+    }
+    /**
+     * Clear all caches
+     */
+    async clearCache() {
+        await this.cache.clear();
+    }
+    /**
+     * Get pipeline configuration
+     */
+    getConfig() {
+        return { ...this.config };
+    }
+    // ============================================================================
+    // Helper Methods
+    // ============================================================================
+    /**
+     * Create a validation error
+     */
+    createError(code, message, path, severity, suggestions = [], context = {}, value) {
+        return {
+            code,
+            message,
+            path,
+            severity,
+            suggestions,
+            context,
+            value
+        };
+    }
+    /**
+     * Create a failed validation result
+     */
+    createFailureResult(context, startTime, errors, warnings = []) {
+        return {
+            isValid: false,
+            errors,
+            warnings,
+            metrics: {
+                duration: Date.now() - startTime,
+                rulesExecuted: 0,
+                validatorsUsed: 0,
+                cacheStats: { hits: 0, misses: 0, hitRate: 0 }
+            },
+            timestamp: new Date()
+        };
+    }
+}
+
+/**
+ * @fileoverview Base validator classes and validator composition utilities
+ *
+ * Provides foundation classes for building custom validators:
+ * - BaseValidator: Abstract base class with common functionality
+ * - CompositeValidator: Combines multiple validators
+ * - ValidatorBuilder: Fluent API for building validators
+ * - SpecializedValidators: Chemistry-specific validator helpers
+ *
+ * @version 1.0.0
+ * @author CREB Team
+ */
+// ============================================================================
+// Base Validator
+// ============================================================================
+/**
+ * Abstract base class for all validators
+ */
+class BaseValidator {
+    constructor(name, config = {}, dependencies = []) {
+        this.name = name;
+        this.dependencies = dependencies;
+        this.config = {
+            enabled: true,
+            priority: 0,
+            timeout: 5000,
+            cacheable: true,
+            ...config
+        };
+        this.schema = this.createSchema();
+    }
+    /**
+     * Create validation schema - can be overridden by subclasses
+     */
+    createSchema() {
+        return {
+            name: this.name,
+            version: '1.0.0',
+            description: `Schema for ${this.name} validator`,
+            types: ['any'],
+            requiredValidators: [],
+            optionalValidators: [],
+            properties: {}
+        };
+    }
+    /**
+     * Get validation schema
+     */
+    getSchema() {
+        return { ...this.schema };
+    }
+    /**
+     * Create a validation error
+     */
+    createError(code, message, path, severity = ValidationSeverity.ERROR, suggestions = [], context, value) {
+        return {
+            code,
+            message,
+            path,
+            severity,
+            suggestions,
+            context,
+            value
+        };
+    }
+    /**
+     * Create a successful validation result
+     */
+    createSuccessResult(context, warnings = []) {
+        return {
+            isValid: true,
+            errors: [],
+            warnings,
+            metrics: {
+                duration: 0,
+                rulesExecuted: 0,
+                validatorsUsed: 1,
+                cacheStats: { hits: 0, misses: 0, hitRate: 0 }
+            },
+            timestamp: new Date()
+        };
+    }
+    /**
+     * Create a failed validation result
+     */
+    createFailureResult(errors, context, warnings = []) {
+        return {
+            isValid: false,
+            errors,
+            warnings,
+            metrics: {
+                duration: 0,
+                rulesExecuted: 0,
+                validatorsUsed: 1,
+                cacheStats: { hits: 0, misses: 0, hitRate: 0 }
+            },
+            timestamp: new Date()
+        };
+    }
+    /**
+     * Validate configuration
+     */
+    validateConfig() {
+        if (this.config.timeout && this.config.timeout <= 0) {
+            throw new ValidationError('Validator timeout must be positive', { validator: this.name, timeout: this.config.timeout });
+        }
+    }
+}
+// ============================================================================
+// Composite Validator
+// ============================================================================
+/**
+ * Validator that combines multiple validators
+ */
+class CompositeValidator extends BaseValidator {
+    constructor(name, validators = [], config = {}) {
+        super(name, config);
+        this.validators = [];
+        this.validatorMap = new Map();
+        for (const validator of validators) {
+            this.addValidator(validator);
+        }
+    }
+    /**
+     * Add a validator to the composition
+     */
+    addValidator(validator) {
+        if (this.validatorMap.has(validator.name)) {
+            throw new ValidationError(`Validator '${validator.name}' already exists in composite`, { composite: this.name, validator: validator.name });
+        }
+        this.validators.push(validator);
+        this.validatorMap.set(validator.name, validator);
+    }
+    /**
+     * Remove a validator from the composition
+     */
+    removeValidator(name) {
+        const index = this.validators.findIndex(v => v.name === name);
+        if (index !== -1) {
+            this.validators.splice(index, 1);
+            this.validatorMap.delete(name);
+        }
+    }
+    /**
+     * Get a specific validator by name
+     */
+    getValidator(name) {
+        return this.validatorMap.get(name);
+    }
+    /**
+     * Check if composite can validate the value
+     */
+    canValidate(value) {
+        return this.validators.some(validator => validator.canValidate(value));
+    }
+    /**
+     * Validate using all applicable validators
+     */
+    async validate(value, context) {
+        const startTime = Date.now();
+        const applicableValidators = this.validators.filter(v => v.canValidate(value));
+        if (applicableValidators.length === 0) {
+            return this.createSuccessResult(context);
+        }
+        const results = [];
+        const allErrors = [];
+        const allWarnings = [];
+        // Execute all applicable validators
+        for (const validator of applicableValidators) {
+            try {
+                const result = await validator.validate(value, context);
+                results.push(result);
+                allErrors.push(...result.errors);
+                allWarnings.push(...result.warnings);
+            }
+            catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                const validationError = this.createError('COMPOSITE_VALIDATOR_ERROR', `Validator '${validator.name}' failed: ${errorMessage}`, context.path, ValidationSeverity.ERROR, ['Check validator configuration', 'Verify input data'], { validator: validator.name, error: errorMessage });
+                allErrors.push(validationError);
+            }
+        }
+        const duration = Date.now() - startTime;
+        const totalRules = results.reduce((sum, r) => sum + r.metrics.rulesExecuted, 0);
+        const totalCacheHits = results.reduce((sum, r) => sum + r.metrics.cacheStats.hits, 0);
+        const totalCacheMisses = results.reduce((sum, r) => sum + r.metrics.cacheStats.misses, 0);
+        const totalCache = totalCacheHits + totalCacheMisses;
+        return {
+            isValid: allErrors.length === 0,
+            errors: allErrors,
+            warnings: allWarnings,
+            metrics: {
+                duration,
+                rulesExecuted: totalRules,
+                validatorsUsed: applicableValidators.length,
+                cacheStats: {
+                    hits: totalCacheHits,
+                    misses: totalCacheMisses,
+                    hitRate: totalCache > 0 ? totalCacheHits / totalCache : 0
+                }
+            },
+            timestamp: new Date()
+        };
+    }
+    /**
+     * Create composite schema
+     */
+    createSchema() {
+        const childSchemas = this.validators.map(v => v.getSchema());
+        const allTypes = new Set();
+        const allRequired = new Set();
+        const allOptional = new Set();
+        for (const schema of childSchemas) {
+            schema.types.forEach(type => allTypes.add(type));
+            schema.requiredValidators.forEach(req => allRequired.add(req));
+            schema.optionalValidators.forEach(opt => allOptional.add(opt));
+        }
+        return {
+            name: this.name,
+            version: '1.0.0',
+            description: `Composite schema for ${this.name}`,
+            types: Array.from(allTypes),
+            requiredValidators: Array.from(allRequired),
+            optionalValidators: Array.from(allOptional),
+            properties: {
+                compositeOf: this.validators.map(v => v.name),
+                childSchemas
+            }
+        };
+    }
+}
+// ============================================================================
+// Validation Builder
+// ============================================================================
+/**
+ * Fluent API for building validators
+ */
+class FluentValidationBuilder {
+    constructor(name) {
+        this.validators = [];
+        this.rules = []; // ValidationRule<T>[] - avoiding circular dependency
+        this.config = {};
+        this.name = name;
+    }
+    /**
+     * Add a validator to the builder
+     */
+    addValidator(validator) {
+        this.validators.push(validator);
+        return this;
+    }
+    /**
+     * Add a rule to the builder
+     */
+    addRule(rule) {
+        this.rules.push(rule);
+        return this;
+    }
+    /**
+     * Set configuration for the validator
+     */
+    withConfig(config) {
+        this.config = { ...this.config, ...config };
+        return this;
+    }
+    /**
+     * Set validator name
+     */
+    withName(name) {
+        this.name = name;
+        return this;
+    }
+    /**
+     * Set validator priority
+     */
+    withPriority(priority) {
+        this.config.priority = priority;
+        return this;
+    }
+    /**
+     * Enable/disable caching
+     */
+    withCaching(enabled) {
+        this.config.cacheable = enabled;
+        return this;
+    }
+    /**
+     * Set validator timeout
+     */
+    withTimeout(timeout) {
+        this.config.timeout = timeout;
+        return this;
+    }
+    /**
+     * Build the composite validator
+     */
+    build() {
+        if (this.validators.length === 0) {
+            throw new ValidationError('Cannot build validator without any validators', { name: this.name });
+        }
+        if (this.validators.length === 1) {
+            return this.validators[0];
+        }
+        return new CompositeValidator(this.name, this.validators, this.config);
+    }
+}
+// ============================================================================
+// Specialized Validator Helpers
+// ============================================================================
+/**
+ * Base class for chemistry-specific validators
+ */
+class ChemistryValidator extends BaseValidator {
+    constructor() {
+        super(...arguments);
+        this.elementSymbols = new Set([
+            'H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne',
+            'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar', 'K', 'Ca',
+            'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn',
+            'Ga', 'Ge', 'As', 'Se', 'Br', 'Kr', 'Rb', 'Sr', 'Y', 'Zr',
+            'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 'Sn',
+            'Sb', 'Te', 'I', 'Xe', 'Cs', 'Ba', 'La', 'Ce', 'Pr', 'Nd',
+            'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb',
+            'Lu', 'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg',
+            'Tl', 'Pb', 'Bi', 'Po', 'At', 'Rn', 'Fr', 'Ra', 'Ac', 'Th',
+            'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk', 'Cf', 'Es', 'Fm',
+            'Md', 'No', 'Lr', 'Rf', 'Db', 'Sg', 'Bh', 'Hs', 'Mt', 'Ds',
+            'Rg', 'Cn', 'Nh', 'Fl', 'Mc', 'Lv', 'Ts', 'Og'
+        ]);
+    }
+    /**
+     * Validate element symbol
+     */
+    isValidElement(symbol) {
+        return this.elementSymbols.has(symbol);
+    }
+    /**
+     * Parse chemical formula into elements and counts
+     */
+    parseFormula(formula) {
+        const elements = new Map();
+        const regex = /([A-Z][a-z]?)(\d*)/g;
+        let match;
+        while ((match = regex.exec(formula)) !== null) {
+            const element = match[1];
+            const count = parseInt(match[2] || '1', 10);
+            if (!this.isValidElement(element)) {
+                throw new ValidationError(`Invalid element symbol: ${element}`, { element, formula });
+            }
+            elements.set(element, (elements.get(element) || 0) + count);
+        }
+        return elements;
+    }
+    /**
+     * Calculate molecular weight from formula
+     */
+    calculateMolecularWeight(elements) {
+        // Simplified atomic weights (should be imported from constants)
+        const atomicWeights = {
+            'H': 1.008, 'C': 12.011, 'N': 14.007, 'O': 15.999,
+            'F': 18.998, 'P': 30.974, 'S': 32.06, 'Cl': 35.45,
+            'K': 39.098, 'Ca': 40.078, 'Fe': 55.845, 'Cu': 63.546,
+            'Zn': 65.38, 'Br': 79.904, 'Ag': 107.868, 'I': 126.90
+            // Add more as needed
+        };
+        let totalWeight = 0;
+        for (const [element, count] of elements) {
+            const weight = atomicWeights[element];
+            if (weight === undefined) {
+                throw new ValidationError(`Atomic weight not available for element: ${element}`, { element });
+            }
+            totalWeight += weight * count;
+        }
+        return totalWeight;
+    }
+}
+// ============================================================================
+// Factory Functions
+// ============================================================================
+/**
+ * Create a validation builder
+ */
+function createValidator(name) {
+    return new FluentValidationBuilder(name);
+}
+/**
+ * Create a composite validator
+ */
+function createCompositeValidator(name, validators, config) {
+    return new CompositeValidator(name, validators, config);
+}
+/**
+ * Create a chemistry validator (helper for common chemistry validations)
+ */
+function createChemistryValidator(name, validationFn, canValidateFn, config) {
+    return new (class extends ChemistryValidator {
+        constructor() {
+            super(...arguments);
+            this.canValidate = canValidateFn;
+            this.validate = validationFn;
+        }
+    })(name, config);
+}
+
+/**
+ * @fileoverview Chemical Formula Validator
+ *
+ * Validates chemical formulas with support for:
+ * - Basic chemical formulas (H2O, C6H12O6)
+ * - Isotope notation (13C, 2H)
+ * - Charge notation (+, -, 2+, 3-)
+ * - Complex notation ([Cu(NH3)4]2+)
+ * - Radical notation (•)
+ *
+ * @version 1.0.0
+ * @author CREB Team
+ */
+/**
+ * Validator for chemical formulas
+ */
+class ChemicalFormulaValidator extends ChemistryValidator {
+    constructor(config = {}, formulaConfig = {}) {
+        super('chemical-formula', config);
+        this.formulaConfig = {
+            allowIsotopes: true,
+            allowRadicals: false,
+            allowCharges: true,
+            allowComplexes: true,
+            maxAtoms: 1000,
+            allowedElements: [], // Empty = all elements allowed
+            ...formulaConfig
+        };
+    }
+    /**
+     * Check if validator can handle the given value
+     */
+    canValidate(value) {
+        return typeof value === 'string' && value.trim().length > 0;
+    }
+    /**
+     * Validate chemical formula
+     */
+    async validate(value, context) {
+        const startTime = Date.now();
+        const errors = [];
+        const warnings = [];
+        try {
+            const formula = value.trim();
+            // Basic format validation
+            if (!this.hasValidFormat(formula)) {
+                // Check for specific types of invalid format
+                const invalidCharPattern = /[^A-Za-z0-9\(\)\[\]\+\-\s\•]/;
+                const unicodePattern = /[₀-₉⁰-⁹]/;
+                let errorMessage = `Invalid chemical formula format: ${formula}`;
+                let suggestions = [
+                    'Use standard chemical notation (e.g., H2O, CaCl2)',
+                    'Ensure element symbols start with uppercase letter',
+                    'Use numbers for atom counts, not letters'
+                ];
+                if (invalidCharPattern.test(formula)) {
+                    errorMessage = `Formula contains invalid character(s): ${formula}`;
+                    suggestions = [
+                        'Remove special characters like !, @, #, $, %, etc.',
+                        'Use only letters, numbers, parentheses, brackets, and +/- signs'
+                    ];
+                }
+                else if (unicodePattern.test(formula)) {
+                    errorMessage = `Formula contains invalid character(s) (Unicode subscripts/superscripts): ${formula}`;
+                    suggestions = [
+                        'Use regular numbers instead of subscript/superscript characters',
+                        'Example: Use H2O instead of H₂O'
+                    ];
+                }
+                errors.push(this.createError('INVALID_FORMULA_FORMAT', errorMessage, context.path, ValidationSeverity.ERROR, suggestions, { formula }, value));
+            }
+            else {
+                // Detailed validation
+                const validationResults = this.validateFormulaComponents(formula, context.path);
+                errors.push(...validationResults.errors);
+                warnings.push(...validationResults.warnings);
+            }
+            const duration = Date.now() - startTime;
+            const isValid = errors.length === 0;
+            return {
+                isValid,
+                errors,
+                warnings,
+                metrics: {
+                    duration,
+                    rulesExecuted: 1,
+                    validatorsUsed: 1,
+                    cacheStats: { hits: 0, misses: 1, hitRate: 0 }
+                },
+                timestamp: new Date()
+            };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            return this.createFailureResult([
+                this.createError('FORMULA_VALIDATION_ERROR', `Formula validation failed: ${errorMessage}`, context.path, ValidationSeverity.ERROR, ['Check formula syntax', 'Verify element symbols'], { error: errorMessage }, value)
+            ], context);
+        }
+    }
+    /**
+     * Basic format validation
+     */
+    hasValidFormat(formula) {
+        // Check for invalid characters first
+        const invalidCharPattern = /[^A-Za-z0-9\(\)\[\]\+\-\s\•]/;
+        if (invalidCharPattern.test(formula)) {
+            return false;
+        }
+        // Check for Unicode subscript/superscript characters
+        const unicodePattern = /[₀-₉⁰-⁹]/;
+        if (unicodePattern.test(formula)) {
+            return false;
+        }
+        // Basic regex for chemical formula validation
+        // Allows: Element symbols, numbers, brackets, charges, isotopes
+        const basicPattern = /^[A-Z][a-z]?(\d*[A-Z][a-z]?\d*)*(\[.*\])?[+-]?\d*[+-]?$/;
+        return basicPattern.test(formula.replace(/[\(\)\[\]]/g, ''));
+    }
+    /**
+     * Detailed component validation
+     */
+    validateFormulaComponents(formula, path) {
+        const errors = [];
+        const warnings = [];
+        try {
+            // Handle complex formulas with brackets
+            if (this.hasComplexNotation(formula)) {
+                if (!this.formulaConfig.allowComplexes) {
+                    errors.push(this.createError('COMPLEX_NOTATION_NOT_ALLOWED', 'Complex notation with brackets is not allowed', path, ValidationSeverity.ERROR, ['Use simple formula notation without brackets'], { formula }));
+                    return { errors, warnings };
+                }
+                return this.validateComplexFormula(formula, path);
+            }
+            // Handle charged formulas
+            if (this.hasChargeNotation(formula)) {
+                if (!this.formulaConfig.allowCharges) {
+                    errors.push(this.createError('CHARGE_NOTATION_NOT_ALLOWED', 'Charge notation is not allowed', path, ValidationSeverity.ERROR, ['Remove charge notation from formula'], { formula }));
+                    return { errors, warnings };
+                }
+                return this.validateChargedFormula(formula, path);
+            }
+            // Validate simple formula
+            return this.validateSimpleFormula(formula, path);
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            errors.push(this.createError('COMPONENT_VALIDATION_ERROR', `Component validation failed: ${errorMessage}`, path, ValidationSeverity.ERROR, ['Check formula structure'], { error: errorMessage }));
+            return { errors, warnings };
+        }
+    }
+    /**
+     * Validate simple chemical formula
+     */
+    validateSimpleFormula(formula, path) {
+        const errors = [];
+        const warnings = [];
+        // Extract elements and counts
+        const elementPattern = /([A-Z][a-z]?)(\d*)/g;
+        const elements = new Map();
+        let totalAtoms = 0;
+        let match;
+        while ((match = elementPattern.exec(formula)) !== null) {
+            const element = match[1];
+            const count = parseInt(match[2] || '1', 10);
+            // Validate element symbol
+            if (!this.isValidElement(element)) {
+                errors.push(this.createError('INVALID_ELEMENT', `Invalid element symbol: ${element}`, path, ValidationSeverity.ERROR, [
+                    'Check periodic table for correct element symbols',
+                    'Ensure proper capitalization (first letter uppercase, second lowercase)'
+                ], { element, formula }));
+            }
+            // Check if element is allowed
+            if (this.formulaConfig.allowedElements.length > 0 &&
+                !this.formulaConfig.allowedElements.includes(element)) {
+                errors.push(this.createError('ELEMENT_NOT_ALLOWED', `Element ${element} is not allowed`, path, ValidationSeverity.ERROR, [`Use only allowed elements: ${this.formulaConfig.allowedElements.join(', ')}`], { element, allowedElements: this.formulaConfig.allowedElements }));
+            }
+            // Check for isotope notation
+            if (/^\d+[A-Z]/.test(element)) {
+                if (!this.formulaConfig.allowIsotopes) {
+                    errors.push(this.createError('ISOTOPE_NOTATION_NOT_ALLOWED', 'Isotope notation is not allowed', path, ValidationSeverity.ERROR, ['Remove isotope numbers from element symbols'], { element, formula }));
+                }
+            }
+            elements.set(element, count);
+            totalAtoms += count;
+        }
+        // Check maximum atoms limit
+        if (totalAtoms > this.formulaConfig.maxAtoms) {
+            errors.push(this.createError('TOO_MANY_ATOMS', `Formula contains ${totalAtoms} atoms, maximum allowed is ${this.formulaConfig.maxAtoms}`, path, ValidationSeverity.ERROR, ['Simplify the formula', 'Use smaller atom counts'], { totalAtoms, maxAtoms: this.formulaConfig.maxAtoms }));
+        }
+        // Warnings for unusual patterns
+        if (totalAtoms > 100) {
+            warnings.push(this.createError('LARGE_MOLECULE', `Formula contains ${totalAtoms} atoms, which is unusually large`, path, ValidationSeverity.WARNING, ['Verify the formula is correct', 'Consider if this represents a polymer unit'], { totalAtoms }));
+        }
+        return { errors, warnings };
+    }
+    /**
+     * Validate charged formula
+     */
+    validateChargedFormula(formula, path) {
+        const errors = [];
+        const warnings = [];
+        // Extract charge part
+        const chargeMatch = formula.match(/([+-]\d*|\d*[+-])$/);
+        if (!chargeMatch) {
+            errors.push(this.createError('INVALID_CHARGE_FORMAT', 'Invalid charge notation format', path, ValidationSeverity.ERROR, ['Use format like +, -, 2+, 3- for charges'], { formula }));
+            return { errors, warnings };
+        }
+        const charge = chargeMatch[1];
+        const neutralFormula = formula.replace(chargeMatch[0], '');
+        // Validate the neutral part
+        const neutralResults = this.validateSimpleFormula(neutralFormula, path);
+        errors.push(...neutralResults.errors);
+        warnings.push(...neutralResults.warnings);
+        // Validate charge format
+        if (!/^[+-]\d*$|^\d*[+-]$/.test(charge)) {
+            errors.push(this.createError('INVALID_CHARGE_VALUE', `Invalid charge value: ${charge}`, path, ValidationSeverity.ERROR, ['Use valid charge notation (e.g., +, -, 2+, 3-)'], { charge, formula }));
+        }
+        return { errors, warnings };
+    }
+    /**
+     * Validate complex formula with brackets
+     */
+    validateComplexFormula(formula, path) {
+        const errors = [];
+        const warnings = [];
+        // Check bracket balance
+        if (!this.areBracketsBalanced(formula)) {
+            errors.push(this.createError('UNBALANCED_BRACKETS', 'Unbalanced brackets in complex formula', path, ValidationSeverity.ERROR, ['Ensure all brackets are properly paired', 'Check for missing opening or closing brackets'], { formula }));
+            return { errors, warnings };
+        }
+        // For complex formulas, we would need more sophisticated parsing
+        // This is a simplified validation
+        warnings.push(this.createError('COMPLEX_FORMULA_LIMITED_VALIDATION', 'Limited validation for complex formulas', path, ValidationSeverity.WARNING, ['Complex formulas receive basic validation only'], { formula }));
+        return { errors, warnings };
+    }
+    /**
+     * Check if formula has complex notation
+     */
+    hasComplexNotation(formula) {
+        return /[\[\]]/.test(formula);
+    }
+    /**
+     * Check if formula has charge notation
+     */
+    hasChargeNotation(formula) {
+        return /[+-]\d*$|\d*[+-]$/.test(formula);
+    }
+    /**
+     * Check if brackets are balanced
+     */
+    areBracketsBalanced(formula) {
+        const stack = [];
+        const pairs = { '[': ']', '(': ')' };
+        for (const char of formula) {
+            if (char in pairs) {
+                stack.push(char);
+            }
+            else if (Object.values(pairs).includes(char)) {
+                const last = stack.pop();
+                if (!last || pairs[last] !== char) {
+                    return false;
+                }
+            }
+        }
+        return stack.length === 0;
+    }
+    /**
+     * Create validation schema
+     */
+    createSchema() {
+        return {
+            name: this.name,
+            version: '1.0.0',
+            description: 'Chemical formula validation schema',
+            types: ['string'],
+            requiredValidators: [],
+            optionalValidators: [],
+            properties: {
+                config: this.formulaConfig,
+                examples: ['H2O', 'CaCl2', 'C6H12O6', '[Cu(NH3)4]2+'],
+                patterns: [
+                    'Simple formulas: ElementCount (e.g., H2O)',
+                    'Charged formulas: Formula+/- (e.g., Ca2+)',
+                    'Complex formulas: [Formula]Charge (e.g., [Cu(NH3)4]2+)'
+                ]
+            }
+        };
+    }
+}
+
+/**
+ * @fileoverview Thermodynamic Properties Validator
+ *
+ * Validates thermodynamic properties with:
+ * - Temperature range validation
+ * - Pressure range validation
+ * - Enthalpy, entropy, and heat capacity validation
+ * - Cross-property consistency checks
+ * - Physical property validation
+ *
+ * @version 1.0.0
+ * @author CREB Team
+ */
+/**
+ * Validator for thermodynamic properties
+ */
+class ThermodynamicPropertiesValidator extends ChemistryValidator {
+    constructor(config = {}, thermoConfig = {}) {
+        super('thermodynamic-properties', config);
+        this.thermoConfig = {
+            temperatureRange: { min: 0, max: 10000 }, // Kelvin
+            pressureRange: { min: 0, max: 1e9 }, // Pascal
+            enthalpyRange: { min: -1e4, max: 10000 }, // kJ/mol
+            entropyRange: { min: 0, max: 1000 }, // J/(mol·K)
+            heatCapacityRange: { min: 0, max: 1000 }, // J/(mol·K)
+            ...thermoConfig
+        };
+    }
+    /**
+     * Check if validator can handle the given value
+     */
+    canValidate(value) {
+        return typeof value === 'object' && value !== null && ('enthalpyFormation' in value ||
+            'entropy' in value ||
+            'heatCapacity' in value ||
+            'gibbsEnergy' in value ||
+            'meltingPoint' in value ||
+            'boilingPoint' in value ||
+            'density' in value ||
+            'temperature' in value ||
+            'pressure' in value ||
+            'enthalpy' in value);
+    }
+    /**
+     * Validate thermodynamic properties
+     */
+    async validate(value, context) {
+        const startTime = Date.now();
+        const errors = [];
+        const warnings = [];
+        try {
+            // Validate individual properties
+            this.validateTemperature(value, errors, warnings, context.path);
+            this.validatePressure(value, errors, warnings, context.path);
+            this.validateEnthalpy(value, errors, warnings, context.path);
+            this.validateEntropy(value, errors, warnings, context.path);
+            this.validateHeatCapacity(value, errors, warnings, context.path);
+            this.validateGibbsEnergy(value, errors, warnings, context.path);
+            this.validateTemperatures(value, errors, warnings, context.path);
+            this.validateDensity(value, errors, warnings, context.path);
+            // Cross-property consistency checks
+            this.validateConsistency(value, errors, warnings, context.path);
+            const duration = Date.now() - startTime;
+            const isValid = errors.length === 0;
+            return {
+                isValid,
+                errors,
+                warnings,
+                metrics: {
+                    duration,
+                    rulesExecuted: 7, // Number of validation methods called
+                    validatorsUsed: 1,
+                    cacheStats: { hits: 0, misses: 1, hitRate: 0 }
+                },
+                timestamp: new Date()
+            };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            return this.createFailureResult([
+                this.createError('THERMODYNAMIC_VALIDATION_ERROR', `Thermodynamic validation failed: ${errorMessage}`, context.path, ValidationSeverity.ERROR, ['Check property values', 'Verify units are correct'], { error: errorMessage }, value)
+            ], context);
+        }
+    }
+    /**
+     * Validate enthalpy of formation
+     */
+    validateEnthalpy(properties, errors, warnings, path) {
+        if (properties.enthalpyFormation === undefined) {
+            return;
+        }
+        const enthalpy = properties.enthalpyFormation;
+        const { min, max } = this.thermoConfig.enthalpyRange;
+        if (typeof enthalpy !== 'number' || !isFinite(enthalpy)) {
+            errors.push(this.createError('INVALID_ENTHALPY_VALUE', 'Enthalpy of formation must be a finite number', [...path, 'enthalpyFormation'], ValidationSeverity.ERROR, ['Provide a valid numerical value in kJ/mol'], { value: enthalpy }));
+            return;
+        }
+        if (enthalpy < min || enthalpy > max) {
+            errors.push(this.createError('ENTHALPY_OUT_OF_RANGE', `Enthalpy of formation ${enthalpy} kJ/mol is outside valid range [${min}, ${max}]`, [...path, 'enthalpyFormation'], ValidationSeverity.ERROR, [`Provide value between ${min} and ${max} kJ/mol`], { value: enthalpy, min, max }));
+        }
+        // Warning for extreme values
+        if (Math.abs(enthalpy) > 5000) {
+            warnings.push(this.createError('EXTREME_ENTHALPY_VALUE', `Enthalpy of formation ${enthalpy} kJ/mol is unusually large`, [...path, 'enthalpyFormation'], ValidationSeverity.WARNING, ['Verify the value is correct', 'Check if units are appropriate'], { value: enthalpy }));
+        }
+    }
+    /**
+     * Validate entropy
+     */
+    validateEntropy(properties, errors, warnings, path) {
+        if (properties.entropy === undefined) {
+            return;
+        }
+        const entropy = properties.entropy;
+        const { min, max } = this.thermoConfig.entropyRange;
+        if (typeof entropy !== 'number' || !isFinite(entropy)) {
+            errors.push(this.createError('INVALID_ENTROPY_VALUE', 'Entropy must be a finite number', [...path, 'entropy'], ValidationSeverity.ERROR, ['Provide a valid numerical value in J/(mol·K)'], { value: entropy }));
+            return;
+        }
+        if (entropy < min) {
+            errors.push(this.createError('NEGATIVE_ENTROPY', `Entropy ${entropy} J/(mol·K) cannot be negative`, [...path, 'entropy'], ValidationSeverity.ERROR, ['Entropy must be positive according to the third law of thermodynamics'], { value: entropy }));
+        }
+        if (entropy > max) {
+            warnings.push(this.createError('VERY_HIGH_ENTROPY', `Entropy ${entropy} J/(mol·K) is unusually high`, [...path, 'entropy'], ValidationSeverity.WARNING, ['Verify the value is correct', 'Check for large molecular complexity'], { value: entropy, max }));
+        }
+    }
+    /**
+     * Validate heat capacity
+     */
+    validateHeatCapacity(properties, errors, warnings, path) {
+        if (properties.heatCapacity === undefined) {
+            return;
+        }
+        const cp = properties.heatCapacity;
+        const { min, max } = this.thermoConfig.heatCapacityRange;
+        if (typeof cp !== 'number' || !isFinite(cp)) {
+            errors.push(this.createError('INVALID_HEAT_CAPACITY_VALUE', 'Heat capacity must be a finite number', [...path, 'heatCapacity'], ValidationSeverity.ERROR, ['Provide a valid numerical value in J/(mol·K)'], { value: cp }));
+            return;
+        }
+        if (cp < min) {
+            errors.push(this.createError('NEGATIVE_HEAT_CAPACITY', `Heat capacity ${cp} J/(mol·K) cannot be negative`, [...path, 'heatCapacity'], ValidationSeverity.ERROR, ['Heat capacity must be positive'], { value: cp }));
+        }
+        if (cp > max) {
+            warnings.push(this.createError('VERY_HIGH_HEAT_CAPACITY', `Heat capacity ${cp} J/(mol·K) is unusually high`, [...path, 'heatCapacity'], ValidationSeverity.WARNING, ['Verify the value is correct', 'Check molecular complexity'], { value: cp, max }));
+        }
+    }
+    /**
+     * Validate Gibbs free energy
+     */
+    validateGibbsEnergy(properties, errors, warnings, path) {
+        if (properties.gibbsEnergy === undefined) {
+            return;
+        }
+        const gibbs = properties.gibbsEnergy;
+        if (typeof gibbs !== 'number' || !isFinite(gibbs)) {
+            errors.push(this.createError('INVALID_GIBBS_ENERGY_VALUE', 'Gibbs free energy must be a finite number', [...path, 'gibbsEnergy'], ValidationSeverity.ERROR, ['Provide a valid numerical value in kJ/mol'], { value: gibbs }));
+            return;
+        }
+        // Check consistency with enthalpy if both are present
+        if (properties.enthalpyFormation !== undefined && properties.entropy !== undefined) {
+            const expectedGibbs = properties.enthalpyFormation - (298.15 * properties.entropy / 1000);
+            const difference = Math.abs(gibbs - expectedGibbs);
+            if (difference > 50) { // 50 kJ/mol tolerance
+                warnings.push(this.createError('GIBBS_ENERGY_INCONSISTENCY', `Gibbs energy may be inconsistent with enthalpy and entropy (difference: ${difference.toFixed(1)} kJ/mol)`, [...path, 'gibbsEnergy'], ValidationSeverity.WARNING, ['Check if all values are at same temperature', 'Verify calculation accuracy'], {
+                    gibbsProvided: gibbs,
+                    gibbsCalculated: expectedGibbs,
+                    difference
+                }));
+            }
+        }
+    }
+    /**
+     * Validate temperature properties
+     */
+    validateTemperatures(properties, errors, warnings, path) {
+        const { meltingPoint, boilingPoint } = properties;
+        const { min, max } = this.thermoConfig.temperatureRange;
+        // Validate melting point
+        if (meltingPoint !== undefined) {
+            if (typeof meltingPoint !== 'number' || !isFinite(meltingPoint)) {
+                errors.push(this.createError('INVALID_MELTING_POINT', 'Melting point must be a finite number', [...path, 'meltingPoint'], ValidationSeverity.ERROR, ['Provide a valid temperature in Kelvin'], { value: meltingPoint }));
+            }
+            else if (meltingPoint < min || meltingPoint > max) {
+                errors.push(this.createError('MELTING_POINT_OUT_OF_RANGE', `Melting point ${meltingPoint} K is outside valid range [${min}, ${max}]`, [...path, 'meltingPoint'], ValidationSeverity.ERROR, [`Provide temperature between ${min} and ${max} K`], { value: meltingPoint, min, max }));
+            }
+        }
+        // Validate boiling point
+        if (boilingPoint !== undefined) {
+            if (typeof boilingPoint !== 'number' || !isFinite(boilingPoint)) {
+                errors.push(this.createError('INVALID_BOILING_POINT', 'Boiling point must be a finite number', [...path, 'boilingPoint'], ValidationSeverity.ERROR, ['Provide a valid temperature in Kelvin'], { value: boilingPoint }));
+            }
+            else if (boilingPoint < min || boilingPoint > max) {
+                errors.push(this.createError('BOILING_POINT_OUT_OF_RANGE', `Boiling point ${boilingPoint} K is outside valid range [${min}, ${max}]`, [...path, 'boilingPoint'], ValidationSeverity.ERROR, [`Provide temperature between ${min} and ${max} K`], { value: boilingPoint, min, max }));
+            }
+        }
+        // Validate relationship between melting and boiling points
+        if (meltingPoint !== undefined && boilingPoint !== undefined) {
+            if (meltingPoint >= boilingPoint) {
+                errors.push(this.createError('INVALID_PHASE_TRANSITION', `Melting point (${meltingPoint} K) must be less than boiling point (${boilingPoint} K)`, path, ValidationSeverity.ERROR, ['Check temperature values', 'Ensure proper phase transition order'], { meltingPoint, boilingPoint }));
+            }
+        }
+    }
+    /**
+     * Validate density
+     */
+    validateDensity(properties, errors, warnings, path) {
+        if (properties.density === undefined) {
+            return;
+        }
+        const density = properties.density;
+        if (typeof density !== 'number' || !isFinite(density)) {
+            errors.push(this.createError('INVALID_DENSITY_VALUE', 'Density must be a finite number', [...path, 'density'], ValidationSeverity.ERROR, ['Provide a valid numerical value in g/cm³'], { value: density }));
+            return;
+        }
+        if (density <= 0) {
+            errors.push(this.createError('NEGATIVE_DENSITY', `Density ${density} g/cm³ must be positive`, [...path, 'density'], ValidationSeverity.ERROR, ['Density cannot be zero or negative'], { value: density }));
+        }
+        if (density > 25) { // Osmium has highest density ~22.6 g/cm³
+            warnings.push(this.createError('EXTREMELY_HIGH_DENSITY', `Density ${density} g/cm³ is extremely high`, [...path, 'density'], ValidationSeverity.WARNING, ['Verify the value is correct', 'Check if dealing with compressed material'], { value: density }));
+        }
+    }
+    /**
+     * Validate cross-property consistency
+     */
+    validateConsistency(properties, errors, warnings, path) {
+        // Additional consistency checks can be added here
+        // For example, checking if entropy correlates with molecular complexity
+        if (properties.entropy !== undefined && properties.heatCapacity !== undefined) {
+            // At room temperature, Cp is typically larger than S for most compounds
+            if (properties.heatCapacity < properties.entropy * 0.5) {
+                warnings.push(this.createError('UNUSUAL_CP_S_RATIO', 'Heat capacity seems unusually low compared to entropy', path, ValidationSeverity.WARNING, ['Verify both values are correct', 'Check temperature conditions'], {
+                    heatCapacity: properties.heatCapacity,
+                    entropy: properties.entropy
+                }));
+            }
+        }
+    }
+    /**
+     * Create validation schema
+     */
+    createSchema() {
+        return {
+            name: this.name,
+            version: '1.0.0',
+            description: 'Thermodynamic properties validation schema',
+            types: ['object'],
+            requiredValidators: [],
+            optionalValidators: [],
+            properties: {
+                config: this.thermoConfig,
+                supportedProperties: [
+                    'enthalpyFormation',
+                    'entropy',
+                    'heatCapacity',
+                    'gibbsEnergy',
+                    'meltingPoint',
+                    'boilingPoint',
+                    'density'
+                ],
+                units: {
+                    enthalpyFormation: 'kJ/mol',
+                    entropy: 'J/(mol·K)',
+                    heatCapacity: 'J/(mol·K)',
+                    gibbsEnergy: 'kJ/mol',
+                    meltingPoint: 'K',
+                    boilingPoint: 'K',
+                    density: 'g/cm³'
+                },
+                validationRules: [
+                    'All values must be finite numbers',
+                    'Entropy and heat capacity must be positive',
+                    'Melting point must be less than boiling point',
+                    'Cross-property consistency checks applied'
+                ]
+            }
+        };
+    }
+    /**
+     * Validate temperature values
+     */
+    validateTemperature(properties, errors, warnings, path) {
+        if (properties.temperature === undefined) {
+            return;
+        }
+        const temperature = properties.temperature;
+        if (typeof temperature !== 'number' || !isFinite(temperature)) {
+            errors.push(this.createError('INVALID_TEMPERATURE_VALUE', 'Temperature must be a finite number', [...path, 'temperature'], ValidationSeverity.ERROR, ['Provide a valid numerical value in Kelvin'], { value: temperature }));
+            return;
+        }
+        // Absolute zero check
+        if (temperature < 0) {
+            errors.push(this.createError('NEGATIVE_TEMPERATURE', `Temperature ${temperature} K is below absolute zero`, [...path, 'temperature'], ValidationSeverity.ERROR, ['Temperature cannot be negative in Kelvin scale'], { value: temperature }));
+        }
+        // Extreme temperature check
+        if (temperature > 10000) {
+            warnings.push(this.createError('EXTREME_TEMPERATURE', `Temperature ${temperature} K is extremely high`, [...path, 'temperature'], ValidationSeverity.WARNING, ['Verify the temperature value is correct'], { value: temperature }));
+        }
+    }
+    /**
+     * Validate pressure values
+     */
+    validatePressure(properties, errors, warnings, path) {
+        if (properties.pressure === undefined) {
+            return;
+        }
+        const pressure = properties.pressure;
+        if (typeof pressure !== 'number' || !isFinite(pressure)) {
+            errors.push(this.createError('INVALID_PRESSURE_VALUE', 'Pressure must be a finite number', [...path, 'pressure'], ValidationSeverity.ERROR, ['Provide a valid numerical value in Pascal'], { value: pressure }));
+            return;
+        }
+        if (pressure < 0) {
+            errors.push(this.createError('NEGATIVE_PRESSURE', `Pressure ${pressure} Pa cannot be negative`, [...path, 'pressure'], ValidationSeverity.ERROR, ['Pressure must be positive'], { value: pressure }));
+        }
+    }
+}
+
+/**
+ * @fileoverview Validation Metrics Dashboard and Performance Monitoring
+ *
+ * Provides comprehensive performance monitoring and metrics collection
+ * for the validation pipeline with real-time dashboard capabilities.
+ */
+/**
+ * Validation Metrics Dashboard
+ *
+ * Provides real-time monitoring and analytics for validation performance
+ */
+class ValidationMetricsDashboard extends events.EventEmitter {
+    constructor(config = {}) {
+        super();
+        this.validationTimes = [];
+        this.recentValidations = [];
+        this.memorySnapshots = [];
+        this.config = {
+            updateInterval: 1000,
+            maxTimeSeriesPoints: 100,
+            realTimeUpdates: true,
+            memoryMonitoring: true,
+            percentileTracking: true,
+            ...config
+        };
+        this.startTime = new Date();
+        this.metrics = this.initializeMetrics();
+        if (this.config.realTimeUpdates) {
+            this.startRealTimeUpdates();
+        }
+    }
+    /**
+     * Record a validation result for metrics tracking
+     */
+    recordValidation(result) {
+        const now = new Date();
+        const success = result.isValid;
+        const duration = result.metrics.duration;
+        // Update basic counters
+        this.metrics.totalValidations++;
+        if (success) {
+            this.metrics.successfulValidations++;
+        }
+        else {
+            this.metrics.failedValidations++;
+        }
+        // Update timing metrics
+        this.validationTimes.push(duration);
+        this.recentValidations.push({ timestamp: now, duration, success });
+        // Update min/max/average times
+        this.updateTimingMetrics(duration);
+        // Update cache metrics
+        if (result.fromCache) {
+            this.updateCacheMetrics();
+        }
+        // Record error distribution
+        if (!success) {
+            this.recordErrors(result.errors);
+        }
+        // Update validator-specific metrics
+        this.updateValidatorMetrics(result);
+        // Memory monitoring
+        if (this.config.memoryMonitoring) {
+            this.recordMemoryUsage();
+        }
+        // Cleanup old data
+        this.cleanupOldData();
+        // Emit update event
+        this.emit('metrics:updated', this.metrics);
+    }
+    /**
+     * Get current performance metrics
+     */
+    getMetrics() {
+        this.updateDerivedMetrics();
+        return { ...this.metrics };
+    }
+    /**
+     * Get metrics for a specific time range
+     */
+    getMetricsForTimeRange(startTime, endTime) {
+        const filteredValidations = this.recentValidations.filter(v => v.timestamp >= startTime && v.timestamp <= endTime);
+        const rangeMetrics = this.calculateMetricsForValidations(filteredValidations);
+        return rangeMetrics;
+    }
+    /**
+     * Get real-time dashboard data formatted for display
+     */
+    getDashboardData() {
+        const current = this.getMetrics();
+        return {
+            summary: {
+                total: current.totalValidations,
+                successful: current.successfulValidations,
+                failed: current.failedValidations,
+                successRate: this.calculateSuccessRate(),
+                avgTime: current.averageValidationTime,
+                cacheHitRate: current.cacheHitRate
+            },
+            performance: {
+                currentRate: current.validationsPerSecond,
+                avgTime: current.averageValidationTime,
+                peakTime: current.peakValidationTime,
+                minTime: current.minValidationTime,
+                percentiles: current.percentiles
+            },
+            memory: current.memoryUsage,
+            validators: Array.from(current.validatorMetrics.values()),
+            timeSeries: current.timeSeries.slice(-20), // Last 20 data points
+            errors: this.getTopErrors(10)
+        };
+    }
+    /**
+     * Reset all metrics
+     */
+    reset() {
+        this.metrics = this.initializeMetrics();
+        this.validationTimes = [];
+        this.recentValidations = [];
+        this.memorySnapshots = [];
+        this.startTime = new Date();
+        this.emit('metrics:reset');
+    }
+    /**
+     * Export metrics to JSON
+     */
+    exportMetrics() {
+        return JSON.stringify({
+            metrics: this.getMetrics(),
+            metadata: {
+                exportTime: new Date(),
+                uptime: Date.now() - this.startTime.getTime(),
+                config: this.config
+            }
+        }, null, 2);
+    }
+    /**
+     * Stop the dashboard and cleanup resources
+     */
+    stop() {
+        if (this.updateTimer) {
+            clearInterval(this.updateTimer);
+            this.updateTimer = undefined;
+        }
+        this.removeAllListeners();
+    }
+    // ============================================================================
+    // Private Methods
+    // ============================================================================
+    initializeMetrics() {
+        return {
+            totalValidations: 0,
+            successfulValidations: 0,
+            failedValidations: 0,
+            averageValidationTime: 0,
+            peakValidationTime: 0,
+            minValidationTime: Infinity,
+            validationsPerSecond: 0,
+            cacheHitRate: 0,
+            memoryUsage: {
+                current: 0,
+                peak: 0,
+                average: 0,
+                allocationRate: 0
+            },
+            errorDistribution: new Map(),
+            percentiles: {
+                p50: 0,
+                p75: 0,
+                p90: 0,
+                p95: 0,
+                p99: 0
+            },
+            validatorMetrics: new Map(),
+            timeSeries: []
+        };
+    }
+    startRealTimeUpdates() {
+        this.updateTimer = setInterval(() => {
+            this.updateDerivedMetrics();
+            this.addTimeSeriesPoint();
+            this.emit('metrics:realtime', this.metrics);
+        }, this.config.updateInterval);
+    }
+    updateTimingMetrics(duration) {
+        this.metrics.peakValidationTime = Math.max(this.metrics.peakValidationTime, duration);
+        this.metrics.minValidationTime = Math.min(this.metrics.minValidationTime, duration);
+        // Calculate rolling average
+        const sum = this.validationTimes.reduce((a, b) => a + b, 0);
+        this.metrics.averageValidationTime = sum / this.validationTimes.length;
+    }
+    updateCacheMetrics() {
+        // Cache hit rate calculation would be based on cache-specific logic
+        // This is a simplified version
+        const totalWithCache = this.recentValidations.length;
+        const cacheHits = this.recentValidations.filter(v => v.duration < this.metrics.averageValidationTime * 0.1).length;
+        this.metrics.cacheHitRate = totalWithCache > 0 ? (cacheHits / totalWithCache) * 100 : 0;
+    }
+    recordErrors(errors) {
+        errors.forEach(error => {
+            const errorType = error.code || 'UNKNOWN_ERROR';
+            const current = this.metrics.errorDistribution.get(errorType) || 0;
+            this.metrics.errorDistribution.set(errorType, current + 1);
+        });
+    }
+    updateValidatorMetrics(result) {
+        // This would be updated based on which validators were used
+        // For now, we'll create a generic entry
+        const validatorName = 'default-validator';
+        let validatorMetrics = this.metrics.validatorMetrics.get(validatorName);
+        if (!validatorMetrics) {
+            validatorMetrics = {
+                name: validatorName,
+                executions: 0,
+                averageTime: 0,
+                successRate: 0,
+                errorCount: 0,
+                cacheHitRate: 0
+            };
+            this.metrics.validatorMetrics.set(validatorName, validatorMetrics);
+        }
+        validatorMetrics.executions++;
+        validatorMetrics.averageTime =
+            (validatorMetrics.averageTime * (validatorMetrics.executions - 1) + result.metrics.duration) /
+                validatorMetrics.executions;
+        if (!result.isValid) {
+            validatorMetrics.errorCount++;
+        }
+        validatorMetrics.successRate =
+            ((validatorMetrics.executions - validatorMetrics.errorCount) / validatorMetrics.executions) * 100;
+    }
+    recordMemoryUsage() {
+        if (typeof process !== 'undefined' && process.memoryUsage) {
+            const memUsage = process.memoryUsage();
+            const currentMB = memUsage.heapUsed / 1024 / 1024;
+            this.metrics.memoryUsage.current = currentMB;
+            this.metrics.memoryUsage.peak = Math.max(this.metrics.memoryUsage.peak, currentMB);
+            this.memorySnapshots.push({ timestamp: new Date(), usage: currentMB });
+            // Calculate average
+            const sum = this.memorySnapshots.reduce((a, b) => a + b.usage, 0);
+            this.metrics.memoryUsage.average = sum / this.memorySnapshots.length;
+        }
+    }
+    updateDerivedMetrics() {
+        // Update validations per second
+        const oneSecondAgo = new Date(Date.now() - 1000);
+        const recentCount = this.recentValidations.filter(v => v.timestamp > oneSecondAgo).length;
+        this.metrics.validationsPerSecond = recentCount;
+        // Update percentiles if enabled
+        if (this.config.percentileTracking && this.validationTimes.length > 0) {
+            this.calculatePercentiles();
+        }
+    }
+    calculatePercentiles() {
+        const sorted = [...this.validationTimes].sort((a, b) => a - b);
+        sorted.length;
+        this.metrics.percentiles = {
+            p50: this.getPercentile(sorted, 0.5),
+            p75: this.getPercentile(sorted, 0.75),
+            p90: this.getPercentile(sorted, 0.9),
+            p95: this.getPercentile(sorted, 0.95),
+            p99: this.getPercentile(sorted, 0.99)
+        };
+    }
+    getPercentile(sortedArray, percentile) {
+        const index = Math.ceil(sortedArray.length * percentile) - 1;
+        return sortedArray[Math.max(0, index)] || 0;
+    }
+    addTimeSeriesPoint() {
+        const now = new Date();
+        const oneMinuteAgo = new Date(now.getTime() - 60000);
+        const recentValidations = this.recentValidations.filter(v => v.timestamp > oneMinuteAgo);
+        const errorCount = recentValidations.filter(v => !v.success).length;
+        const errorRate = recentValidations.length > 0 ? (errorCount / recentValidations.length) * 100 : 0;
+        const point = {
+            timestamp: now,
+            validationsPerSecond: this.metrics.validationsPerSecond,
+            averageResponseTime: this.metrics.averageValidationTime,
+            errorRate,
+            memoryUsage: this.metrics.memoryUsage.current
+        };
+        this.metrics.timeSeries.push(point);
+        // Keep only the last N points
+        if (this.metrics.timeSeries.length > this.config.maxTimeSeriesPoints) {
+            this.metrics.timeSeries = this.metrics.timeSeries.slice(-this.config.maxTimeSeriesPoints);
+        }
+    }
+    cleanupOldData() {
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        // Keep only recent validations (last 5 minutes)
+        this.recentValidations = this.recentValidations.filter(v => v.timestamp > fiveMinutesAgo);
+        // Keep only recent memory snapshots
+        this.memorySnapshots = this.memorySnapshots.filter(s => s.timestamp > fiveMinutesAgo);
+        // Keep only recent validation times (last 1000 entries)
+        if (this.validationTimes.length > 1000) {
+            this.validationTimes = this.validationTimes.slice(-1e3);
+        }
+    }
+    calculateSuccessRate() {
+        return this.metrics.totalValidations > 0 ?
+            (this.metrics.successfulValidations / this.metrics.totalValidations) * 100 : 0;
+    }
+    getTopErrors(count) {
+        const totalErrors = Array.from(this.metrics.errorDistribution.values()).reduce((a, b) => a + b, 0);
+        return Array.from(this.metrics.errorDistribution.entries())
+            .map(([type, count]) => ({
+            type,
+            count,
+            percentage: totalErrors > 0 ? (count / totalErrors) * 100 : 0
+        }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, count);
+    }
+    calculateMetricsForValidations(validations) {
+        // Implementation for calculating metrics for a specific set of validations
+        // This is a simplified version - full implementation would calculate all metrics
+        const total = validations.length;
+        const successful = validations.filter(v => v.success).length;
+        const failed = total - successful;
+        const durations = validations.map(v => v.duration);
+        const avgTime = durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : 0;
+        return {
+            ...this.initializeMetrics(),
+            totalValidations: total,
+            successfulValidations: successful,
+            failedValidations: failed,
+            averageValidationTime: avgTime,
+            peakValidationTime: Math.max(...durations, 0),
+            minValidationTime: Math.min(...durations, Infinity)
+        };
+    }
+}
+/**
+ * Global metrics dashboard instance
+ */
+new ValidationMetricsDashboard();
+
+/**
+ * CREB Data Validation Module
+ *
+ * Provides comprehensive validation capabilities for chemistry data:
+ * - Composable validator architecture
+ * - Async validation support with dependency management
+ * - Performance optimization with caching and parallelization
+ * - Chemical-specific validation capabilities
+ *
+ * @version 1.0.0
+ * @author CREB Team
+ */
+// Core Pipeline and Types
+/**
+ * Creates a new validation pipeline with common defaults
+ */
+function createValidationPipeline() {
+    return new ValidationPipeline({
+        timeout: 30000,
+        enableCaching: true,
+        cacheTTL: 300000,
+        maxCacheSize: 1000,
+        continueOnError: true,
+        parallel: {
+            enabled: true,
+            maxConcurrency: 10
+        },
+        monitoring: {
+            enabled: true,
+            sampleRate: 1.0
+        }
+    });
+}
+/**
+ * Creates a performance-optimized validation pipeline
+ */
+function createFastValidationPipeline() {
+    return new ValidationPipeline({
+        timeout: 10000,
+        enableCaching: true,
+        cacheTTL: 600000,
+        maxCacheSize: 5000,
+        continueOnError: false,
+        parallel: {
+            enabled: true,
+            maxConcurrency: 20
+        },
+        monitoring: {
+            enabled: true,
+            sampleRate: 0.1
+        }
+    });
+}
+/**
+ * Creates a thorough validation pipeline for comprehensive checks
+ */
+function createThoroughValidationPipeline() {
+    return new ValidationPipeline({
+        timeout: 120000,
+        enableCaching: false,
+        cacheTTL: 0,
+        maxCacheSize: 0,
+        continueOnError: true,
+        parallel: {
+            enabled: false,
+            maxConcurrency: 1
+        },
+        monitoring: {
+            enabled: true,
+            sampleRate: 1.0
+        }
+    });
+}
+/**
+ * Quick validation for chemical formulas
+ */
+async function validateChemicalFormula(formula, config) {
+    const validator = new ChemicalFormulaValidator(undefined, config);
+    const context = {
+        path: ['formula'],
+        root: { formula },
+        config: {
+            enabled: true,
+            priority: 1,
+            cacheable: true
+        },
+        shared: new Map(),
+        metrics: {
+            duration: 0,
+            rulesExecuted: 0,
+            validatorsUsed: 1,
+            cacheStats: {
+                hits: 0,
+                misses: 0,
+                hitRate: 0
+            }
+        }
+    };
+    return validator.validate(formula, context);
+}
+/**
+ * Quick validation for thermodynamic properties
+ */
+async function validateThermodynamicProperties(properties) {
+    const validator = new ThermodynamicPropertiesValidator();
+    const context = {
+        path: ['thermodynamics'],
+        root: properties,
+        config: {
+            enabled: true,
+            priority: 1,
+            cacheable: true
+        },
+        shared: new Map(),
+        metrics: {
+            duration: 0,
+            rulesExecuted: 0,
+            validatorsUsed: 1,
+            cacheStats: {
+                hits: 0,
+                misses: 0,
+                hitRate: 0
+            }
+        }
+    };
+    return validator.validate(properties, context);
+}
+
+/**
  * Enhanced Chemical Equation Balancer with PubChem integration
  * Provides compound validation, molecular weight verification, and enriched data
  */
@@ -2788,11 +5887,25 @@ exports.EnhancedChemicalEquationBalancer = class EnhancedChemicalEquationBalance
             validation: {
                 massBalanced: true,
                 chargeBalanced: true,
-                warnings: []
+                warnings: [],
+                formulaValidation: {}
             }
         };
         // Get all unique species from the equation
         const allSpecies = [...new Set([...balanced.reactants, ...balanced.products])];
+        // Validate chemical formulas using the validation pipeline
+        for (const species of allSpecies) {
+            try {
+                const formulaValidation = await validateChemicalFormula(species);
+                enhanced.validation.formulaValidation[species] = formulaValidation;
+                if (!formulaValidation.isValid) {
+                    enhanced.validation.warnings.push(`Invalid formula ${species}: ${formulaValidation.errors.map(e => e.message).join(', ')}`);
+                }
+            }
+            catch (error) {
+                enhanced.validation.warnings.push(`Formula validation failed for ${species}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+        }
         // Fetch PubChem data for each compound
         for (const species of allSpecies) {
             try {
@@ -3570,13 +6683,31 @@ exports.ThermodynamicsCalculator = class ThermodynamicsCalculator {
         for (const formula of uniqueFormulas) {
             try {
                 const properties = await this.fetchThermodynamicProperties(formula);
+                // Validate thermodynamic properties using the validation pipeline
+                const validationResult = await validateThermodynamicProperties(properties);
+                if (!validationResult.isValid) {
+                    const validationErrors = validationResult.errors.map(e => e.message).join(', ');
+                    throw new ValidationError(`Invalid thermodynamic properties for ${formula}: ${validationErrors}`, { formula, errors: validationResult.errors });
+                }
                 data.set(formula, properties);
             }
             catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                console.warn(`Could not fetch thermodynamic data for ${formula}: ${errorMessage}`);
+                console.warn(`Could not fetch or validate thermodynamic data for ${formula}: ${errorMessage}`);
                 // Use estimated values or throw error
-                data.set(formula, this.estimateThermodynamicProperties(formula));
+                const estimatedProperties = this.estimateThermodynamicProperties(formula);
+                // Validate estimated properties too
+                try {
+                    const estimatedValidation = await validateThermodynamicProperties(estimatedProperties);
+                    if (!estimatedValidation.isValid) {
+                        throw new ValidationError(`Both fetched and estimated thermodynamic properties invalid for ${formula}`, { formula, originalError: error });
+                    }
+                    data.set(formula, estimatedProperties);
+                }
+                catch (validationError) {
+                    // If both real and estimated data are invalid, re-throw the original error
+                    throw error;
+                }
             }
         }
         return data;
@@ -5672,9 +8803,21 @@ exports.ChemicalDatabaseManager = class ChemicalDatabaseManager {
             defaultTtl: 1800000, // 30 minutes
             enableMetrics: true
         });
+        this.validationPipeline = this.initializeValidationPipeline();
         this.initializeDefaultSources();
         this.initializeValidationRules();
         this.loadDefaultCompounds();
+    }
+    /**
+     * Initialize the validation pipeline with chemistry validators
+     */
+    initializeValidationPipeline() {
+        const pipeline = createValidationPipeline();
+        // Add chemical formula validator
+        pipeline.addValidator(new ChemicalFormulaValidator());
+        // Add thermodynamic properties validator
+        pipeline.addValidator(new ThermodynamicPropertiesValidator());
+        return pipeline;
     }
     /**
      * Initialize default database sources
@@ -5919,9 +9062,12 @@ exports.ChemicalDatabaseManager = class ChemicalDatabaseManager {
     async addCompound(compound) {
         try {
             // Validate the compound data
-            const validationErrors = this.validateCompound(compound);
+            const validationErrors = await this.validateCompound(compound);
             if (validationErrors.length > 0) {
-                throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
+                throw new ValidationError(`Validation failed: ${validationErrors.join(', ')}`, {
+                    errors: validationErrors,
+                    compound: compound.formula || 'unknown'
+                });
             }
             // Fill in missing fields
             const fullCompound = {
@@ -5955,32 +9101,52 @@ exports.ChemicalDatabaseManager = class ChemicalDatabaseManager {
         };
     }
     /**
-     * Validate compound data against rules
+     * Validate compound data using the advanced validation pipeline
      */
-    validateCompound(compound) {
+    async validateCompound(compound) {
         const errors = [];
-        for (const rule of this.validationRules) {
-            const value = this.getNestedProperty(compound, rule.field);
-            switch (rule.type) {
-                case 'required':
-                    if (value === undefined || value === null) {
-                        errors.push(rule.message);
-                    }
-                    break;
-                case 'range':
-                    if (typeof value === 'number') {
-                        const { min, max } = rule.rule;
-                        if (value < min || value > max) {
+        try {
+            // Validate chemical formula if present
+            if (compound.formula) {
+                const formulaResult = await this.validationPipeline.validate(compound.formula, ['ChemicalFormulaValidator']);
+                if (!formulaResult.isValid) {
+                    errors.push(...formulaResult.errors.map(e => e.message));
+                }
+            }
+            // Validate thermodynamic properties if present
+            if (compound.thermodynamicProperties) {
+                const thermoResult = await this.validationPipeline.validate(compound.thermodynamicProperties, ['ThermodynamicPropertiesValidator']);
+                if (!thermoResult.isValid) {
+                    errors.push(...thermoResult.errors.map(e => e.message));
+                }
+            }
+            // Legacy validation rules for backward compatibility
+            for (const rule of this.validationRules) {
+                const value = this.getNestedProperty(compound, rule.field);
+                switch (rule.type) {
+                    case 'required':
+                        if (value === undefined || value === null) {
                             errors.push(rule.message);
                         }
-                    }
-                    break;
-                case 'custom':
-                    if (value !== undefined && !rule.rule(value)) {
-                        errors.push(rule.message);
-                    }
-                    break;
+                        break;
+                    case 'range':
+                        if (typeof value === 'number') {
+                            const { min, max } = rule.rule;
+                            if (value < min || value > max) {
+                                errors.push(rule.message);
+                            }
+                        }
+                        break;
+                    case 'custom':
+                        if (value !== undefined && !rule.rule(value)) {
+                            errors.push(rule.message);
+                        }
+                        break;
+                }
             }
+        }
+        catch (error) {
+            errors.push(`Validation failed: ${error instanceof Error ? error.message : String(error)}`);
         }
         return errors;
     }
@@ -12117,22 +15283,2985 @@ class WorkerPerformanceMonitor {
     }
 }
 
+/**
+ * CREB-JS Plugin System Types
+ *
+ * Type definitions for the plugin system including plugin interfaces,
+ * API contexts, lifecycle management, and security configurations.
+ *
+ * @author Loganathane Virassamy
+ * @version 1.7.0
+ */
+/**
+ * Plugin execution context with permission levels
+ */
+exports.PluginContextEnum = void 0;
+(function (PluginContext) {
+    PluginContext["Calculation"] = "calculation";
+    PluginContext["DataProvider"] = "data-provider";
+    PluginContext["UI"] = "ui";
+    PluginContext["System"] = "system";
+})(exports.PluginContextEnum || (exports.PluginContextEnum = {}));
+/**
+ * Plugin permission levels for security sandboxing
+ */
+exports.PluginPermissionEnum = void 0;
+(function (PluginPermission) {
+    PluginPermission["ReadOnly"] = "read-only";
+    PluginPermission["ReadWrite"] = "read-write";
+    PluginPermission["SystemAccess"] = "system-access";
+    PluginPermission["NetworkAccess"] = "network-access";
+})(exports.PluginPermissionEnum || (exports.PluginPermissionEnum = {}));
+/**
+ * Plugin lifecycle states
+ */
+exports.PluginStateEnum = void 0;
+(function (PluginState) {
+    PluginState["Unloaded"] = "unloaded";
+    PluginState["Loading"] = "loading";
+    PluginState["Loaded"] = "loaded";
+    PluginState["Active"] = "active";
+    PluginState["Inactive"] = "inactive";
+    PluginState["Error"] = "error";
+    PluginState["Unloading"] = "unloading";
+})(exports.PluginStateEnum || (exports.PluginStateEnum = {}));
+/**
+ * Plugin priority levels for execution order
+ */
+exports.PluginPriorityEnum = void 0;
+(function (PluginPriority) {
+    PluginPriority[PluginPriority["Critical"] = 1000] = "Critical";
+    PluginPriority[PluginPriority["High"] = 750] = "High";
+    PluginPriority[PluginPriority["Normal"] = 500] = "Normal";
+    PluginPriority[PluginPriority["Low"] = 250] = "Low";
+    PluginPriority[PluginPriority["Background"] = 100] = "Background";
+})(exports.PluginPriorityEnum || (exports.PluginPriorityEnum = {}));
+
+/**
+ * CREB-JS Plugin API Context Implementation
+ *
+ * Provides secure, controlled access to CREB services and utilities
+ * for plugins with permission-based sandboxing and resource management.
+ *
+ * @author Loganathane Virassamy
+ * @version 1.7.0
+ */
+/**
+ * Permission denied error for unauthorized plugin operations
+ */
+class PluginPermissionError extends Error {
+    constructor(pluginId, requiredPermission, operation) {
+        super(`Plugin ${pluginId} lacks permission ${requiredPermission} for operation: ${operation}`);
+        this.pluginId = pluginId;
+        this.requiredPermission = requiredPermission;
+        this.name = 'PluginPermissionError';
+    }
+}
+/**
+ * Resource limit exceeded error
+ */
+class PluginResourceError extends Error {
+    constructor(pluginId, resource, limit, used) {
+        super(`Plugin ${pluginId} exceeded ${resource} limit: ${used}/${limit}`);
+        this.pluginId = pluginId;
+        this.resource = resource;
+        this.limit = limit;
+        this.used = used;
+        this.name = 'PluginResourceError';
+    }
+}
+/**
+ * Plugin service registry implementation with permission checking
+ */
+class SecurePluginServiceRegistry {
+    constructor(container, pluginId, permissions, logger) {
+        this.container = container;
+        this.pluginId = pluginId;
+        this.permissions = permissions;
+        this.logger = logger;
+    }
+    get(token) {
+        this._checkPermission(exports.PluginPermissionEnum.ReadOnly, 'service access');
+        try {
+            return this.container.resolve(token);
+        }
+        catch (error) {
+            this.logger.warn(`Service access failed for ${String(token)}:`, error);
+            return undefined;
+        }
+    }
+    has(token) {
+        this._checkPermission(exports.PluginPermissionEnum.ReadOnly, 'service discovery');
+        return this.container.isRegistered(token);
+    }
+    list() {
+        this._checkPermission(exports.PluginPermissionEnum.ReadOnly, 'service listing');
+        return this.container.getRegisteredTokens();
+    }
+    _checkPermission(required, operation) {
+        // Check if the plugin has the exact permission or a higher-level permission
+        const hasPermission = this.permissions.includes(required) ||
+            (required === exports.PluginPermissionEnum.ReadOnly && this.permissions.includes(exports.PluginPermissionEnum.ReadWrite));
+        if (!hasPermission) {
+            throw new PluginPermissionError(this.pluginId, required, operation);
+        }
+    }
+}
+/**
+ * Plugin event system implementation with sandboxing
+ */
+class SandboxedPluginEventSystem {
+    constructor(pluginId, permissions, logger, globalEventSystem) {
+        this.pluginId = pluginId;
+        this.permissions = permissions;
+        this.logger = logger;
+        this.globalEventSystem = globalEventSystem;
+        this.maxListeners = 50;
+        this.eventEmitter = new events.EventEmitter();
+        this.eventPrefix = `plugin:${pluginId}:`;
+        this.eventEmitter.setMaxListeners(this.maxListeners);
+    }
+    emit(event, data) {
+        this._checkPermission(exports.PluginPermissionEnum.ReadWrite, 'event emission');
+        const namespacedEvent = this._namespaceEvent(event);
+        this.logger.debug(`Emitting event: ${namespacedEvent}`);
+        // Emit both locally and globally
+        this.eventEmitter.emit(event, data);
+        this.globalEventSystem.emit(namespacedEvent, { pluginId: this.pluginId, data });
+    }
+    on(event, handler) {
+        this._checkPermission(exports.PluginPermissionEnum.ReadOnly, 'event listening');
+        const wrappedHandler = this._wrapHandler(handler, event);
+        this.eventEmitter.on(event, wrappedHandler);
+        // Also listen to global events
+        const namespacedEvent = this._namespaceEvent(event);
+        this.globalEventSystem.on(namespacedEvent, wrappedHandler);
+    }
+    off(event, handler) {
+        this.eventEmitter.off(event, handler);
+        const namespacedEvent = this._namespaceEvent(event);
+        this.globalEventSystem.off(namespacedEvent, handler);
+    }
+    once(event, handler) {
+        this._checkPermission(exports.PluginPermissionEnum.ReadOnly, 'event listening');
+        const wrappedHandler = this._wrapHandler(handler, event);
+        this.eventEmitter.once(event, wrappedHandler);
+        const namespacedEvent = this._namespaceEvent(event);
+        this.globalEventSystem.once(namespacedEvent, wrappedHandler);
+    }
+    _namespaceEvent(event) {
+        return `${this.eventPrefix}${event}`;
+    }
+    _wrapHandler(handler, event) {
+        return (data) => {
+            try {
+                handler(data);
+            }
+            catch (error) {
+                this.logger.error(`Event handler error for ${event}:`, error);
+            }
+        };
+    }
+    _checkPermission(required, operation) {
+        // Check if the plugin has the exact permission or a higher-level permission
+        const hasPermission = this.permissions.includes(required) ||
+            (required === exports.PluginPermissionEnum.ReadOnly && this.permissions.includes(exports.PluginPermissionEnum.ReadWrite));
+        if (!hasPermission) {
+            throw new PluginPermissionError(this.pluginId, required, operation);
+        }
+    }
+}
+/**
+ * Plugin storage implementation with isolation
+ */
+class IsolatedPluginStorage {
+    constructor(pluginId, permissions, logger, storage = new Map()) {
+        this.pluginId = pluginId;
+        this.permissions = permissions;
+        this.logger = logger;
+        this.storage = storage;
+        this.storagePrefix = `plugin:${pluginId}:`;
+    }
+    async get(key) {
+        this._checkPermission(exports.PluginPermissionEnum.ReadOnly, 'storage read');
+        const namespacedKey = this._namespaceKey(key);
+        return this.storage.get(namespacedKey);
+    }
+    async set(key, value) {
+        this._checkPermission(exports.PluginPermissionEnum.ReadWrite, 'storage write');
+        const namespacedKey = this._namespaceKey(key);
+        this.storage.set(namespacedKey, value);
+        this.logger.debug(`Storage set: ${namespacedKey}`);
+    }
+    async delete(key) {
+        this._checkPermission(exports.PluginPermissionEnum.ReadWrite, 'storage delete');
+        const namespacedKey = this._namespaceKey(key);
+        this.storage.delete(namespacedKey);
+        this.logger.debug(`Storage delete: ${namespacedKey}`);
+    }
+    async clear() {
+        this._checkPermission(exports.PluginPermissionEnum.ReadWrite, 'storage clear');
+        const keysToDelete = Array.from(this.storage.keys())
+            .filter(key => key.startsWith(this.storagePrefix));
+        keysToDelete.forEach(key => this.storage.delete(key));
+        this.logger.debug(`Storage cleared for plugin: ${this.pluginId}`);
+    }
+    async keys() {
+        this._checkPermission(exports.PluginPermissionEnum.ReadOnly, 'storage enumeration');
+        return Array.from(this.storage.keys())
+            .filter(key => key.startsWith(this.storagePrefix))
+            .map(key => key.substring(this.storagePrefix.length));
+    }
+    _namespaceKey(key) {
+        return `${this.storagePrefix}${key}`;
+    }
+    _checkPermission(required, operation) {
+        // Check if the plugin has the exact permission or a higher-level permission
+        const hasPermission = this.permissions.includes(required) ||
+            (required === exports.PluginPermissionEnum.ReadOnly && this.permissions.includes(exports.PluginPermissionEnum.ReadWrite));
+        if (!hasPermission) {
+            throw new PluginPermissionError(this.pluginId, required, operation);
+        }
+    }
+}
+/**
+ * Plugin HTTP client implementation with rate limiting
+ */
+class RateLimitedPluginHttpClient {
+    constructor(pluginId, permissions, logger, maxRequestsPerMinute = 100) {
+        this.pluginId = pluginId;
+        this.permissions = permissions;
+        this.logger = logger;
+        this.maxRequestsPerMinute = maxRequestsPerMinute;
+        this.requestCount = 0;
+        this.lastResetTime = Date.now();
+        this.resetInterval = 60000; // 1 minute
+    }
+    async get(url, options) {
+        return this._makeRequest('GET', url, undefined, options);
+    }
+    async post(url, data, options) {
+        return this._makeRequest('POST', url, data, options);
+    }
+    async put(url, data, options) {
+        return this._makeRequest('PUT', url, data, options);
+    }
+    async delete(url, options) {
+        return this._makeRequest('DELETE', url, undefined, options);
+    }
+    async _makeRequest(method, url, data, options) {
+        this._checkPermission(exports.PluginPermissionEnum.NetworkAccess, 'HTTP request');
+        this._checkRateLimit();
+        const requestOptions = {
+            ...options,
+            method,
+            headers: {
+                'User-Agent': `CREB-Plugin/${this.pluginId}`,
+                ...options?.headers
+            }
+        };
+        if (data && (method === 'POST' || method === 'PUT')) {
+            if (typeof data === 'object') {
+                requestOptions.body = JSON.stringify(data);
+                requestOptions.headers = {
+                    'Content-Type': 'application/json',
+                    ...requestOptions.headers
+                };
+            }
+            else {
+                requestOptions.body = data;
+            }
+        }
+        try {
+            this.logger.debug(`Making ${method} request to: ${url}`);
+            const response = await fetch(url, requestOptions);
+            if (!response.ok) {
+                this.logger.warn(`HTTP request failed: ${response.status} ${response.statusText}`);
+            }
+            return response;
+        }
+        catch (error) {
+            this.logger.error(`HTTP request error:`, error);
+            throw error;
+        }
+    }
+    _checkPermission(required, operation) {
+        // Check if the plugin has the exact permission or a higher-level permission
+        const hasPermission = this.permissions.includes(required) ||
+            (required === exports.PluginPermissionEnum.ReadOnly && this.permissions.includes(exports.PluginPermissionEnum.ReadWrite));
+        if (!hasPermission) {
+            throw new PluginPermissionError(this.pluginId, required, operation);
+        }
+    }
+    _checkRateLimit() {
+        const now = Date.now();
+        if (now - this.lastResetTime >= this.resetInterval) {
+            this.requestCount = 0;
+            this.lastResetTime = now;
+        }
+        if (this.requestCount >= this.maxRequestsPerMinute) {
+            throw new PluginResourceError(this.pluginId, 'HTTP requests per minute', this.maxRequestsPerMinute, this.requestCount);
+        }
+        this.requestCount++;
+    }
+}
+/**
+ * Plugin utilities implementation
+ */
+class PluginUtilitiesImpl {
+    constructor(pluginId, logger) {
+        this.pluginId = pluginId;
+        this.logger = logger;
+    }
+    validateFormula(formula) {
+        try {
+            // Basic chemical formula validation - allow simple molecular formulas
+            const trimmedFormula = formula.trim();
+            if (!trimmedFormula)
+                return false;
+            // Allow simple formulas like H2O, CO2, NaCl, etc.
+            const formulaRegex = /^([A-Z][a-z]?\d*)+$/;
+            return formulaRegex.test(trimmedFormula);
+        }
+        catch (error) {
+            this.logger.warn(`Formula validation error:`, error);
+            return false;
+        }
+    }
+    parseFormula(formula) {
+        try {
+            const elements = {};
+            const regex = /([A-Z][a-z]?)(\d*)/g;
+            let match;
+            while ((match = regex.exec(formula)) !== null) {
+                const element = match[1];
+                const count = match[2] ? parseInt(match[2], 10) : 1;
+                elements[element] = (elements[element] || 0) + count;
+            }
+            return elements;
+        }
+        catch (error) {
+            this.logger.error(`Formula parsing error:`, error);
+            return {};
+        }
+    }
+    calculateMolarWeight(formula) {
+        try {
+            // Simplified molar weight calculation
+            const atomicWeights = {
+                H: 1.008, He: 4.003, Li: 6.941, Be: 9.012, B: 10.811,
+                C: 12.011, N: 14.007, O: 15.999, F: 18.998, Ne: 20.180,
+                Na: 22.990, Mg: 24.305, Al: 26.982, Si: 28.086, P: 30.974,
+                S: 32.065, Cl: 35.453, Ar: 39.948, K: 39.098, Ca: 40.078
+            };
+            const elements = this.parseFormula(formula);
+            let totalWeight = 0;
+            for (const [element, count] of Object.entries(elements)) {
+                const weight = atomicWeights[element];
+                if (weight) {
+                    totalWeight += weight * count;
+                }
+                else {
+                    this.logger.warn(`Unknown element in formula: ${element}`);
+                }
+            }
+            return totalWeight;
+        }
+        catch (error) {
+            this.logger.error(`Molar weight calculation error:`, error);
+            return 0;
+        }
+    }
+    formatNumber(value, precision = 2) {
+        try {
+            return value.toFixed(precision);
+        }
+        catch (error) {
+            this.logger.warn(`Number formatting error:`, error);
+            return String(value);
+        }
+    }
+    sanitizeInput(input) {
+        try {
+            // Basic input sanitization
+            return input
+                .trim()
+                .replace(/[<>\"'&]/g, '') // Remove potentially dangerous characters
+                .substring(0, 1000); // Limit length
+        }
+        catch (error) {
+            this.logger.warn(`Input sanitization error:`, error);
+            return '';
+        }
+    }
+}
+/**
+ * Main plugin API context implementation
+ */
+class PluginAPIContextImpl {
+    constructor(container, pluginId, permissions, logger, globalEventSystem, globalStorage) {
+        this.container = container;
+        this.pluginId = pluginId;
+        this.permissions = permissions;
+        this.logger = logger;
+        this.globalEventSystem = globalEventSystem;
+        this.globalStorage = globalStorage;
+        this.version = '1.0.0';
+        this.services = new SecurePluginServiceRegistry(container, pluginId, permissions, logger);
+        this.events = new SandboxedPluginEventSystem(pluginId, permissions, logger, globalEventSystem);
+        this.storage = new IsolatedPluginStorage(pluginId, permissions, logger, globalStorage);
+        this.http = new RateLimitedPluginHttpClient(pluginId, permissions, logger);
+        this.utils = new PluginUtilitiesImpl(pluginId, logger);
+    }
+}
+/**
+ * Plugin API context factory
+ */
+class PluginAPIContextFactory {
+    constructor(container, globalEventSystem, globalStorage) {
+        this.container = container;
+        this.globalEventSystem = globalEventSystem;
+        this.globalStorage = globalStorage;
+    }
+    create(pluginId, permissions, logger) {
+        return new PluginAPIContextImpl(this.container, pluginId, permissions, logger, this.globalEventSystem, this.globalStorage);
+    }
+}
+
+/**
+ * CREB-JS Plugin Manager
+ *
+ * Central plugin management system providing plugin discovery, loading,
+ * lifecycle management, security sandboxing, and marketplace integration.
+ *
+ * @author Loganathane Virassamy
+ * @version 1.7.0
+ */
+/**
+ * Plugin manager error classes
+ */
+class PluginManagerError extends Error {
+    constructor(message, operation) {
+        super(message);
+        this.operation = operation;
+        this.name = 'PluginManagerError';
+    }
+}
+class PluginLoadError extends PluginManagerError {
+    constructor(pluginId, reason) {
+        super(`Failed to load plugin ${pluginId}: ${reason}`, 'load');
+        this.name = 'PluginLoadError';
+    }
+}
+class PluginSecurityError extends PluginManagerError {
+    constructor(pluginId, violation) {
+        super(`Security violation in plugin ${pluginId}: ${violation}`, 'security');
+        this.name = 'PluginSecurityError';
+    }
+}
+/**
+ * Plugin registry for managing loaded plugins
+ */
+class PluginRegistry {
+    constructor() {
+        this.plugins = new Map();
+        this.manifests = new Map();
+    }
+    register(manifest, plugin) {
+        this.manifests.set(manifest.metadata.id, manifest);
+        this.plugins.set(manifest.metadata.id, plugin);
+    }
+    unregister(pluginId) {
+        this.manifests.delete(pluginId);
+        this.plugins.delete(pluginId);
+    }
+    get(pluginId) {
+        return this.plugins.get(pluginId);
+    }
+    getManifest(pluginId) {
+        return this.manifests.get(pluginId);
+    }
+    list() {
+        return Array.from(this.plugins.values());
+    }
+    listByState(state) {
+        return this.list().filter(plugin => plugin.state === state);
+    }
+    listByContext(context) {
+        return this.list().filter(plugin => {
+            const manifest = this.manifests.get(plugin.metadata.id);
+            return manifest?.metadata.context.includes(context);
+        });
+    }
+    has(pluginId) {
+        return this.plugins.has(pluginId);
+    }
+    size() {
+        return this.plugins.size;
+    }
+}
+/**
+ * Plugin logger implementation
+ */
+class PluginLoggerImpl {
+    constructor(pluginId, level = 'info') {
+        this.pluginId = pluginId;
+        this.level = level;
+    }
+    debug(message, ...args) {
+        if (this._shouldLog('debug')) {
+            console.debug(`[Plugin:${this.pluginId}] ${message}`, ...args);
+        }
+    }
+    info(message, ...args) {
+        if (this._shouldLog('info')) {
+            console.info(`[Plugin:${this.pluginId}] ${message}`, ...args);
+        }
+    }
+    warn(message, ...args) {
+        if (this._shouldLog('warn')) {
+            console.warn(`[Plugin:${this.pluginId}] ${message}`, ...args);
+        }
+    }
+    error(message, error, ...args) {
+        if (this._shouldLog('error')) {
+            console.error(`[Plugin:${this.pluginId}] ${message}`, error, ...args);
+        }
+    }
+    _shouldLog(level) {
+        const levels = ['debug', 'info', 'warn', 'error'];
+        return levels.indexOf(level) >= levels.indexOf(this.level);
+    }
+}
+/**
+ * Main plugin manager class
+ */
+class PluginManager extends events.EventEmitter {
+    constructor(container, config) {
+        super();
+        this.container = container;
+        this.config = config;
+        this.registry = new PluginRegistry();
+        this.globalStorage = new Map();
+        this.discoveredPlugins = new Map();
+        this.apiContextFactory = new PluginAPIContextFactory(container, this, // Use this EventEmitter as global event system
+        this.globalStorage);
+        this.setMaxListeners(0); // Unlimited listeners for plugin events
+    }
+    /**
+     * Initialize the plugin manager
+     */
+    async initialize() {
+        try {
+            // Ensure plugin directory exists
+            await this._ensurePluginDirectory();
+            // Start periodic health checks
+            if (this.config.healthCheckInterval > 0) {
+                this.healthCheckTimer = setInterval(() => this._performHealthChecks(), this.config.healthCheckInterval);
+            }
+            // Start plugin discovery
+            if (this.config.discoveryInterval > 0) {
+                this.discoveryTimer = setInterval(() => this._discoverPlugins(), this.config.discoveryInterval);
+            }
+            // Initial plugin discovery
+            await this._discoverPlugins();
+            console.info(`Plugin manager initialized with ${this.registry.size()} plugins`);
+        }
+        catch (error) {
+            throw new PluginManagerError(`Failed to initialize plugin manager: ${error.message}`, 'initialize');
+        }
+    }
+    /**
+     * Shutdown the plugin manager
+     */
+    async shutdown() {
+        try {
+            // Clear timers
+            if (this.healthCheckTimer) {
+                clearInterval(this.healthCheckTimer);
+            }
+            if (this.discoveryTimer) {
+                clearInterval(this.discoveryTimer);
+            }
+            // Unload all plugins
+            const activePlugins = this.registry.listByState(exports.PluginStateEnum.Active);
+            for (const plugin of activePlugins) {
+                await this.unloadPlugin(plugin.metadata.id);
+            }
+            console.info('Plugin manager shutdown complete');
+        }
+        catch (error) {
+            throw new PluginManagerError(`Failed to shutdown plugin manager: ${error.message}`, 'shutdown');
+        }
+    }
+    /**
+     * Load a plugin from manifest
+     */
+    async loadPlugin(manifest) {
+        try {
+            const { metadata } = manifest;
+            // Check if already loaded
+            if (this.registry.has(metadata.id)) {
+                throw new Error(`Plugin already loaded: ${metadata.id}`);
+            }
+            // Check plugin limits
+            if (this.registry.size() >= this.config.maxPlugins) {
+                throw new Error(`Maximum plugin limit reached: ${this.config.maxPlugins}`);
+            }
+            // Validate plugin metadata
+            this._validatePluginMetadata(metadata);
+            // Check security permissions
+            this._validatePluginSecurity(metadata);
+            // Create plugin instance
+            const logger = new PluginLoggerImpl(metadata.id);
+            const apiContext = this.apiContextFactory.create(metadata.id, metadata.permissions, logger);
+            const plugin = manifest.factory({
+                metadata,
+                config: manifest.config,
+                apiContext,
+                logger
+            });
+            // Initialize plugin
+            await plugin.initialize({
+                metadata,
+                config: manifest.config,
+                apiContext,
+                logger
+            });
+            // Register plugin
+            this.registry.register(manifest, plugin);
+            // Activate plugin if auto-load is enabled
+            if (manifest.config.autoLoad) {
+                await this.activatePlugin(metadata.id);
+            }
+            this.emit('plugin-loaded', plugin);
+            logger.info(`Plugin loaded successfully: ${metadata.name}`);
+        }
+        catch (error) {
+            const errorInfo = {
+                pluginId: manifest.metadata.id,
+                error: error,
+                context: 'loading',
+                timestamp: new Date(),
+                recoverable: false
+            };
+            this.emit('plugin-error', errorInfo);
+            throw new PluginLoadError(manifest.metadata.id, error.message);
+        }
+    }
+    /**
+     * Unload a plugin
+     */
+    async unloadPlugin(pluginId) {
+        try {
+            const plugin = this.registry.get(pluginId);
+            if (!plugin) {
+                throw new Error(`Plugin not found: ${pluginId}`);
+            }
+            // Deactivate if active
+            if (plugin.state === exports.PluginStateEnum.Active) {
+                await this.deactivatePlugin(pluginId);
+            }
+            // Cleanup plugin
+            await plugin.cleanup();
+            // Unregister
+            this.registry.unregister(pluginId);
+            this.emit('plugin-unloaded', pluginId);
+            console.info(`Plugin unloaded: ${pluginId}`);
+        }
+        catch (error) {
+            const errorInfo = {
+                pluginId,
+                error: error,
+                context: 'unloading',
+                timestamp: new Date(),
+                recoverable: true
+            };
+            this.emit('plugin-error', errorInfo);
+            throw error;
+        }
+    }
+    /**
+     * Activate a plugin
+     */
+    async activatePlugin(pluginId) {
+        try {
+            const plugin = this.registry.get(pluginId);
+            if (!plugin) {
+                throw new Error(`Plugin not found: ${pluginId}`);
+            }
+            await plugin.activate();
+            this.emit('plugin-activated', plugin);
+        }
+        catch (error) {
+            const errorInfo = {
+                pluginId,
+                error: error,
+                context: 'activation',
+                timestamp: new Date(),
+                recoverable: true
+            };
+            this.emit('plugin-error', errorInfo);
+            throw error;
+        }
+    }
+    /**
+     * Deactivate a plugin
+     */
+    async deactivatePlugin(pluginId) {
+        try {
+            const plugin = this.registry.get(pluginId);
+            if (!plugin) {
+                throw new Error(`Plugin not found: ${pluginId}`);
+            }
+            await plugin.deactivate();
+            this.emit('plugin-deactivated', plugin);
+        }
+        catch (error) {
+            const errorInfo = {
+                pluginId,
+                error: error,
+                context: 'deactivation',
+                timestamp: new Date(),
+                recoverable: true
+            };
+            this.emit('plugin-error', errorInfo);
+            throw error;
+        }
+    }
+    /**
+     * Get plugin by ID
+     */
+    getPlugin(pluginId) {
+        return this.registry.get(pluginId);
+    }
+    /**
+     * List all plugins
+     */
+    listPlugins() {
+        return this.registry.list();
+    }
+    /**
+     * List plugins by state
+     */
+    listPluginsByState(state) {
+        return this.registry.listByState(state);
+    }
+    /**
+     * List plugins by context
+     */
+    listPluginsByContext(context) {
+        return this.registry.listByContext(context);
+    }
+    /**
+     * Get plugin health status
+     */
+    getPluginHealth(pluginId) {
+        const plugin = this.registry.get(pluginId);
+        return plugin?.getHealth();
+    }
+    /**
+     * Update plugin configuration
+     */
+    async updatePluginConfig(pluginId, config) {
+        const plugin = this.registry.get(pluginId);
+        if (!plugin) {
+            throw new Error(`Plugin not found: ${pluginId}`);
+        }
+        await plugin.updateConfig(config);
+    }
+    /**
+     * Hot-swap a plugin (if enabled)
+     */
+    async hotSwapPlugin(pluginId, newManifest) {
+        if (!this.config.enableHotSwap) {
+            throw new Error('Hot-swap is disabled');
+        }
+        try {
+            // Unload old plugin
+            await this.unloadPlugin(pluginId);
+            // Load new plugin
+            await this.loadPlugin(newManifest);
+            console.info(`Plugin hot-swapped: ${pluginId}`);
+        }
+        catch (error) {
+            throw new PluginManagerError(`Hot-swap failed for ${pluginId}: ${error.message}`, 'hot-swap');
+        }
+    }
+    /**
+     * Private helper methods
+     */
+    async _ensurePluginDirectory() {
+        try {
+            await fs.promises.mkdir(this.config.pluginDirectory, { recursive: true });
+        }
+        catch (error) {
+            // Directory might already exist
+        }
+    }
+    async _discoverPlugins() {
+        try {
+            const pluginFiles = await fs.promises.readdir(this.config.pluginDirectory);
+            for (const file of pluginFiles) {
+                if (file.endsWith('.js') || file.endsWith('.ts')) {
+                    const pluginPath = path__namespace.join(this.config.pluginDirectory, file);
+                    await this._loadPluginFromFile(pluginPath);
+                }
+            }
+        }
+        catch (error) {
+            console.warn('Plugin discovery failed:', error);
+        }
+    }
+    async _loadPluginFromFile(filePath) {
+        try {
+            // Dynamic import would be used here in a real implementation
+            // For now, we'll skip the actual file loading
+            console.debug(`Discovering plugin at: ${filePath}`);
+        }
+        catch (error) {
+            console.warn(`Failed to load plugin from ${filePath}:`, error);
+        }
+    }
+    _performHealthChecks() {
+        const plugins = this.registry.list();
+        for (const plugin of plugins) {
+            try {
+                const health = plugin.getHealth();
+                this.emit('plugin-health-check', plugin.metadata.id, health);
+                if (!health.healthy) {
+                    console.warn(`Plugin health check failed: ${plugin.metadata.id} - ${health.message}`);
+                }
+            }
+            catch (error) {
+                const errorInfo = {
+                    pluginId: plugin.metadata.id,
+                    error: error,
+                    context: 'health-check',
+                    timestamp: new Date(),
+                    recoverable: true
+                };
+                this.emit('plugin-error', errorInfo);
+            }
+        }
+    }
+    _validatePluginMetadata(metadata) {
+        if (!metadata.id || !metadata.name || !metadata.version) {
+            throw new Error('Plugin metadata must include id, name, and version');
+        }
+        if (!this._isValidAPIVersion(metadata.apiVersion)) {
+            throw new Error(`Unsupported API version: ${metadata.apiVersion}`);
+        }
+    }
+    _validatePluginSecurity(metadata) {
+        const { securityLevel } = this.config;
+        if (securityLevel === 'strict') {
+            // In strict mode, only allow read-only permissions by default
+            const dangerousPermissions = [
+                exports.PluginPermissionEnum.SystemAccess,
+                exports.PluginPermissionEnum.NetworkAccess
+            ];
+            const hasDangerousPermissions = metadata.permissions.some(p => dangerousPermissions.includes(p));
+            if (hasDangerousPermissions) {
+                throw new PluginSecurityError(metadata.id, 'Dangerous permissions not allowed in strict mode');
+            }
+        }
+    }
+    _isValidAPIVersion(version) {
+        const supportedVersions = ['1.0.0', '1.1.0'];
+        return supportedVersions.includes(version);
+    }
+}
+
+/**
+ * CREB-JS Base Plugin Implementation
+ *
+ * Abstract base class providing common plugin functionality including
+ * lifecycle management, state tracking, error handling, and extension points.
+ *
+ * @author Loganathane Virassamy
+ * @version 1.7.0
+ */
+/**
+ * Base plugin error class
+ */
+class PluginBaseError extends Error {
+    constructor(message, pluginId, context = 'unknown', recoverable = true) {
+        super(message);
+        this.pluginId = pluginId;
+        this.context = context;
+        this.recoverable = recoverable;
+        this.name = 'PluginBaseError';
+    }
+}
+/**
+ * Plugin execution timeout error
+ */
+class PluginTimeoutError extends PluginBaseError {
+    constructor(pluginId, timeout) {
+        super(`Plugin execution timed out after ${timeout}ms`, pluginId, 'execution', false);
+        this.name = 'PluginTimeoutError';
+    }
+}
+/**
+ * Plugin initialization error
+ */
+class PluginInitializationError extends PluginBaseError {
+    constructor(pluginId, reason) {
+        super(`Plugin initialization failed: ${reason}`, pluginId, 'initialization', false);
+        this.name = 'PluginInitializationError';
+    }
+}
+/**
+ * Abstract base plugin class providing common functionality
+ */
+class BasePlugin extends events.EventEmitter {
+    constructor(metadata, extensionPoints = []) {
+        super();
+        this.metadata = metadata;
+        this.extensionPoints = extensionPoints;
+        this._state = exports.PluginStateEnum.Unloaded;
+        this._healthStatus = {
+            healthy: true,
+            timestamp: new Date()
+        };
+        this.setMaxListeners(100); // Allow many event listeners
+    }
+    /**
+     * Get current plugin state
+     */
+    get state() {
+        return this._state;
+    }
+    /**
+     * Get plugin configuration
+     */
+    get config() {
+        return this._config;
+    }
+    /**
+     * Get API context
+     */
+    get apiContext() {
+        return this._apiContext;
+    }
+    /**
+     * Get plugin logger
+     */
+    get logger() {
+        return this._logger;
+    }
+    /**
+     * Initialize the plugin with parameters
+     */
+    async initialize(params) {
+        try {
+            this._setState(exports.PluginStateEnum.Loading);
+            this._config = params.config;
+            this._apiContext = params.apiContext;
+            this._logger = params.logger;
+            this._logger.info(`Initializing plugin: ${this.metadata.name}`);
+            // Call derived class initialization
+            if (this.onInitialize) {
+                await this._executeWithTimeout(() => this.onInitialize(params), this._config.timeouts.initialization, 'initialization');
+            }
+            this._setState(exports.PluginStateEnum.Loaded);
+            this._logger.info(`Plugin initialized successfully: ${this.metadata.name}`);
+        }
+        catch (error) {
+            this._setState(exports.PluginStateEnum.Error);
+            this._logger.error(`Plugin initialization failed: ${this.metadata.name}`, error);
+            throw new PluginInitializationError(this.metadata.id, error.message);
+        }
+    }
+    /**
+     * Activate the plugin
+     */
+    async activate() {
+        try {
+            if (this._state !== exports.PluginStateEnum.Loaded && this._state !== exports.PluginStateEnum.Inactive) {
+                throw new Error(`Cannot activate plugin in state: ${this._state}`);
+            }
+            this._logger.info(`Activating plugin: ${this.metadata.name}`);
+            if (this.onActivate) {
+                await this._executeWithTimeout(() => this.onActivate(), this._config.timeouts.execution, 'activation');
+            }
+            this._setState(exports.PluginStateEnum.Active);
+            this._logger.info(`Plugin activated successfully: ${this.metadata.name}`);
+            this.emit('activated');
+        }
+        catch (error) {
+            this._setState(exports.PluginStateEnum.Error);
+            this._logger.error(`Plugin activation failed: ${this.metadata.name}`, error);
+            throw error;
+        }
+    }
+    /**
+     * Deactivate the plugin
+     */
+    async deactivate() {
+        try {
+            if (this._state !== exports.PluginStateEnum.Active) {
+                throw new Error(`Cannot deactivate plugin in state: ${this._state}`);
+            }
+            this._logger.info(`Deactivating plugin: ${this.metadata.name}`);
+            if (this.onDeactivate) {
+                await this._executeWithTimeout(() => this.onDeactivate(), this._config.timeouts.execution, 'deactivation');
+            }
+            this._setState(exports.PluginStateEnum.Inactive);
+            this._logger.info(`Plugin deactivated successfully: ${this.metadata.name}`);
+            this.emit('deactivated');
+        }
+        catch (error) {
+            this._setState(exports.PluginStateEnum.Error);
+            this._logger.error(`Plugin deactivation failed: ${this.metadata.name}`, error);
+            throw error;
+        }
+    }
+    /**
+     * Cleanup and unload the plugin
+     */
+    async cleanup() {
+        try {
+            this._setState(exports.PluginStateEnum.Unloading);
+            this._logger.info(`Cleaning up plugin: ${this.metadata.name}`);
+            if (this.onCleanup) {
+                await this._executeWithTimeout(() => this.onCleanup(), this._config.timeouts.cleanup, 'cleanup');
+            }
+            this.removeAllListeners();
+            this._setState(exports.PluginStateEnum.Unloaded);
+            this._logger.info(`Plugin cleaned up successfully: ${this.metadata.name}`);
+        }
+        catch (error) {
+            this._setState(exports.PluginStateEnum.Error);
+            this._logger.error(`Plugin cleanup failed: ${this.metadata.name}`, error);
+            throw error;
+        }
+    }
+    /**
+     * Execute a plugin extension point
+     */
+    async execute(extensionPoint, input) {
+        const startTime = Date.now();
+        try {
+            if (this._state !== exports.PluginStateEnum.Active) {
+                throw new Error(`Plugin not active: ${this._state}`);
+            }
+            const extension = this.extensionPoints.find(ep => ep.name === extensionPoint);
+            if (!extension) {
+                throw new Error(`Extension point not found: ${extensionPoint}`);
+            }
+            this._logger.debug(`Executing extension point: ${extensionPoint}`);
+            const result = await this._executeWithTimeout(() => extension.handler(input, this._apiContext), this._config.timeouts.execution, 'execution');
+            const executionTime = Date.now() - startTime;
+            this._logger.debug(`Extension point executed successfully: ${extensionPoint} (${executionTime}ms)`);
+            return {
+                success: true,
+                data: result.data,
+                executionTime,
+                warnings: result.warnings,
+                metadata: result.metadata
+            };
+        }
+        catch (error) {
+            const executionTime = Date.now() - startTime;
+            const errorMessage = error.message;
+            this._logger.error(`Extension point execution failed: ${extensionPoint}`, error);
+            return {
+                success: false,
+                error: errorMessage,
+                executionTime
+            };
+        }
+    }
+    /**
+     * Get plugin health status
+     */
+    getHealth() {
+        try {
+            // Update health status if health check is implemented
+            if (this.onHealthCheck) {
+                const result = this.onHealthCheck();
+                this._healthStatus = result instanceof Promise ? this._healthStatus : result;
+            }
+            return {
+                ...this._healthStatus,
+                timestamp: new Date()
+            };
+        }
+        catch (error) {
+            return {
+                healthy: false,
+                message: `Health check failed: ${error.message}`,
+                timestamp: new Date()
+            };
+        }
+    }
+    /**
+     * Update plugin configuration
+     */
+    async updateConfig(config) {
+        try {
+            const oldConfig = { ...this._config };
+            this._config = { ...this._config, ...config };
+            this._logger.info(`Updating plugin configuration: ${this.metadata.name}`);
+            if (this.onConfigChange) {
+                await this._executeWithTimeout(() => this.onConfigChange(this._config), this._config.timeouts.execution, 'config-change');
+            }
+            this._logger.info(`Plugin configuration updated successfully: ${this.metadata.name}`);
+            this.emit('config-changed', { oldConfig, newConfig: this._config });
+        }
+        catch (error) {
+            this._logger.error(`Plugin configuration update failed: ${this.metadata.name}`, error);
+            throw error;
+        }
+    }
+    /**
+     * Private helper methods
+     */
+    _setState(state) {
+        const oldState = this._state;
+        this._state = state;
+        this.emit('state-changed', { oldState, newState: state });
+    }
+    async _executeWithTimeout(operation, timeout, context) {
+        return new Promise((resolve, reject) => {
+            const timeoutId = setTimeout(() => {
+                reject(new PluginTimeoutError(this.metadata.id, timeout));
+            }, timeout);
+            Promise.resolve(operation())
+                .then(result => {
+                clearTimeout(timeoutId);
+                resolve(result);
+            })
+                .catch(error => {
+                clearTimeout(timeoutId);
+                reject(error);
+            });
+        });
+    }
+}
+/**
+ * Simple plugin implementation for basic use cases
+ */
+class SimplePlugin extends BasePlugin {
+    constructor(metadata, extensionPoints = [], handlers = {}) {
+        super(metadata, extensionPoints);
+        this.handlers = handlers;
+    }
+    async onInitialize(params) {
+        if (this.handlers.onInitialize) {
+            await this.handlers.onInitialize(params);
+        }
+    }
+    async onActivate() {
+        if (this.handlers.onActivate) {
+            await this.handlers.onActivate();
+        }
+    }
+    async onDeactivate() {
+        if (this.handlers.onDeactivate) {
+            await this.handlers.onDeactivate();
+        }
+    }
+    async onCleanup() {
+        if (this.handlers.onCleanup) {
+            await this.handlers.onCleanup();
+        }
+    }
+    async onConfigChange(newConfig) {
+        if (this.handlers.onConfigChange) {
+            await this.handlers.onConfigChange(newConfig);
+        }
+    }
+    onHealthCheck() {
+        if (this.handlers.onHealthCheck) {
+            const result = this.handlers.onHealthCheck();
+            if (result instanceof Promise) {
+                // For async health checks, return a default status and handle async separately
+                return {
+                    healthy: true,
+                    message: 'Health check in progress',
+                    timestamp: new Date()
+                };
+            }
+            return result;
+        }
+        return {
+            healthy: true,
+            message: 'Plugin is running normally',
+            timestamp: new Date()
+        };
+    }
+}
+/**
+ * Plugin builder for fluent plugin creation
+ */
+class PluginBuilder {
+    constructor() {
+        this._extensionPoints = [];
+        this._handlers = {};
+    }
+    static create() {
+        return new PluginBuilder();
+    }
+    metadata(metadata) {
+        this._metadata = metadata;
+        return this;
+    }
+    addExtensionPoint(extensionPoint) {
+        this._extensionPoints.push(extensionPoint);
+        return this;
+    }
+    onInitialize(handler) {
+        this._handlers.onInitialize = handler;
+        return this;
+    }
+    onActivate(handler) {
+        this._handlers.onActivate = handler;
+        return this;
+    }
+    onDeactivate(handler) {
+        this._handlers.onDeactivate = handler;
+        return this;
+    }
+    onCleanup(handler) {
+        this._handlers.onCleanup = handler;
+        return this;
+    }
+    onConfigChange(handler) {
+        this._handlers.onConfigChange = handler;
+        return this;
+    }
+    onHealthCheck(handler) {
+        this._handlers.onHealthCheck = handler;
+        return this;
+    }
+    build() {
+        if (!this._metadata) {
+            throw new Error('Plugin metadata is required');
+        }
+        return new SimplePlugin(this._metadata, this._extensionPoints, this._handlers);
+    }
+}
+
+/**
+ * CREB-JS Plugin Examples
+ *
+ * Example plugin implementations demonstrating various plugin patterns
+ * and use cases for third-party developers.
+ *
+ * @author Loganathane Virassamy
+ * @version 1.7.0
+ */
+/**
+ * Example 1: Custom Equation Balancing Algorithm Plugin
+ * Demonstrates how to extend CREB's equation balancing capabilities
+ */
+function createCustomBalancerPlugin() {
+    const metadata = {
+        id: 'custom-balancer',
+        name: 'Advanced Equation Balancer',
+        version: '1.0.0',
+        description: 'Enhanced equation balancing with AI-powered optimization',
+        author: 'CREB Plugin Developer',
+        license: 'MIT',
+        homepage: 'https://github.com/example/creb-custom-balancer',
+        apiVersion: '1.0.0',
+        context: [exports.PluginContextEnum.Calculation],
+        permissions: [exports.PluginPermissionEnum.ReadOnly],
+        priority: exports.PluginPriorityEnum.High,
+        keywords: ['balancing', 'equations', 'chemistry', 'ai'],
+        createdAt: new Date(),
+        updatedAt: new Date()
+    };
+    const config = {
+        enabled: true,
+        autoLoad: true,
+        settings: {
+            useAiOptimization: true,
+            maxIterations: 1000,
+            precision: 1e-10
+        },
+        timeouts: {
+            initialization: 5000,
+            execution: 10000,
+            cleanup: 3000
+        },
+        resources: {
+            maxMemory: 50 * 1024 * 1024, // 50MB
+            maxCpuTime: 5000,
+            maxNetworkRequests: 0 // No network access needed
+        }
+    };
+    const extensionPoints = [
+        {
+            name: 'advanced-balance',
+            description: 'Balance chemical equations using advanced AI algorithms',
+            inputTypes: ['string'],
+            outputType: 'object',
+            handler: async (equation, context) => {
+                try {
+                    // Validate the equation using built-in utilities
+                    const sanitizedEquation = context.utils.sanitizeInput(equation);
+                    if (!sanitizedEquation) {
+                        return {
+                            success: false,
+                            error: 'Invalid equation format',
+                            executionTime: 0
+                        };
+                    }
+                    // Custom balancing algorithm implementation
+                    const result = await advancedBalance(sanitizedEquation);
+                    return {
+                        success: true,
+                        data: {
+                            balanced: result.equation,
+                            coefficients: result.coefficients,
+                            confidence: result.confidence,
+                            method: 'ai-optimized'
+                        },
+                        executionTime: result.executionTime,
+                        metadata: {
+                            iterations: result.iterations,
+                            algorithmVersion: '2.1.0'
+                        }
+                    };
+                }
+                catch (error) {
+                    return {
+                        success: false,
+                        error: error.message,
+                        executionTime: 0
+                    };
+                }
+            }
+        }
+    ];
+    return {
+        metadata,
+        config,
+        extensionPoints,
+        factory: (params) => {
+            return PluginBuilder.create()
+                .metadata(metadata)
+                .addExtensionPoint(extensionPoints[0])
+                .onInitialize(async (params) => {
+                params.logger.info('Advanced Equation Balancer initialized');
+                // Initialize AI models, load configurations, etc.
+            })
+                .onActivate(async () => {
+                console.log('Advanced balancer ready for use');
+            })
+                .onHealthCheck(() => ({
+                healthy: true,
+                message: 'AI models loaded and ready',
+                metrics: {
+                    memoryUsage: process.memoryUsage().heapUsed,
+                    modelAccuracy: 0.98
+                },
+                timestamp: new Date()
+            }))
+                .build();
+        }
+    };
+}
+/**
+ * Example 2: External Data Provider Plugin
+ * Demonstrates how to integrate with external chemistry databases
+ */
+function createDataProviderPlugin() {
+    const metadata = {
+        id: 'external-data-provider',
+        name: 'ChemSpider Data Provider',
+        version: '1.0.0',
+        description: 'Fetch compound data from ChemSpider API',
+        author: 'CREB Plugin Developer',
+        license: 'MIT',
+        apiVersion: '1.0.0',
+        context: [exports.PluginContextEnum.DataProvider],
+        permissions: [exports.PluginPermissionEnum.ReadOnly, exports.PluginPermissionEnum.NetworkAccess],
+        priority: exports.PluginPriorityEnum.Normal,
+        keywords: ['data', 'chemspider', 'compounds', 'api'],
+        createdAt: new Date(),
+        updatedAt: new Date()
+    };
+    const config = {
+        enabled: true,
+        autoLoad: false,
+        settings: {
+            apiKey: '', // To be configured by user
+            baseUrl: 'https://www.chemspider.com/InChI.asmx',
+            timeout: 10000,
+            cacheResults: true,
+            cacheTtl: 3600000 // 1 hour
+        },
+        timeouts: {
+            initialization: 5000,
+            execution: 15000,
+            cleanup: 3000
+        },
+        resources: {
+            maxMemory: 30 * 1024 * 1024, // 30MB
+            maxCpuTime: 2000,
+            maxNetworkRequests: 100
+        }
+    };
+    const extensionPoints = [
+        {
+            name: 'fetch-compound-data',
+            description: 'Fetch compound information from ChemSpider',
+            inputTypes: ['string'],
+            outputType: 'object',
+            handler: async (identifier, context) => {
+                try {
+                    // Check cache first
+                    const cacheKey = `compound:${identifier}`;
+                    const cached = await context.storage.get(cacheKey);
+                    if (cached) {
+                        return {
+                            success: true,
+                            data: cached,
+                            executionTime: 1,
+                            metadata: { source: 'cache' }
+                        };
+                    }
+                    // Fetch from external API
+                    const startTime = Date.now();
+                    const url = `https://www.chemspider.com/Search.asmx/SimpleSearch?query=${encodeURIComponent(identifier)}`;
+                    const response = await context.http.get(url);
+                    const data = await response.json();
+                    const executionTime = Date.now() - startTime;
+                    // Cache the result
+                    await context.storage.set(cacheKey, data);
+                    return {
+                        success: true,
+                        data,
+                        executionTime,
+                        metadata: { source: 'chemspider' }
+                    };
+                }
+                catch (error) {
+                    return {
+                        success: false,
+                        error: `Failed to fetch compound data: ${error.message}`,
+                        executionTime: 0
+                    };
+                }
+            }
+        },
+        {
+            name: 'search-compounds',
+            description: 'Search for compounds by name or formula',
+            inputTypes: ['string'],
+            outputType: 'array',
+            handler: async (query, context) => {
+                try {
+                    const sanitizedQuery = context.utils.sanitizeInput(query);
+                    const startTime = Date.now();
+                    const url = `https://www.chemspider.com/Search.asmx/SimpleSearch?query=${encodeURIComponent(sanitizedQuery)}`;
+                    const response = await context.http.get(url);
+                    const results = await response.json();
+                    const executionTime = Date.now() - startTime;
+                    return {
+                        success: true,
+                        data: results,
+                        executionTime,
+                        metadata: {
+                            query: sanitizedQuery,
+                            resultCount: Array.isArray(results) ? results.length : 0
+                        }
+                    };
+                }
+                catch (error) {
+                    return {
+                        success: false,
+                        error: `Search failed: ${error.message}`,
+                        executionTime: 0
+                    };
+                }
+            }
+        }
+    ];
+    return {
+        metadata,
+        config,
+        extensionPoints,
+        factory: (params) => {
+            return PluginBuilder.create()
+                .metadata(metadata)
+                .addExtensionPoint(extensionPoints[0])
+                .addExtensionPoint(extensionPoints[1])
+                .onInitialize(async (params) => {
+                const apiKey = params.config.settings.apiKey;
+                if (!apiKey) {
+                    throw new Error('ChemSpider API key is required');
+                }
+                params.logger.info('ChemSpider data provider initialized');
+            })
+                .onActivate(async () => {
+                console.log('ChemSpider data provider ready');
+            })
+                .onConfigChange(async (newConfig) => {
+                console.log('ChemSpider configuration updated');
+            })
+                .onHealthCheck(() => ({
+                healthy: true,
+                message: 'External API connectivity verified',
+                timestamp: new Date()
+            }))
+                .build();
+        }
+    };
+}
+/**
+ * Example 3: Specialized Calculator Plugin
+ * Demonstrates domain-specific chemistry calculations
+ */
+function createSpecializedCalculatorPlugin() {
+    const metadata = {
+        id: 'advanced-calculator',
+        name: 'Advanced Chemistry Calculator',
+        version: '1.0.0',
+        description: 'Specialized calculations for advanced chemistry problems',
+        author: 'CREB Plugin Developer',
+        license: 'MIT',
+        apiVersion: '1.0.0',
+        context: [exports.PluginContextEnum.Calculation],
+        permissions: [exports.PluginPermissionEnum.ReadOnly],
+        priority: exports.PluginPriorityEnum.High,
+        keywords: ['calculations', 'advanced', 'chemistry', 'kinetics', 'thermodynamics'],
+        createdAt: new Date(),
+        updatedAt: new Date()
+    };
+    const config = {
+        enabled: true,
+        autoLoad: true,
+        settings: {
+            precision: 10,
+            useSymbolicMath: true,
+            enableUnitConversion: true
+        },
+        timeouts: {
+            initialization: 3000,
+            execution: 5000,
+            cleanup: 2000
+        },
+        resources: {
+            maxMemory: 20 * 1024 * 1024, // 20MB
+            maxCpuTime: 3000,
+            maxNetworkRequests: 0
+        }
+    };
+    const extensionPoints = [
+        {
+            name: 'calculate-equilibrium-constant',
+            description: 'Calculate equilibrium constants from thermodynamic data',
+            inputTypes: ['object'],
+            outputType: 'number',
+            handler: async (data, context) => {
+                try {
+                    const { deltaG, temperature = 298.15 } = data;
+                    const R = 8.314; // Gas constant J/(mol·K)
+                    // K = exp(-ΔG / RT)
+                    const K = Math.exp(-deltaG * 1000 / (R * temperature));
+                    return {
+                        success: true,
+                        data: K,
+                        executionTime: 1,
+                        metadata: {
+                            deltaG,
+                            temperature,
+                            units: 'dimensionless'
+                        }
+                    };
+                }
+                catch (error) {
+                    return {
+                        success: false,
+                        error: `Calculation failed: ${error.message}`,
+                        executionTime: 0
+                    };
+                }
+            }
+        },
+        {
+            name: 'calculate-reaction-rate',
+            description: 'Calculate reaction rates using kinetic data',
+            inputTypes: ['object'],
+            outputType: 'object',
+            handler: async (data, context) => {
+                try {
+                    const { concentrations, rateConstant, orders } = data;
+                    // Rate = k * [A]^m * [B]^n * ...
+                    let rate = rateConstant;
+                    for (let i = 0; i < concentrations.length; i++) {
+                        rate *= Math.pow(concentrations[i], orders[i] || 1);
+                    }
+                    return {
+                        success: true,
+                        data: {
+                            rate,
+                            units: 'M/s',
+                            method: 'rate-law'
+                        },
+                        executionTime: 2,
+                        metadata: {
+                            rateConstant,
+                            concentrations,
+                            orders
+                        }
+                    };
+                }
+                catch (error) {
+                    return {
+                        success: false,
+                        error: `Rate calculation failed: ${error.message}`,
+                        executionTime: 0
+                    };
+                }
+            }
+        }
+    ];
+    return {
+        metadata,
+        config,
+        extensionPoints,
+        factory: (params) => {
+            return PluginBuilder.create()
+                .metadata(metadata)
+                .addExtensionPoint(extensionPoints[0])
+                .addExtensionPoint(extensionPoints[1])
+                .onInitialize(async (params) => {
+                params.logger.info('Advanced calculator initialized');
+            })
+                .onActivate(async () => {
+                console.log('Advanced calculator ready for calculations');
+            })
+                .onHealthCheck(() => ({
+                healthy: true,
+                message: 'All calculation modules loaded',
+                metrics: {
+                    precision: 10,
+                    modulesLoaded: 2
+                },
+                timestamp: new Date()
+            }))
+                .build();
+        }
+    };
+}
+/**
+ * Helper function for the custom balancer (mock implementation)
+ */
+async function advancedBalance(equation) {
+    // Mock AI-powered balancing algorithm
+    const startTime = Date.now();
+    // Simulate processing time
+    await new Promise(resolve => setTimeout(resolve, 100));
+    return {
+        equation: 'H2 + O2 → H2O', // Simplified example
+        coefficients: [2, 1, 2],
+        confidence: 0.95,
+        executionTime: Date.now() - startTime,
+        iterations: 42
+    };
+}
+/**
+ * Plugin marketplace entry examples
+ */
+const exampleMarketplaceEntries = [
+    {
+        metadata: createCustomBalancerPlugin().metadata,
+        downloads: 1250,
+        rating: 4.8,
+        reviews: 23,
+        verified: true,
+        downloadUrl: 'https://registry.creb.js/plugins/custom-balancer-1.0.0.tgz',
+        screenshots: [
+            'https://images.creb.js/plugins/custom-balancer/screenshot1.png',
+            'https://images.creb.js/plugins/custom-balancer/screenshot2.png'
+        ],
+        readme: 'Advanced equation balancing with AI optimization...'
+    },
+    {
+        metadata: createDataProviderPlugin().metadata,
+        downloads: 890,
+        rating: 4.6,
+        reviews: 15,
+        verified: true,
+        downloadUrl: 'https://registry.creb.js/plugins/external-data-provider-1.0.0.tgz',
+        screenshots: [
+            'https://images.creb.js/plugins/external-data/screenshot1.png'
+        ],
+        readme: 'Seamless integration with ChemSpider database...'
+    },
+    {
+        metadata: createSpecializedCalculatorPlugin().metadata,
+        downloads: 2100,
+        rating: 4.9,
+        reviews: 42,
+        verified: true,
+        downloadUrl: 'https://registry.creb.js/plugins/advanced-calculator-1.0.0.tgz',
+        screenshots: [
+            'https://images.creb.js/plugins/advanced-calc/screenshot1.png',
+            'https://images.creb.js/plugins/advanced-calc/screenshot2.png',
+            'https://images.creb.js/plugins/advanced-calc/screenshot3.png'
+        ],
+        readme: 'Professional-grade chemistry calculations for research and education...'
+    }
+];
+
+/**
+ * @fileoverview Telemetry and Logging Type Definitions
+ * @module @creb/core/telemetry/types
+ * @version 1.0.0
+ * @author CREB Team
+ *
+ * Comprehensive type definitions for structured logging, metrics, and telemetry.
+ * Supports correlation IDs, performance tracking, and multi-destination logging.
+ */
+/**
+ * Log level hierarchy for filtering
+ */
+const LOG_LEVELS = {
+    debug: 0,
+    info: 1,
+    warn: 2,
+    error: 3,
+    fatal: 4,
+};
+/**
+ * Default performance thresholds
+ */
+const PERFORMANCE_THRESHOLDS = {
+    /** Slow operation threshold in ms */
+    SLOW_OPERATION: 1000,
+    /** Very slow operation threshold in ms */
+    VERY_SLOW_OPERATION: 5000,
+    /** High memory usage threshold in bytes */
+    HIGH_MEMORY_USAGE: 100 * 1024 * 1024, // 100MB
+    /** High CPU usage threshold (percentage) */
+    HIGH_CPU_USAGE: 80,
+};
+/**
+ * Type guards for runtime type checking
+ */
+const isLogLevel = (value) => {
+    return typeof value === 'string' && value in LOG_LEVELS;
+};
+const isLogEntry = (value) => {
+    return (typeof value === 'object' &&
+        value !== null &&
+        'id' in value &&
+        'level' in value &&
+        'message' in value &&
+        'timestamp' in value &&
+        'correlationId' in value);
+};
+const isMetric = (value) => {
+    return (typeof value === 'object' &&
+        value !== null &&
+        'name' in value &&
+        'type' in value &&
+        'value' in value &&
+        'timestamp' in value);
+};
+/**
+ * Utility functions for creating branded types
+ */
+const createCorrelationId = (id) => id;
+const createTimestamp = (timestamp) => (timestamp ?? Date.now());
+/**
+ * Default telemetry configuration
+ */
+const DEFAULT_TELEMETRY_CONFIG = {
+    logger: {
+        name: 'creb',
+        level: 'info',
+        format: 'json',
+        destinations: [
+            {
+                type: 'console',
+                options: {},
+                enabled: true,
+            },
+        ],
+        enabled: true,
+        includeStack: true,
+        includeMetrics: true,
+        bufferSize: 100,
+        flushInterval: 1000,
+    },
+    metrics: {
+        enabled: true,
+        collectInterval: 10000, // 10 seconds
+        retentionPeriod: 3600000, // 1 hour
+    },
+    context: {
+        enabled: true,
+        propagateAcrossAsync: true,
+    },
+    performance: {
+        enabled: true,
+        sampleRate: 0.1, // 10% sampling
+        thresholds: PERFORMANCE_THRESHOLDS,
+    },
+};
+
+/**
+ * @fileoverview Context Management and Propagation
+ * @module @creb/core/telemetry/Context
+ * @version 1.0.0
+ * @author CREB Team
+ *
+ * Provides context propagation for correlation IDs and logging context
+ * across async operations and module boundaries.
+ */
+/**
+ * Context storage using Node.js AsyncLocalStorage for automatic propagation
+ */
+const contextStorage = new async_hooks.AsyncLocalStorage();
+/**
+ * Context Manager class for managing logging context and correlation IDs
+ */
+class ContextManager {
+    constructor() {
+        this.defaultContext = {
+            operation: 'unknown',
+            module: 'creb',
+        };
+    }
+    /**
+     * Get singleton instance
+     */
+    static getInstance() {
+        if (!ContextManager.instance) {
+            ContextManager.instance = new ContextManager();
+        }
+        return ContextManager.instance;
+    }
+    /**
+     * Get current context from async storage
+     */
+    getContext() {
+        const state = contextStorage.getStore();
+        if (state) {
+            return { ...state.context };
+        }
+        return { ...this.defaultContext };
+    }
+    /**
+     * Set context in current async context
+     */
+    setContext(context) {
+        const current = this.getCurrentState();
+        const updatedContext = { ...current.context, ...context };
+        const newState = {
+            ...current,
+            context: updatedContext,
+        };
+        // Run in new context with updated state
+        contextStorage.run(newState, () => {
+            // Context is now set for this async scope
+        });
+    }
+    /**
+     * Create child context with inheritance
+     */
+    createChild(context) {
+        const childManager = new ChildContextManager(this, context);
+        return childManager;
+    }
+    /**
+     * Clear current context
+     */
+    clear() {
+        contextStorage.run(this.createDefaultState(), () => {
+            // Context cleared
+        });
+    }
+    /**
+     * Get current correlation ID
+     */
+    getCorrelationId() {
+        const state = contextStorage.getStore();
+        return state?.correlationId ?? this.generateCorrelationId();
+    }
+    /**
+     * Set correlation ID
+     */
+    setCorrelationId(id) {
+        const current = this.getCurrentState();
+        const newState = {
+            ...current,
+            correlationId: id,
+        };
+        contextStorage.run(newState, () => {
+            // Correlation ID set
+        });
+    }
+    /**
+     * Run function with specific context
+     */
+    runWithContext(context, fn, correlationId) {
+        const currentState = this.getCurrentState();
+        const newState = {
+            correlationId: correlationId ?? this.generateCorrelationId(),
+            context: { ...currentState.context, ...context },
+            createdAt: createTimestamp(),
+            parentId: currentState.correlationId,
+        };
+        return contextStorage.run(newState, fn);
+    }
+    /**
+     * Run async function with specific context
+     */
+    async runWithContextAsync(context, fn, correlationId) {
+        const currentState = this.getCurrentState();
+        const newState = {
+            correlationId: correlationId ?? this.generateCorrelationId(),
+            context: { ...currentState.context, ...context },
+            createdAt: createTimestamp(),
+            parentId: currentState.correlationId,
+        };
+        return contextStorage.run(newState, fn);
+    }
+    /**
+     * Get context trace (current + parent contexts)
+     */
+    getContextTrace() {
+        const current = this.getCurrentState();
+        return {
+            current: current.correlationId,
+            parent: current.parentId,
+            depth: this.calculateDepth(current),
+            createdAt: current.createdAt,
+            context: current.context,
+        };
+    }
+    /**
+     * Generate new correlation ID
+     */
+    generateCorrelationId() {
+        return createCorrelationId(`creb-${crypto.randomUUID()}`);
+    }
+    /**
+     * Get current state or create default
+     */
+    getCurrentState() {
+        return contextStorage.getStore() ?? this.createDefaultState();
+    }
+    /**
+     * Create default context state
+     */
+    createDefaultState() {
+        return {
+            correlationId: this.generateCorrelationId(),
+            context: { ...this.defaultContext },
+            createdAt: createTimestamp(),
+        };
+    }
+    /**
+     * Calculate context depth for tracing
+     */
+    calculateDepth(state) {
+        let depth = 0;
+        let current = state;
+        // This is a simplified version - in a real implementation,
+        // you might want to track this more efficiently
+        while (current.parentId && depth < 100) { // Prevent infinite loops
+            depth++;
+            // In a full implementation, you'd need to track parent states
+            break;
+        }
+        return depth;
+    }
+}
+/**
+ * Child context manager for scoped contexts
+ */
+class ChildContextManager {
+    constructor(parent, childContext) {
+        this.parent = parent;
+        this.childContext = childContext;
+    }
+    getContext() {
+        const parentContext = this.parent.getContext();
+        return { ...parentContext, ...this.childContext };
+    }
+    setContext(context) {
+        this.childContext = { ...this.childContext, ...context };
+    }
+    createChild(context) {
+        const mergedContext = { ...this.childContext, ...context };
+        return new ChildContextManager(this.parent, mergedContext);
+    }
+    clear() {
+        this.childContext = {};
+    }
+}
+/**
+ * Context utilities
+ */
+class ContextUtils {
+    /**
+     * Create correlation ID from parts
+     */
+    static createCorrelationId(prefix, suffix) {
+        const parts = [
+            prefix ?? 'creb',
+            crypto.randomUUID(),
+            suffix,
+        ].filter(Boolean);
+        return createCorrelationId(parts.join('-'));
+    }
+    /**
+     * Extract correlation ID from string
+     */
+    static extractCorrelationId(value) {
+        // Simple validation - could be more sophisticated
+        if (value && value.length > 0) {
+            return createCorrelationId(value);
+        }
+        return null;
+    }
+    /**
+     * Format correlation ID for display
+     */
+    static formatCorrelationId(id, length = 8) {
+        const idStr = String(id);
+        if (idStr.length <= length) {
+            return idStr;
+        }
+        return `${idStr.substring(0, length)}...`;
+    }
+    /**
+     * Merge contexts with precedence
+     */
+    static mergeContexts(...contexts) {
+        const merged = {
+            operation: 'unknown',
+            module: 'creb',
+        };
+        for (const context of contexts) {
+            Object.assign(merged, context);
+        }
+        return merged;
+    }
+    /**
+     * Validate context structure
+     */
+    static validateContext(context) {
+        return (typeof context === 'object' &&
+            context !== null &&
+            'operation' in context &&
+            'module' in context &&
+            typeof context.operation === 'string' &&
+            typeof context.module === 'string');
+    }
+}
+/**
+ * Decorator for automatic context propagation
+ */
+function withContext(context) {
+    return function (target, propertyKey, descriptor) {
+        const originalMethod = descriptor.value;
+        if (!originalMethod) {
+            throw new Error('Decorator can only be applied to methods');
+        }
+        descriptor.value = function (...args) {
+            const contextManager = ContextManager.getInstance();
+            if (originalMethod.constructor.name === 'AsyncFunction') {
+                return contextManager.runWithContextAsync(context, async () => {
+                    return await originalMethod.apply(this, args);
+                });
+            }
+            else {
+                return contextManager.runWithContext(context, () => {
+                    return originalMethod.apply(this, args);
+                });
+            }
+        };
+        return descriptor;
+    };
+}
+/**
+ * Global context manager instance
+ */
+const globalContextManager = ContextManager.getInstance();
+/**
+ * Convenience functions for common operations
+ */
+const getCurrentContext = () => globalContextManager.getContext();
+const getCurrentCorrelationId = () => globalContextManager.getCorrelationId();
+const setContext = (context) => globalContextManager.setContext(context);
+const setCorrelationId = (id) => globalContextManager.setCorrelationId(id);
+const runWithContext = (context, fn) => globalContextManager.runWithContext(context, fn);
+const runWithContextAsync = (context, fn) => globalContextManager.runWithContextAsync(context, fn);
+
+/**
+ * @fileoverview Performance Metrics Collection and Analysis
+ * @module @creb/core/telemetry/Metrics
+ * @version 1.0.0
+ * @author CREB Team
+ *
+ * Comprehensive metrics collection system for performance monitoring,
+ * automatic metric capture, and telemetry aggregation.
+ */
+/**
+ * Metrics Registry for storing and managing metrics
+ */
+class MetricsRegistry extends events.EventEmitter {
+    constructor() {
+        super();
+        this.metrics = new Map();
+        this.counters = new Map();
+        this.gauges = new Map();
+        this.histograms = new Map();
+        this.timers = new Map();
+        this.maxRetentionSize = 10000;
+        this.defaultBuckets = [0.1, 0.5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000];
+        this.setupPeriodicCleanup();
+    }
+    /**
+     * Record a counter metric (monotonically increasing)
+     */
+    counter(name, value = 1, tags = {}) {
+        const currentValue = this.counters.get(name) || 0;
+        const newValue = currentValue + value;
+        this.counters.set(name, newValue);
+        const metric = {
+            name,
+            type: 'counter',
+            value: newValue,
+            tags,
+            timestamp: createTimestamp(),
+        };
+        this.recordMetric(metric);
+    }
+    /**
+     * Record a gauge metric (arbitrary value that can go up or down)
+     */
+    gauge(name, value, tags = {}) {
+        this.gauges.set(name, value);
+        const metric = {
+            name,
+            type: 'gauge',
+            value,
+            tags,
+            timestamp: createTimestamp(),
+        };
+        this.recordMetric(metric);
+    }
+    /**
+     * Record a histogram metric (distribution of values)
+     */
+    histogram(name, value, tags = {}, buckets = this.defaultBuckets) {
+        let histogramData = this.histograms.get(name);
+        if (!histogramData) {
+            histogramData = {
+                buckets: buckets.map(le => ({ le, count: 0 })),
+                sum: 0,
+                count: 0,
+            };
+            this.histograms.set(name, histogramData);
+        }
+        // Update histogram
+        histogramData.sum += value;
+        histogramData.count += 1;
+        // Update buckets
+        for (const bucket of histogramData.buckets) {
+            if (value <= bucket.le) {
+                bucket.count += 1;
+            }
+        }
+        const metric = {
+            name,
+            type: 'histogram',
+            value,
+            tags: { ...tags, bucket: 'sample' },
+            timestamp: createTimestamp(),
+        };
+        this.recordMetric(metric);
+    }
+    /**
+     * Start a timer for measuring duration
+     */
+    startTimer(name, tags = {}) {
+        const startTime = perf_hooks.performance.now();
+        const timer = {
+            name,
+            startTime,
+            stop: () => {
+                const duration = perf_hooks.performance.now() - startTime;
+                this.histogram(`${name}_duration_ms`, duration, tags);
+                this.timers.delete(name);
+                return duration;
+            },
+            elapsed: () => perf_hooks.performance.now() - startTime,
+        };
+        this.timers.set(name, timer);
+        return timer;
+    }
+    /**
+     * Time a synchronous function execution
+     */
+    time(name, fn, tags = {}) {
+        const timer = this.startTimer(name, tags);
+        try {
+            const result = fn();
+            return result;
+        }
+        finally {
+            timer.stop();
+        }
+    }
+    /**
+     * Time an asynchronous function execution
+     */
+    async timeAsync(name, fn, tags = {}) {
+        const timer = this.startTimer(name, tags);
+        try {
+            const result = await fn();
+            return result;
+        }
+        finally {
+            timer.stop();
+        }
+    }
+    /**
+     * Record custom performance metrics
+     */
+    recordPerformanceMetrics(metrics, tags = {}) {
+        if (metrics.duration !== undefined) {
+            this.histogram('operation_duration_ms', metrics.duration, tags);
+        }
+        if (metrics.memoryUsage !== undefined) {
+            this.gauge('memory_usage_bytes', metrics.memoryUsage, tags);
+        }
+        if (metrics.cpuUsage !== undefined) {
+            this.gauge('cpu_usage_percent', metrics.cpuUsage, tags);
+        }
+        if (metrics.operationCount !== undefined) {
+            this.counter('operations_total', metrics.operationCount, tags);
+        }
+        if (metrics.cacheHitRatio !== undefined) {
+            this.gauge('cache_hit_ratio', metrics.cacheHitRatio, tags);
+        }
+        // Record custom metrics
+        if (metrics.custom) {
+            for (const [key, value] of Object.entries(metrics.custom)) {
+                this.gauge(`custom_${key}`, value, tags);
+            }
+        }
+    }
+    /**
+     * Get current metric value
+     */
+    getMetric(name) {
+        const values = this.metrics.get(name);
+        if (!values || values.length === 0) {
+            return undefined;
+        }
+        const latest = values[values.length - 1];
+        return {
+            name,
+            type: this.inferMetricType(name),
+            value: latest.value,
+            tags: latest.tags,
+            timestamp: latest.timestamp,
+        };
+    }
+    /**
+     * Get all metrics values for a metric name
+     */
+    getMetricHistory(name, limit) {
+        const values = this.metrics.get(name) || [];
+        return limit ? values.slice(-limit) : [...values];
+    }
+    /**
+     * Get metric statistics
+     */
+    getMetricStats(name) {
+        const values = this.metrics.get(name);
+        if (!values || values.length === 0) {
+            return undefined;
+        }
+        const numericValues = values.map(v => v.value);
+        const sorted = [...numericValues].sort((a, b) => a - b);
+        return {
+            count: values.length,
+            min: Math.min(...numericValues),
+            max: Math.max(...numericValues),
+            mean: numericValues.reduce((a, b) => a + b, 0) / numericValues.length,
+            median: this.calculateMedian(sorted),
+            p95: this.calculatePercentile(sorted, 0.95),
+            p99: this.calculatePercentile(sorted, 0.99),
+            stdDev: this.calculateStandardDeviation(numericValues),
+        };
+    }
+    /**
+     * Collect all current metrics
+     */
+    async collect() {
+        const metrics = [];
+        // Collect counters
+        this.counters.forEach((value, name) => {
+            metrics.push({
+                name,
+                type: 'counter',
+                value,
+                timestamp: createTimestamp(),
+                tags: {},
+            });
+        });
+        // Collect gauges
+        this.gauges.forEach((value, name) => {
+            metrics.push({
+                name,
+                type: 'gauge',
+                value,
+                timestamp: createTimestamp(),
+                tags: {},
+            });
+        });
+        // Collect histograms
+        this.histograms.forEach((histogram, name) => {
+            // Add histogram buckets
+            for (const bucket of histogram.buckets) {
+                metrics.push({
+                    name: `${name}_bucket`,
+                    type: 'histogram',
+                    value: bucket.count,
+                    timestamp: createTimestamp(),
+                    tags: { le: bucket.le.toString() },
+                });
+            }
+            // Add histogram sum and count
+            metrics.push({
+                name: `${name}_sum`,
+                type: 'histogram',
+                value: histogram.sum,
+                timestamp: createTimestamp(),
+                tags: {},
+            });
+            metrics.push({
+                name: `${name}_count`,
+                type: 'histogram',
+                value: histogram.count,
+                timestamp: createTimestamp(),
+                tags: {},
+            });
+        });
+        return metrics;
+    }
+    /**
+     * Reset all metrics
+     */
+    reset() {
+        this.metrics.clear();
+        this.counters.clear();
+        this.gauges.clear();
+        this.histograms.clear();
+        this.timers.clear();
+        this.emit('metrics:reset');
+    }
+    /**
+     * Reset specific metric
+     */
+    resetMetric(name) {
+        this.metrics.delete(name);
+        this.counters.delete(name);
+        this.gauges.delete(name);
+        this.histograms.delete(name);
+        this.timers.delete(name);
+        this.emit('metrics:reset', name);
+    }
+    /**
+     * Get system performance metrics
+     */
+    getSystemMetrics() {
+        const memoryUsage = process.memoryUsage();
+        const cpuUsage = process.cpuUsage();
+        return {
+            memoryUsage: memoryUsage.heapUsed,
+            cpuUsage: (cpuUsage.user + cpuUsage.system) / 1000000, // Convert to milliseconds
+            operationCount: this.metrics.size,
+            custom: {
+                heap_total: memoryUsage.heapTotal,
+                heap_used: memoryUsage.heapUsed,
+                external: memoryUsage.external,
+                rss: memoryUsage.rss,
+                gc_duration: 0, // Would need to hook into GC events
+            },
+        };
+    }
+    /**
+     * Check performance thresholds and emit alerts
+     */
+    checkThresholds() {
+        const systemMetrics = this.getSystemMetrics();
+        if (systemMetrics.memoryUsage && systemMetrics.memoryUsage > PERFORMANCE_THRESHOLDS.HIGH_MEMORY_USAGE) {
+            this.emit('threshold:exceeded', {
+                metric: 'memory_usage',
+                value: systemMetrics.memoryUsage,
+                threshold: PERFORMANCE_THRESHOLDS.HIGH_MEMORY_USAGE,
+            });
+        }
+        if (systemMetrics.cpuUsage && systemMetrics.cpuUsage > PERFORMANCE_THRESHOLDS.HIGH_CPU_USAGE) {
+            this.emit('threshold:exceeded', {
+                metric: 'cpu_usage',
+                value: systemMetrics.cpuUsage,
+                threshold: PERFORMANCE_THRESHOLDS.HIGH_CPU_USAGE,
+            });
+        }
+    }
+    /**
+     * Record a metric value internally
+     */
+    recordMetric(metric) {
+        let values = this.metrics.get(metric.name);
+        if (!values) {
+            values = [];
+            this.metrics.set(metric.name, values);
+        }
+        values.push({
+            value: metric.value,
+            timestamp: metric.timestamp,
+            tags: metric.tags || {},
+        });
+        // Limit retention size
+        if (values.length > this.maxRetentionSize) {
+            values.splice(0, values.length - this.maxRetentionSize);
+        }
+        this.emit('metric:recorded', metric);
+    }
+    /**
+     * Infer metric type from name patterns
+     */
+    inferMetricType(name) {
+        if (name.includes('_total') || name.includes('_count')) {
+            return 'counter';
+        }
+        if (name.includes('_duration') || name.includes('_bucket')) {
+            return 'histogram';
+        }
+        if (name.includes('_timer')) {
+            return 'timer';
+        }
+        return 'gauge';
+    }
+    /**
+     * Calculate median value
+     */
+    calculateMedian(sorted) {
+        const mid = Math.floor(sorted.length / 2);
+        return sorted.length % 2 === 0
+            ? (sorted[mid - 1] + sorted[mid]) / 2
+            : sorted[mid];
+    }
+    /**
+     * Calculate percentile value
+     */
+    calculatePercentile(sorted, percentile) {
+        const index = Math.ceil(sorted.length * percentile) - 1;
+        return sorted[Math.max(0, index)];
+    }
+    /**
+     * Calculate standard deviation
+     */
+    calculateStandardDeviation(values) {
+        const mean = values.reduce((a, b) => a + b, 0) / values.length;
+        const squaredDiffs = values.map(value => Math.pow(value - mean, 2));
+        const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / values.length;
+        return Math.sqrt(avgSquaredDiff);
+    }
+    /**
+     * Setup periodic cleanup of old metrics
+     */
+    setupPeriodicCleanup() {
+        const cleanupInterval = 5 * 60 * 1000; // 5 minutes
+        setInterval(() => {
+            const cutoff = Date.now() - (60 * 60 * 1000); // 1 hour ago
+            this.metrics.forEach((values, name) => {
+                const filtered = values.filter(v => v.timestamp > cutoff);
+                if (filtered.length !== values.length) {
+                    this.metrics.set(name, filtered);
+                }
+            });
+        }, cleanupInterval);
+    }
+}
+/**
+ * Performance profiler for automatic metric capture
+ */
+class PerformanceProfiler {
+    constructor(metrics, enabled = true) {
+        this.metrics = metrics;
+        this.enabled = enabled;
+    }
+    /**
+     * Profile a function execution
+     */
+    profile(name, fn, tags = {}) {
+        if (!this.enabled) {
+            return fn();
+        }
+        return this.metrics.time(name, fn, tags);
+    }
+    /**
+     * Profile an async function execution
+     */
+    async profileAsync(name, fn, tags = {}) {
+        if (!this.enabled) {
+            return await fn();
+        }
+        return await this.metrics.timeAsync(name, fn, tags);
+    }
+    /**
+     * Create a profiling decorator
+     */
+    createProfileDecorator(name, tags = {}) {
+        const metrics = this.metrics;
+        return (target, propertyKey, descriptor) => {
+            const metricName = name || `${target.constructor.name}.${propertyKey}`;
+            const originalMethod = descriptor.value;
+            descriptor.value = function (...args) {
+                if (originalMethod.constructor.name === 'AsyncFunction') {
+                    return metrics.timeAsync(metricName, async () => {
+                        return await originalMethod.apply(this, args);
+                    }, tags);
+                }
+                else {
+                    return metrics.time(metricName, () => {
+                        return originalMethod.apply(this, args);
+                    }, tags);
+                }
+            };
+            return descriptor;
+        };
+    }
+}
+/**
+ * Global metrics registry instance
+ */
+const globalMetrics = new MetricsRegistry();
+/**
+ * Global performance profiler
+ */
+const globalProfiler = new PerformanceProfiler(globalMetrics);
+/**
+ * Convenience functions for metrics
+ */
+const counter = (name, value, tags) => globalMetrics.counter(name, value, tags);
+const gauge = (name, value, tags) => globalMetrics.gauge(name, value, tags);
+const histogram = (name, value, tags) => globalMetrics.histogram(name, value, tags);
+const time = (name, fn, tags) => globalMetrics.time(name, fn, tags);
+const timeAsync = (name, fn, tags) => globalMetrics.timeAsync(name, fn, tags);
+/**
+ * Profile decorator for automatic method timing
+ */
+const Profile = (name, tags = {}) => globalProfiler.createProfileDecorator(name, tags);
+
+/**
+ * Structured Logger Implementation
+ *
+ * Provides structured JSON logging with context propagation, performance metrics,
+ * and zero-overhead when disabled.
+ */
+var LogLevel;
+(function (LogLevel) {
+    LogLevel[LogLevel["DEBUG"] = 0] = "DEBUG";
+    LogLevel[LogLevel["INFO"] = 1] = "INFO";
+    LogLevel[LogLevel["WARN"] = 2] = "WARN";
+    LogLevel[LogLevel["ERROR"] = 3] = "ERROR";
+    LogLevel[LogLevel["OFF"] = 4] = "OFF";
+})(LogLevel || (LogLevel = {}));
+class ConsoleDestination {
+    write(entry) {
+        this.writeToConsole(JSON.stringify(entry));
+    }
+    writeToConsole(message) {
+        try {
+            console.log(message);
+        }
+        catch (error) {
+            // Handle EPIPE errors gracefully (broken pipe when output is piped)
+            if (error?.code === 'EPIPE') {
+                // Silently ignore EPIPE errors to prevent crash
+                return;
+            }
+            // Re-throw other errors
+            throw error;
+        }
+    }
+}
+class FileDestination {
+    constructor(filePath) {
+        this.filePath = filePath;
+    }
+    write(entry) {
+        // Implementation would use fs.appendFile in real scenario
+        // For demo purposes, we'll use console with file prefix
+        console.log(`[FILE:${this.filePath}] ${JSON.stringify(entry)}`);
+    }
+}
+class LevelFilter {
+    constructor(minLevel) {
+        this.minLevel = minLevel;
+    }
+    shouldLog(entry) {
+        const entryLevel = LogLevel[entry.level];
+        return entryLevel >= this.minLevel;
+    }
+}
+class ModuleFilter {
+    constructor(modules) {
+        this.modules = modules;
+    }
+    shouldLog(entry) {
+        if (!entry.module)
+            return true;
+        return this.modules.includes(entry.module);
+    }
+}
+class StructuredLogger {
+    constructor(config) {
+        this.config = config;
+        this.children = new Map();
+    }
+    static getGlobalLogger() {
+        if (!StructuredLogger.globalLogger) {
+            StructuredLogger.globalLogger = LoggerFactory.createLogger({
+                level: LogLevel.INFO,
+                destinations: [new ConsoleDestination()]
+            });
+        }
+        return StructuredLogger.globalLogger;
+    }
+    static setGlobalLogger(logger) {
+        StructuredLogger.globalLogger = logger;
+    }
+    child(module, context) {
+        const key = `${module}-${JSON.stringify(context || {})}`;
+        if (!this.children.has(key)) {
+            const childConfig = {
+                ...this.config,
+                module
+            };
+            const child = new StructuredLogger(childConfig);
+            child.children = this.children; // Share children map
+            this.children.set(key, child);
+        }
+        return this.children.get(key);
+    }
+    debug(message, context, metadata) {
+        this.log(LogLevel.DEBUG, message, context, metadata);
+    }
+    info(message, context, metadata) {
+        this.log(LogLevel.INFO, message, context, metadata);
+    }
+    warn(message, context, metadata) {
+        this.log(LogLevel.WARN, message, context, metadata);
+    }
+    error(message, error, metadata) {
+        let context;
+        let errorObj;
+        if (error instanceof Error) {
+            errorObj = {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            };
+        }
+        else if (error) {
+            context = error;
+        }
+        const entry = this.createLogEntry(LogLevel.ERROR, message, context, metadata);
+        if (errorObj) {
+            entry.error = errorObj;
+        }
+        this.writeEntry(entry);
+    }
+    performance(operation, fn, context) {
+        if (!this.config.enablePerformance) {
+            return fn();
+        }
+        const startTime = process.hrtime.bigint();
+        const start = Date.now();
+        try {
+            const result = fn();
+            const endTime = process.hrtime.bigint();
+            const duration = Number(endTime - startTime) / 1000000; // Convert to milliseconds
+            this.info(`Performance: ${operation}`, {
+                ...context,
+                operation,
+                duration_ms: Math.round(duration * 100) / 100,
+                timestamp: new Date(start).toISOString()
+            }, {
+                type: 'performance',
+                start_time: start,
+                end_time: Date.now()
+            });
+            return result;
+        }
+        catch (error) {
+            const endTime = process.hrtime.bigint();
+            const duration = Number(endTime - startTime) / 1000000;
+            this.error(`Performance: ${operation} failed`, error instanceof Error ? error : new Error(String(error)), {
+                operation,
+                duration_ms: Math.round(duration * 100) / 100,
+                timestamp: new Date(start).toISOString(),
+                type: 'performance_error'
+            });
+            throw error;
+        }
+    }
+    async performanceAsync(operation, fn, context) {
+        if (!this.config.enablePerformance) {
+            return fn();
+        }
+        const startTime = process.hrtime.bigint();
+        const start = Date.now();
+        try {
+            const result = await fn();
+            const endTime = process.hrtime.bigint();
+            const duration = Number(endTime - startTime) / 1000000;
+            this.info(`Performance: ${operation}`, {
+                ...context,
+                operation,
+                duration_ms: Math.round(duration * 100) / 100,
+                timestamp: new Date(start).toISOString()
+            }, {
+                type: 'performance_async',
+                start_time: start,
+                end_time: Date.now()
+            });
+            return result;
+        }
+        catch (error) {
+            const endTime = process.hrtime.bigint();
+            const duration = Number(endTime - startTime) / 1000000;
+            this.error(`Performance: ${operation} failed`, error instanceof Error ? error : new Error(String(error)), {
+                operation,
+                duration_ms: Math.round(duration * 100) / 100,
+                timestamp: new Date(start).toISOString(),
+                type: 'performance_async_error'
+            });
+            throw error;
+        }
+    }
+    flush() {
+        this.config.destinations.forEach(dest => {
+            if (dest.flush) {
+                dest.flush();
+            }
+        });
+    }
+    log(level, message, context, metadata) {
+        const entry = this.createLogEntry(level, message, context, metadata);
+        this.writeEntry(entry);
+    }
+    createLogEntry(level, message, context, metadata) {
+        const entry = {
+            timestamp: new Date().toISOString(),
+            level: LogLevel[level],
+            message,
+            context,
+            metadata,
+            module: this.config.module
+        };
+        // Add correlation ID from context if available
+        // This would integrate with Context.ts in a full implementation
+        try {
+            const { getCurrentContext } = require('./Context');
+            const currentContext = getCurrentContext();
+            if (currentContext?.correlationId) {
+                entry.correlationId = currentContext.correlationId;
+            }
+        }
+        catch {
+            // Context module not available or error - continue without correlation ID
+        }
+        return entry;
+    }
+    writeEntry(entry) {
+        // Apply filters
+        if (this.config.filters) {
+            for (const filter of this.config.filters) {
+                if (!filter.shouldLog(entry)) {
+                    return;
+                }
+            }
+        }
+        // Write to all destinations
+        this.config.destinations.forEach(dest => {
+            try {
+                dest.write(entry);
+            }
+            catch (error) {
+                // Don't let destination errors crash the application
+                console.error('Logger destination error:', error);
+            }
+        });
+    }
+}
+StructuredLogger.globalLogger = null;
+class LoggerFactory {
+    static createLogger(config) {
+        return new StructuredLogger(config);
+    }
+    static createConsoleLogger(level = LogLevel.INFO) {
+        return new StructuredLogger({
+            level,
+            destinations: [new ConsoleDestination()],
+            filters: [new LevelFilter(level)],
+            enablePerformance: true
+        });
+    }
+    static createFileLogger(filePath, level = LogLevel.INFO) {
+        return new StructuredLogger({
+            level,
+            destinations: [new FileDestination(filePath)],
+            filters: [new LevelFilter(level)],
+            enablePerformance: true
+        });
+    }
+    static createMultiDestinationLogger(destinations, level = LogLevel.INFO, filters) {
+        return new StructuredLogger({
+            level,
+            destinations,
+            filters: filters || [new LevelFilter(level)],
+            enablePerformance: true
+        });
+    }
+}
+// Convenience exports
+const logger = StructuredLogger.getGlobalLogger();
+const globalLogger = logger; // Alias for compatibility
+const createLogger = LoggerFactory.createLogger;
+const createConsoleLogger = LoggerFactory.createConsoleLogger;
+const createFileLogger = LoggerFactory.createFileLogger;
+const createMultiDestinationLogger = LoggerFactory.createMultiDestinationLogger;
+
+/**
+ * @fileoverview Telemetry Module Exports
+ * @module @creb/core/telemetry
+ * @version 1.0.0
+ * @author CREB Team
+ *
+ * Main exports for the CREB telemetry system including structured logging,
+ * metrics collection, context management, and performance monitoring.
+ */
+// Type exports
+/**
+ * Telemetry system initialization and configuration
+ */
+class TelemetrySystem {
+    /**
+     * Initialize the telemetry system with configuration
+     */
+    static initialize(config) {
+        if (TelemetrySystem.initialized) {
+            return;
+        }
+        TelemetrySystem.config = config;
+        TelemetrySystem.initialized = true;
+        // Initialize subsystems
+        globalLogger.info('Telemetry system initialized', {
+            operation: 'telemetry_init',
+            module: 'telemetry',
+        }, {
+            config_provided: !!config,
+            timestamp: Date.now(),
+        });
+    }
+    /**
+     * Check if telemetry system is initialized
+     */
+    static isInitialized() {
+        return TelemetrySystem.initialized;
+    }
+    /**
+     * Get current configuration
+     */
+    static getConfig() {
+        return TelemetrySystem.config;
+    }
+    /**
+     * Shutdown telemetry system
+     */
+    static async shutdown() {
+        if (!TelemetrySystem.initialized) {
+            return;
+        }
+        globalLogger.info('Telemetry system shutting down', {
+            operation: 'telemetry_shutdown',
+            module: 'telemetry',
+        });
+        // Flush all pending logs and metrics
+        globalLogger.flush();
+        TelemetrySystem.initialized = false;
+    }
+}
+TelemetrySystem.initialized = false;
+TelemetrySystem.config = null;
+/**
+ * Default telemetry initialization for quick setup
+ */
+const initializeTelemetry = (config) => TelemetrySystem.initialize(config);
+/**
+ * Quick access to commonly used telemetry functions
+ */
+const telemetry = {
+    // Logging
+    debug: (message, context, metadata) => globalLogger.debug(message, context, metadata),
+    info: (message, context, metadata) => globalLogger.info(message, context, metadata),
+    warn: (message, context, metadata) => globalLogger.warn(message, context, metadata),
+    error: (message, error, metadata) => globalLogger.error(message, error, metadata),
+    fatal: (message, error, metadata) => globalLogger.error(message, error, metadata), // Map fatal to error
+    // Metrics
+    counter,
+    gauge,
+    histogram,
+    time,
+    timeAsync,
+    // Context
+    setContext,
+    setCorrelationId,
+    runWithContext,
+    runWithContextAsync,
+    // System
+    initialize: initializeTelemetry,
+    shutdown: TelemetrySystem.shutdown,
+    isInitialized: TelemetrySystem.isInitialized,
+};
+
 exports.AdaptiveEvictionPolicy = AdaptiveEvictionPolicy;
 exports.AdvancedKineticsAnalyzer = AdvancedKineticsAnalyzer;
+exports.BasePlugin = BasePlugin;
 exports.CREBError = CREBError;
 exports.CREBServices = CREBServices;
 exports.CREBValidationError = ValidationError;
+exports.CREBVisualizationUtils = CREBVisualizationUtils;
 exports.CREBWorkerManager = CREBWorkerManager;
 exports.CacheFactory = CacheFactory;
 exports.CachedChemicalDatabase = CachedChemicalDatabase;
 exports.CachedEquationBalancer = CachedEquationBalancer;
 exports.CachedThermodynamicsCalculator = CachedThermodynamicsCalculator;
+exports.Canvas2DRenderer = Canvas2DRenderer;
 exports.ChemicalFormulaError = ChemicalFormulaError;
+exports.ChemicalFormulaValidator = ChemicalFormulaValidator;
 exports.CircuitBreaker = CircuitBreaker;
 exports.CircuitBreakerManager = CircuitBreakerManager;
 exports.CircularDependencyError = CircularDependencyError;
 exports.ComputationError = ComputationError;
+exports.ConsoleDestination = ConsoleDestination;
 exports.Container = Container;
+exports.ContextManager = ContextManager;
+exports.ContextUtils = ContextUtils;
+exports.DEFAULT_TELEMETRY_CONFIG = DEFAULT_TELEMETRY_CONFIG;
 exports.DataValidationService = DataValidationService;
 exports.ELEMENTS_LIST = ELEMENTS_LIST;
 exports.ElementCounter = ElementCounter;
@@ -12149,6 +18278,8 @@ exports.ErrorUtils = ErrorUtils;
 exports.EvictionPolicyFactory = EvictionPolicyFactory;
 exports.ExternalAPIError = ExternalAPIError;
 exports.FIFOEvictionPolicy = FIFOEvictionPolicy;
+exports.FileDestination = FileDestination;
+exports.FluentValidationBuilder = FluentValidationBuilder;
 exports.GracefulDegradationService = GracefulDegradationService;
 exports.IBalancerToken = IBalancerToken;
 exports.ICacheToken = ICacheToken;
@@ -12163,14 +18294,28 @@ exports.IWorkerPoolToken = IWorkerPoolToken;
 exports.Inject = Inject;
 exports.Injectable = Injectable;
 exports.LFUEvictionPolicy = LFUEvictionPolicy;
+exports.LOG_LEVELS = LOG_LEVELS;
 exports.LRUEvictionPolicy = LRUEvictionPolicy;
+exports.LevelFilter = LevelFilter;
+exports.LoggerFactory = LoggerFactory;
 exports.MaxDepthExceededError = MaxDepthExceededError;
 exports.MechanismAnalyzer = MechanismAnalyzer;
+exports.MetricsRegistry = MetricsRegistry;
+exports.ModuleFilter = ModuleFilter;
+exports.MolecularDataUtils = MolecularDataUtils;
+exports.MolecularVisualization = MolecularVisualization;
 exports.MultiLevelCache = MultiLevelCache;
 exports.NetworkError = NetworkError;
 exports.Optional = Optional;
 exports.PARAMETER_SYMBOLS = PARAMETER_SYMBOLS;
+exports.PERFORMANCE_THRESHOLDS = PERFORMANCE_THRESHOLDS;
 exports.PERIODIC_TABLE = PERIODIC_TABLE;
+exports.PerformanceProfiler = PerformanceProfiler;
+exports.PluginAPIContextFactory = PluginAPIContextFactory;
+exports.PluginAPIContextImpl = PluginAPIContextImpl;
+exports.PluginBuilder = PluginBuilder;
+exports.PluginManager = PluginManager;
+exports.Profile = Profile;
 exports.RandomEvictionPolicy = RandomEvictionPolicy;
 exports.RateLimiter = RateLimiter;
 exports.ReactionKinetics = ReactionKinetics;
@@ -12178,13 +18323,18 @@ exports.ReactionSafetyAnalyzer = ReactionSafetyAnalyzer;
 exports.RetryPolicies = RetryPolicies;
 exports.RetryPolicy = RetryPolicy;
 exports.ServiceNotFoundError = ServiceNotFoundError;
+exports.SimplePlugin = SimplePlugin;
 exports.Singleton = Singleton;
+exports.StructuredLogger = StructuredLogger;
 exports.SystemError = SystemError;
 exports.SystemHealthMonitor = SystemHealthMonitor;
 exports.TTLEvictionPolicy = TTLEvictionPolicy;
 exports.TaskBuilder = TaskBuilder;
+exports.TelemetrySystem = TelemetrySystem;
+exports.ThermodynamicPropertiesValidator = ThermodynamicPropertiesValidator;
 exports.ThermodynamicsEquationBalancer = ThermodynamicsEquationBalancer;
 exports.Transient = Transient;
+exports.ValidationPipeline = ValidationPipeline;
 exports.WithCircuitBreaker = WithCircuitBreaker;
 exports.WithRetry = WithRetry;
 exports.WorkerPerformanceMonitor = WorkerPerformanceMonitor;
@@ -12192,35 +18342,76 @@ exports.calculateMolarWeight = calculateMolarWeight;
 exports.circuitBreakerManager = circuitBreakerManager;
 exports.configManager = configManager;
 exports.container = container;
+exports.convertMoleculeToVisualization = convertMoleculeToVisualization;
+exports.counter = counter;
 exports.createBatchTasks = createBatchTasks;
 exports.createChemicalFormula = createChemicalFormula;
+exports.createChemistryValidator = createChemistryValidator;
 exports.createChildContainer = createChildContainer;
+exports.createCompositeValidator = createCompositeValidator;
+exports.createConsoleLogger = createConsoleLogger;
+exports.createCorrelationId = createCorrelationId;
 exports.createCriticalTask = createCriticalTask;
+exports.createCustomBalancerPlugin = createCustomBalancerPlugin;
+exports.createDataProviderPlugin = createDataProviderPlugin;
 exports.createElementSymbol = createElementSymbol;
 exports.createEnergyProfile = createEnergyProfile;
+exports.createFastValidationPipeline = createFastValidationPipeline;
+exports.createFileLogger = createFileLogger;
+exports.createLogger = createLogger;
+exports.createMolecularVisualization = createMolecularVisualization;
+exports.createMultiDestinationLogger = createMultiDestinationLogger;
 exports.createRetryPolicy = createRetryPolicy;
+exports.createSpecializedCalculatorPlugin = createSpecializedCalculatorPlugin;
 exports.createTaskId = createTaskId;
+exports.createThoroughValidationPipeline = createThoroughValidationPipeline;
+exports.createTimestamp = createTimestamp;
 exports.createToken = createToken;
+exports.createValidationPipeline = createValidationPipeline;
+exports.createValidator = createValidator;
 exports.createWorkerId = createWorkerId;
 exports.createWorkerManager = createWorkerManager;
 exports.defaultConfig = defaultConfig;
 exports.demonstrateAdvancedCaching = demonstrateAdvancedCaching;
 exports.demonstrateEnhancedErrorHandling = demonstrateEnhancedErrorHandling;
+exports.exampleMarketplaceEntries = exampleMarketplaceEntries;
 exports.exportEnergyProfile = exportEnergyProfile;
+exports.gauge = gauge;
 exports.generateSchemaDocumentation = generateSchemaDocumentation;
 exports.getConfig = getConfig;
+exports.getCurrentContext = getCurrentContext;
+exports.getCurrentCorrelationId = getCurrentCorrelationId;
 exports.getDependencyTokens = getDependencyTokens;
 exports.getFullConfig = getFullConfig;
 exports.getInjectableMetadata = getInjectableMetadata;
 exports.getService = getService;
+exports.globalContextManager = globalContextManager;
+exports.globalMetrics = globalMetrics;
+exports.globalProfiler = globalProfiler;
+exports.histogram = histogram;
 exports.initializeCREBDI = initializeCREBDI;
+exports.initializeTelemetry = initializeTelemetry;
 exports.isBalancedEquation = isBalancedEquation;
 exports.isCREBConfig = isCREBConfig;
 exports.isChemicalFormula = isChemicalFormula;
 exports.isElementSymbol = isElementSymbol;
 exports.isInjectable = isInjectable;
+exports.isLogEntry = isLogEntry;
+exports.isLogLevel = isLogLevel;
+exports.isMetric = isMetric;
+exports.logger = logger;
 exports.parseFormula = parseFormula;
+exports.runWithContext = runWithContext;
+exports.runWithContextAsync = runWithContextAsync;
 exports.setConfig = setConfig;
+exports.setContext = setContext;
+exports.setCorrelationId = setCorrelationId;
 exports.setupCREBContainer = setupCREBContainer;
+exports.telemetry = telemetry;
+exports.time = time;
+exports.timeAsync = timeAsync;
+exports.validateChemicalFormula = validateChemicalFormula;
 exports.validateConfig = validateConfig;
+exports.validateThermodynamicProperties = validateThermodynamicProperties;
+exports.withContext = withContext;
 //# sourceMappingURL=index.js.map

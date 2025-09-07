@@ -1,0 +1,55 @@
+{
+  "name": "@creb/vue",
+  "version": "1.0.0",
+  "description": "Vue.js composables for CREB-JS chemistry calculations",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "rollup -c -w",
+    "test": "vitest",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "keywords": [
+    "chemistry",
+    "vue",
+    "composables",
+    "equation-balancing",
+    "thermodynamics",
+    "molecular-structure",
+    "chemical-calculations"
+  ],
+  "author": "CREB-JS Team",
+  "license": "MIT",
+  "peerDependencies": {
+    "vue": ">=3.0.0"
+  },
+  "dependencies": {
+    "@creb/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "@vue/tsconfig": "^0.4.0",
+    "eslint": "^8.0.0",
+    "rollup": "^4.0.0",
+    "rollup-plugin-typescript2": "^0.36.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0",
+    "vue": "^3.3.0",
+    "vue-tsc": "^1.8.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vloganathane/CREB.git",
+    "directory": "packages/vue"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

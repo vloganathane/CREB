@@ -1,10 +1,21 @@
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
 import { calculateMolarWeight, EquationParser } from './utils';
 import { ChemicalEquationBalancer } from './balancer';
+import { ValidationError } from './core/errors/CREBError';
+import { Injectable } from './core/decorators/Injectable';
 /**
  * Stoichiometry calculator
  * Based on the Stoichiometry class from the original CREB project
  */
-export class Stoichiometry {
+let Stoichiometry = class Stoichiometry {
     constructor(equation) {
         this.reactants = [];
         this.products = [];
@@ -36,13 +47,13 @@ export class Stoichiometry {
      */
     calculateRatios(selectedSpecies) {
         if (!this.equation) {
-            throw new Error('No equation provided. Initialize with an equation first.');
+            throw new ValidationError('No equation provided. Initialize with an equation first.', { operation: 'calculateRatios', selectedSpecies }, { field: 'equation', value: this.equation, constraint: 'must be initialized' });
         }
         const allSpecies = [...this.reactants, ...this.products];
         const selectedIndex = allSpecies.indexOf(selectedSpecies);
         if (selectedIndex === -1) {
             const availableSpecies = allSpecies.join(', ');
-            throw new Error(`Species "${selectedSpecies}" not found in the equation. Available species: ${availableSpecies}`);
+            throw new ValidationError(`Species "${selectedSpecies}" not found in the equation. Available species: ${availableSpecies}`, { selectedSpecies, availableSpecies: allSpecies }, { field: 'selectedSpecies', value: selectedSpecies, constraint: `must be one of: ${availableSpecies}` });
         }
         const selectedCoefficient = this.coefficients[selectedIndex];
         return this.coefficients.map(coeff => coeff / selectedCoefficient);
@@ -52,7 +63,7 @@ export class Stoichiometry {
      */
     calculateFromMoles(selectedSpecies, moles) {
         if (!this.equation) {
-            throw new Error('No equation provided. Initialize with an equation first.');
+            throw new ValidationError('No equation provided. Initialize with an equation first.', { operation: 'calculateFromMoles', selectedSpecies, moles }, { field: 'equation', value: this.equation, constraint: 'must be initialized' });
         }
         const ratios = this.calculateRatios(selectedSpecies);
         const allSpecies = [...this.reactants, ...this.products];
@@ -90,7 +101,7 @@ export class Stoichiometry {
      */
     calculateFromGrams(selectedSpecies, grams) {
         if (!this.equation) {
-            throw new Error('No equation provided. Initialize with an equation first.');
+            throw new ValidationError('No equation provided. Initialize with an equation first.', { operation: 'calculateFromGrams', selectedSpecies, grams }, { field: 'equation', value: this.equation, constraint: 'must be initialized' });
         }
         const molarWeight = this.calculateMolarWeight(selectedSpecies);
         const moles = grams / molarWeight;
@@ -101,7 +112,7 @@ export class Stoichiometry {
      */
     getBalancedEquation() {
         if (!this.equation) {
-            throw new Error('No equation provided.');
+            throw new ValidationError('No equation provided.', { operation: 'getBalancedEquation' }, { field: 'equation', value: this.equation, constraint: 'must be initialized' });
         }
         return this.balancer.balance(this.equation);
     }
@@ -130,5 +141,10 @@ export class Stoichiometry {
     static calculateMolarWeight(formula) {
         return calculateMolarWeight(formula);
     }
-}
+};
+Stoichiometry = __decorate([
+    Injectable(),
+    __metadata("design:paramtypes", [String])
+], Stoichiometry);
+export { Stoichiometry };
 //# sourceMappingURL=stoichiometry.js.map

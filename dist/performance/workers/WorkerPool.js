@@ -6,18 +6,29 @@
  * This module provides a sophisticated worker pool for managing multiple worker threads,
  * distributing tasks efficiently, and monitoring performance metrics.
  */
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
 import { Worker } from 'worker_threads';
 import { EventEmitter } from 'events';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { WorkerStatus, TaskStatus, MessageType, createWorkerId } from './types.js';
-import { TaskQueue } from './TaskQueue.js';
+import { WorkerStatus, TaskStatus, MessageType, createWorkerId } from './types';
+import { TaskQueue } from './TaskQueue';
+import { SystemError, ValidationError } from '../../core/errors/CREBError';
+import { Injectable } from '../../core/decorators/Injectable';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 /**
  * Advanced worker pool with load balancing and health monitoring
  */
-export class WorkerPool extends EventEmitter {
+let WorkerPool = class WorkerPool extends EventEmitter {
     constructor(config = {}, recoveryConfig = {}) {
         super();
         this.isShuttingDown = false;
@@ -65,7 +76,7 @@ export class WorkerPool extends EventEmitter {
      */
     async submitTask(task) {
         if (this.isShuttingDown) {
-            throw new Error('Worker pool is shutting down');
+            throw new SystemError('Worker pool is shutting down', { operation: 'submitTask', taskId: task.id, poolState: 'shutting-down' }, { subsystem: 'workers', resource: 'worker-pool' });
         }
         // Add task to queue
         await this.taskQueue.enqueue(task);
@@ -128,7 +139,7 @@ export class WorkerPool extends EventEmitter {
      */
     async scalePool(targetSize) {
         if (targetSize < this.config.minWorkers || targetSize > this.config.maxWorkers) {
-            throw new Error(`Target size must be between ${this.config.minWorkers} and ${this.config.maxWorkers}`);
+            throw new ValidationError(`Target size must be between ${this.config.minWorkers} and ${this.config.maxWorkers}`, { targetSize, minWorkers: this.config.minWorkers, maxWorkers: this.config.maxWorkers }, { field: 'targetSize', value: targetSize, constraint: `must be between ${this.config.minWorkers} and ${this.config.maxWorkers}` });
         }
         const currentSize = this.workers.size;
         if (targetSize > currentSize) {
@@ -562,5 +573,10 @@ export class WorkerPool extends EventEmitter {
             }
         }
     }
-}
+};
+WorkerPool = __decorate([
+    Injectable(),
+    __metadata("design:paramtypes", [Object, Object])
+], WorkerPool);
+export { WorkerPool };
 //# sourceMappingURL=WorkerPool.js.map

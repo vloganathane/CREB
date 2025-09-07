@@ -6,6 +6,8 @@
 import { ThermodynamicsResult, ReactionConditions, ThermodynamicProperties, TemperatureProfile } from './types';
 import { BalancedEquation } from '../types';
 import { Injectable } from '../core/decorators/Injectable';
+import { validateThermodynamicProperties } from '../data/validation';
+import { ValidationError } from '../core/errors/CREBError';
 
 interface CompoundData {
   formula: string;
@@ -212,12 +214,38 @@ export class ThermodynamicsCalculator {
     for (const formula of uniqueFormulas) {
       try {
         const properties = await this.fetchThermodynamicProperties(formula);
+        
+        // Validate thermodynamic properties using the validation pipeline
+        const validationResult = await validateThermodynamicProperties(properties);
+        if (!validationResult.isValid) {
+          const validationErrors = validationResult.errors.map(e => e.message).join(', ');
+          throw new ValidationError(
+            `Invalid thermodynamic properties for ${formula}: ${validationErrors}`,
+            { formula, errors: validationResult.errors }
+          );
+        }
+        
         data.set(formula, properties);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.warn(`Could not fetch thermodynamic data for ${formula}: ${errorMessage}`);
+        console.warn(`Could not fetch or validate thermodynamic data for ${formula}: ${errorMessage}`);
         // Use estimated values or throw error
-        data.set(formula, this.estimateThermodynamicProperties(formula));
+        const estimatedProperties = this.estimateThermodynamicProperties(formula);
+        
+        // Validate estimated properties too
+        try {
+          const estimatedValidation = await validateThermodynamicProperties(estimatedProperties);
+          if (!estimatedValidation.isValid) {
+            throw new ValidationError(
+              `Both fetched and estimated thermodynamic properties invalid for ${formula}`,
+              { formula, originalError: error }
+            );
+          }
+          data.set(formula, estimatedProperties);
+        } catch (validationError) {
+          // If both real and estimated data are invalid, re-throw the original error
+          throw error;
+        }
       }
     }
 

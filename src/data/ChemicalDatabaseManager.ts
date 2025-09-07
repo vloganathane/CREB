@@ -16,12 +16,15 @@ import {
 import { ThermodynamicProperties } from '../thermodynamics/types';
 import { AdvancedCache } from '../performance/cache/AdvancedCache';
 import { Injectable } from '../core/decorators/Injectable';
+import { ValidationPipeline, createValidationPipeline, ChemicalFormulaValidator, ThermodynamicPropertiesValidator } from './validation';
+import { ValidationError } from '../core/errors/CREBError';
 
 @Injectable()
 export class ChemicalDatabaseManager {
   private compounds: Map<string, CompoundDatabase> = new Map();
   private sources: Map<string, DatabaseSource> = new Map();
   private validationRules: DataValidationRule[] = [];
+  private readonly validationPipeline: ValidationPipeline;
   private cache = new AdvancedCache<any>({
     maxSize: 1000,
     defaultTtl: 1800000, // 30 minutes
@@ -29,9 +32,25 @@ export class ChemicalDatabaseManager {
   });
 
   constructor() {
+    this.validationPipeline = this.initializeValidationPipeline();
     this.initializeDefaultSources();
     this.initializeValidationRules();
     this.loadDefaultCompounds();
+  }
+
+  /**
+   * Initialize the validation pipeline with chemistry validators
+   */
+  private initializeValidationPipeline(): ValidationPipeline {
+    const pipeline = createValidationPipeline();
+    
+    // Add chemical formula validator
+    pipeline.addValidator(new ChemicalFormulaValidator());
+    
+    // Add thermodynamic properties validator
+    pipeline.addValidator(new ThermodynamicPropertiesValidator());
+    
+    return pipeline;
   }
 
   /**
@@ -284,9 +303,12 @@ export class ChemicalDatabaseManager {
   async addCompound(compound: Partial<CompoundDatabase>): Promise<boolean> {
     try {
       // Validate the compound data
-      const validationErrors = this.validateCompound(compound);
+      const validationErrors = await this.validateCompound(compound);
       if (validationErrors.length > 0) {
-        throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
+        throw new ValidationError(`Validation failed: ${validationErrors.join(', ')}`, {
+          errors: validationErrors,
+          compound: compound.formula || 'unknown'
+        });
       }
 
       // Fill in missing fields
@@ -323,36 +345,57 @@ export class ChemicalDatabaseManager {
   }
 
   /**
-   * Validate compound data against rules
+   * Validate compound data using the advanced validation pipeline
    */
-  private validateCompound(compound: Partial<CompoundDatabase>): string[] {
+  private async validateCompound(compound: Partial<CompoundDatabase>): Promise<string[]> {
     const errors: string[] = [];
 
-    for (const rule of this.validationRules) {
-      const value = this.getNestedProperty(compound, rule.field);
-      
-      switch (rule.type) {
-        case 'required':
-          if (value === undefined || value === null) {
-            errors.push(rule.message);
-          }
-          break;
+    try {
+      // Validate chemical formula if present
+      if (compound.formula) {
+        const formulaResult = await this.validationPipeline.validate(compound.formula, ['ChemicalFormulaValidator']);
+        if (!formulaResult.isValid) {
+          errors.push(...formulaResult.errors.map(e => e.message));
+        }
+      }
+
+      // Validate thermodynamic properties if present
+      if (compound.thermodynamicProperties) {
+        const thermoResult = await this.validationPipeline.validate(compound.thermodynamicProperties, ['ThermodynamicPropertiesValidator']);
+        if (!thermoResult.isValid) {
+          errors.push(...thermoResult.errors.map(e => e.message));
+        }
+      }
+
+      // Legacy validation rules for backward compatibility
+      for (const rule of this.validationRules) {
+        const value = this.getNestedProperty(compound, rule.field);
         
-        case 'range':
-          if (typeof value === 'number') {
-            const { min, max } = rule.rule;
-            if (value < min || value > max) {
+        switch (rule.type) {
+          case 'required':
+            if (value === undefined || value === null) {
               errors.push(rule.message);
             }
-          }
-          break;
-        
-        case 'custom':
-          if (value !== undefined && !rule.rule(value)) {
-            errors.push(rule.message);
-          }
-          break;
+            break;
+          
+          case 'range':
+            if (typeof value === 'number') {
+              const { min, max } = rule.rule;
+              if (value < min || value > max) {
+                errors.push(rule.message);
+              }
+            }
+            break;
+          
+          case 'custom':
+            if (value !== undefined && !rule.rule(value)) {
+              errors.push(rule.message);
+            }
+            break;
+        }
       }
+    } catch (error) {
+      errors.push(`Validation failed: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     return errors;

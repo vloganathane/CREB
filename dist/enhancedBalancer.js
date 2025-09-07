@@ -2,11 +2,25 @@
  * Enhanced Chemical Equation Balancer with PubChem integration
  * Provides compound validation, molecular weight verification, and enriched data
  */
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
 import { ChemicalEquationBalancer } from './balancer';
-export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
+import { ComputationError, ValidationError } from './core/errors/CREBError';
+import { Injectable } from './core/decorators/Injectable';
+import { AdvancedCache } from './performance/cache/AdvancedCache';
+import { validateChemicalFormula } from './data/validation';
+let EnhancedChemicalEquationBalancer = class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
     constructor() {
         super(...arguments);
-        this.compoundCache = new Map();
+        this.compoundCache = new AdvancedCache({
+            maxSize: 1000,
+            defaultTtl: 7200000, // 2 hours
+            evictionStrategy: 'lru'
+        });
     }
     /**
      * Balance equation with safety and hazard information
@@ -273,7 +287,7 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
                         }
                     }
                     if (!found) {
-                        throw new Error(`Could not resolve compound name: "${name}". Try using the chemical formula instead.`);
+                        throw new ComputationError(`Could not resolve compound name: "${name}". Try using the chemical formula instead.`, { compoundName: name, operation: 'compound_resolution' });
                     }
                 }
             }
@@ -322,7 +336,7 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
             return enhanced;
         }
         catch (error) {
-            throw new Error(`Failed to balance equation by name: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            throw new ComputationError(`Failed to balance equation by name: ${error instanceof Error ? error.message : 'Unknown error'}`, { equation: commonNameEquation, operation: 'balance_by_name' });
         }
     }
     /**
@@ -338,11 +352,25 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
             validation: {
                 massBalanced: true,
                 chargeBalanced: true,
-                warnings: []
+                warnings: [],
+                formulaValidation: {}
             }
         };
         // Get all unique species from the equation
         const allSpecies = [...new Set([...balanced.reactants, ...balanced.products])];
+        // Validate chemical formulas using the validation pipeline
+        for (const species of allSpecies) {
+            try {
+                const formulaValidation = await validateChemicalFormula(species);
+                enhanced.validation.formulaValidation[species] = formulaValidation;
+                if (!formulaValidation.isValid) {
+                    enhanced.validation.warnings.push(`Invalid formula ${species}: ${formulaValidation.errors.map(e => e.message).join(', ')}`);
+                }
+            }
+            catch (error) {
+                enhanced.validation.warnings.push(`Formula validation failed for ${species}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+        }
         // Fetch PubChem data for each compound
         for (const species of allSpecies) {
             try {
@@ -374,8 +402,9 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
      */
     async getCompoundInfo(compoundName) {
         // Check cache first
-        if (this.compoundCache.has(compoundName)) {
-            return this.compoundCache.get(compoundName);
+        const cached = await this.compoundCache.get(compoundName);
+        if (cached.hit && cached.value) {
+            return cached.value;
         }
         const result = {
             name: compoundName,
@@ -386,7 +415,7 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
             const pubchemModule = await this.loadPubChemModule();
             if (!pubchemModule) {
                 result.error = 'PubChem module not available. Install creb-pubchem-js for enhanced functionality.';
-                this.compoundCache.set(compoundName, result);
+                await this.compoundCache.set(compoundName, result);
                 return result;
             }
             // Try to find compound by name
@@ -438,7 +467,7 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
             result.error = `Search failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
         }
         // Cache the result
-        this.compoundCache.set(compoundName, result);
+        await this.compoundCache.set(compoundName, result);
         return result;
     }
     /**
@@ -485,7 +514,7 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
         // Split by = or -> or →
         const parts = cleanEquation.split(/\s*(?:=|->|→)\s*/);
         if (parts.length !== 2) {
-            throw new Error('Invalid equation format. Expected format: "reactants = products"');
+            throw new ValidationError('Invalid equation format. Expected format: "reactants = products"', { equation: cleanEquation, operation: 'parse_equation' });
         }
         const [reactantsPart, productsPart] = parts;
         // Parse reactants and products (split by + and clean up)
@@ -498,7 +527,7 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
             .filter(name => name.length > 0)
             .map(name => this.cleanCompoundName(name));
         if (reactantNames.length === 0 || productNames.length === 0) {
-            throw new Error('Invalid equation: must have at least one reactant and one product');
+            throw new ValidationError('Invalid equation: must have at least one reactant and one product', { reactantCount: reactantNames.length, productCount: productNames.length, operation: 'parse_equation' });
         }
         return { reactantNames, productNames };
     }
@@ -627,7 +656,7 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
                 reactantMass += coefficient * compound.molecularWeight;
             }
             else {
-                throw new Error(`Missing molecular weight for reactant: ${species}`);
+                throw new ComputationError(`Missing molecular weight for reactant: ${species}`, { species, coefficient, operation: 'mass_balance_validation' });
             }
         }
         // Calculate product mass
@@ -639,7 +668,7 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
                 productMass += coefficient * compound.molecularWeight;
             }
             else {
-                throw new Error(`Missing molecular weight for product: ${species}`);
+                throw new ComputationError(`Missing molecular weight for product: ${species}`, { species, coefficient, operation: 'mass_balance_validation' });
             }
         }
         const discrepancy = Math.abs(reactantMass - productMass);
@@ -689,14 +718,19 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
     /**
      * Clear the compound cache
      */
-    clearCache() {
-        this.compoundCache.clear();
+    async clearCache() {
+        await this.compoundCache.clear();
     }
     /**
      * Get cached compound info without making new requests
      */
-    getCachedCompoundInfo(compoundName) {
-        return this.compoundCache.get(compoundName);
+    async getCachedCompoundInfo(compoundName) {
+        const result = await this.compoundCache.get(compoundName);
+        return result.hit ? result.value : undefined;
     }
-}
+};
+EnhancedChemicalEquationBalancer = __decorate([
+    Injectable()
+], EnhancedChemicalEquationBalancer);
+export { EnhancedChemicalEquationBalancer };
 //# sourceMappingURL=enhancedBalancer.js.map

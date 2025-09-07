@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CREB-JS Molecular Visualization Prototype</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 30px;
+        }
+
+        .demo-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ecf0f1;
+            border-radius: 8px;
+        }
+
+        .demo-section h3 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        label {
+            font-weight: 600;
+            color: #34495e;
+            font-size: 14px;
+        }
+
+        input, select, button {
+            padding: 8px 12px;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            min-width: 120px;
+        }
+
+        button:hover {
+            background: #2980b9;
+        }
+
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        .viewer-container {
+            width: 100%;
+            height: 400px;
+            border: 1px solid #bdc3c7;
+            border-radius: 8px;
+            background: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .molecule-info {
+            background: #e8f4fd;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+
+        .molecule-info h4 {
+            margin: 0 0 10px 0;
+            color: #2980b9;
+        }
+
+        .property {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+
+        .property strong {
+            color: #2c3e50;
+            display: inline-block;
+            width: 120px;
+        }
+
+        .examples {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .example-btn {
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            min-width: auto;
+        }
+
+        .example-btn:hover {
+            background: #219a52;
+        }
+
+        .status {
+            text-align: center;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+
+        .error {
+            color: #e74c3c;
+            background: #fff5f5;
+            padding: 10px;
+            border-radius: 4px;
+            border-left: 4px solid #e74c3c;
+        }
+
+        .success {
+            color: #27ae60;
+            background: #f8fff8;
+            padding: 10px;
+            border-radius: 4px;
+            border-left: 4px solid #27ae60;
+        }
+    </style>
+    <!-- 3Dmol.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/gh/3dmol/3Dmol.js@latest/build/3Dmol-min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🧬 CREB-JS Molecular Visualization Prototype</h1>
+        <p class="subtitle">Research prototype demonstrating 2D/3D molecular structure rendering integration</p>
+
+        <!-- SMILES Input Section -->
+        <div class="demo-section">
+            <h3>📝 SMILES to 3D Structure</h3>
+            <div class="controls">
+                <div class="control-group">
+                    <label for="smilesInput">SMILES String:</label>
+                    <input type="text" id="smilesInput" placeholder="Enter SMILES (e.g., CCO for ethanol)" value="CCO">
+                </div>
+                <div class="control-group">
+                    <label for="styleSelect">Rendering Style:</label>
+                    <select id="styleSelect">
+                        <option value="stick">Stick</option>
+                        <option value="ball-stick" selected>Ball & Stick</option>
+                        <option value="sphere">Space Filling</option>
+                        <option value="wireframe">Wireframe</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>&nbsp;</label>
+                    <button onclick="generateFromSMILES()">Generate 3D Structure</button>
+                </div>
+            </div>
+
+            <div class="examples">
+                <span>Examples:</span>
+                <button class="example-btn" onclick="loadExample('CCO', 'Ethanol')">CCO (Ethanol)</button>
+                <button class="example-btn" onclick="loadExample('C1=CC=CC=C1', 'Benzene')">C1=CC=CC=C1 (Benzene)</button>
+                <button class="example-btn" onclick="loadExample('CN1C=NC2=C1C(=O)N(C(=O)N2C)C', 'Caffeine')">Caffeine</button>
+                <button class="example-btn" onclick="loadExample('CC(=O)OC1=CC=CC=C1C(=O)O', 'Aspirin')">Aspirin</button>
+                <button class="example-btn" onclick="loadExample('CC(C)CC1=CC=C(C=C1)C(C)C(=O)O', 'Ibuprofen')">Ibuprofen</button>
+            </div>
+
+            <div id="viewer3d" class="viewer-container">
+                <div class="status">Enter a SMILES string and click "Generate 3D Structure" to begin</div>
+            </div>
+
+            <div id="moleculeInfo" class="molecule-info" style="display: none;">
+                <h4>Molecule Information</h4>
+                <div id="infoContent"></div>
+            </div>
+        </div>
+
+        <!-- Chemical Reaction Visualization -->
+        <div class="demo-section">
+            <h3>⚗️ Chemical Reaction Visualization</h3>
+            <div class="controls">
+                <div class="control-group">
+                    <label for="reactionInput">Chemical Equation:</label>
+                    <input type="text" id="reactionInput" placeholder="Enter equation (e.g., C2H6 + O2 -> CO2 + H2O)" value="C2H6 + O2 -> CO2 + H2O">
+                </div>
+                <div class="control-group">
+                    <label>&nbsp;</label>
+                    <button onclick="visualizeReaction()">Visualize Reaction</button>
+                </div>
+            </div>
+
+            <div id="reactionViewer" class="viewer-container">
+                <div class="status">Enter a chemical equation to visualize reactants and products</div>
+            </div>
+
+            <div id="reactionInfo" class="molecule-info" style="display: none;">
+                <h4>Reaction Analysis</h4>
+                <div id="reactionContent"></div>
+            </div>
+        </div>
+
+        <!-- Integration with CREB Features -->
+        <div class="demo-section">
+            <h3>🔬 CREB-JS Integration Demo</h3>
+            <p>This section demonstrates how molecular visualization integrates with existing CREB-JS features:</p>
+            
+            <div class="controls">
+                <button onclick="demonstrateBalancingIntegration()">Equation Balancing + Visualization</button>
+                <button onclick="demonstrateThermodynamicsIntegration()">Thermodynamics + Molecular Models</button>
+                <button onclick="demonstratePubChemIntegration()">PubChem + 3D Structures</button>
+            </div>
+
+            <div id="integrationDemo" class="viewer-container">
+                <div class="status">Click a button above to see CREB-JS integration examples</div>
+            </div>
+
+            <div id="integrationInfo" class="molecule-info" style="display: none;">
+                <h4>Integration Results</h4>
+                <div id="integrationContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let viewer3d = null;
+        let currentMolecule = null;
+
+        // Initialize 3D viewer
+        function init3DViewer() {
+            const element = document.getElementById('viewer3d');
+            element.innerHTML = ''; // Clear existing content
+            
+            viewer3d = $3Dmol.createViewer(element, {
+                defaultcolors: $3Dmol.elementColors.rasmol,
+                backgroundColor: 'white'
+            });
+            
+            return viewer3d;
+        }
+
+        // SMILES to 3D coordinates (simplified - in real implementation would use RDKit or similar)
+        function smilesTo3D(smiles) {
+            // This is a simplified mock - real implementation would use:
+            // 1. RDKit-JS for SMILES parsing and 2D coordinates
+            // 2. Force field optimization for 3D coordinates
+            // 3. Proper molecular structure generation
+            
+            const mockMolecules = {
+                'CCO': { // Ethanol
+                    atoms: [
+                        { element: 'C', x: 0, y: 0, z: 0 },
+                        { element: 'C', x: 1.5, y: 0, z: 0 },
+                        { element: 'O', x: 2.3, y: 1.2, z: 0 },
+                        { element: 'H', x: -0.5, y: -0.8, z: 0 },
+                        { element: 'H', x: -0.5, y: 0.8, z: 0 },
+                        { element: 'H', x: -0.5, y: 0, z: 0.8 },
+                        { element: 'H', x: 1.5, y: -0.8, z: 0.8 },
+                        { element: 'H', x: 1.5, y: -0.8, z: -0.8 },
+                        { element: 'H', x: 3.2, y: 1.0, z: 0 }
+                    ],
+                    bonds: [
+                        { from: 0, to: 1, order: 1 },
+                        { from: 1, to: 2, order: 1 }
+                    ]
+                },
+                'C1=CC=CC=C1': { // Benzene
+                    atoms: [
+                        { element: 'C', x: 1.4, y: 0, z: 0 },
+                        { element: 'C', x: 0.7, y: 1.2, z: 0 },
+                        { element: 'C', x: -0.7, y: 1.2, z: 0 },
+                        { element: 'C', x: -1.4, y: 0, z: 0 },
+                        { element: 'C', x: -0.7, y: -1.2, z: 0 },
+                        { element: 'C', x: 0.7, y: -1.2, z: 0 },
+                        { element: 'H', x: 2.5, y: 0, z: 0 },
+                        { element: 'H', x: 1.25, y: 2.15, z: 0 },
+                        { element: 'H', x: -1.25, y: 2.15, z: 0 },
+                        { element: 'H', x: -2.5, y: 0, z: 0 },
+                        { element: 'H', x: -1.25, y: -2.15, z: 0 },
+                        { element: 'H', x: 1.25, y: -2.15, z: 0 }
+                    ],
+                    bonds: [
+                        { from: 0, to: 1, order: 1.5 },
+                        { from: 1, to: 2, order: 1.5 },
+                        { from: 2, to: 3, order: 1.5 },
+                        { from: 3, to: 4, order: 1.5 },
+                        { from: 4, to: 5, order: 1.5 },
+                        { from: 5, to: 0, order: 1.5 }
+                    ]
+                }
+            };
+
+            return mockMolecules[smiles] || null;
+        }
+
+        // Generate molecular formula from SMILES (simplified)
+        function getMolecularFormula(smiles) {
+            const formulas = {
+                'CCO': 'C₂H₆O',
+                'C1=CC=CC=C1': 'C₆H₆',
+                'CN1C=NC2=C1C(=O)N(C(=O)N2C)C': 'C₈H₁₀N₄O₂',
+                'CC(=O)OC1=CC=CC=C1C(=O)O': 'C₉H₈O₄',
+                'CC(C)CC1=CC=C(C=C1)C(C)C(=O)O': 'C₁₃H₁₈O₂'
+            };
+            return formulas[smiles] || 'Unknown';
+        }
+
+        // Get molecular weight (simplified)
+        function getMolecularWeight(smiles) {
+            const weights = {
+                'CCO': 46.07,
+                'C1=CC=CC=C1': 78.11,
+                'CN1C=NC2=C1C(=O)N(C(=O)N2C)C': 194.19,
+                'CC(=O)OC1=CC=CC=C1C(=O)O': 180.16,
+                'CC(C)CC1=CC=C(C=C1)C(C)C(=O)O': 206.28
+            };
+            return weights[smiles] || 0;
+        }
+
+        // Generate 3D structure from SMILES
+        function generateFromSMILES() {
+            const smiles = document.getElementById('smilesInput').value.trim();
+            const style = document.getElementById('styleSelect').value;
+
+            if (!smiles) {
+                showError('Please enter a SMILES string');
+                return;
+            }
+
+            try {
+                showStatus('Generating 3D structure...');
+                
+                // Initialize viewer
+                if (!viewer3d) {
+                    init3DViewer();
+                }
+
+                viewer3d.clear();
+
+                // Get 3D coordinates (mock implementation)
+                const molecule = smilesTo3D(smiles);
+                
+                if (!molecule) {
+                    // For unknown SMILES, create a simple placeholder
+                    showError('SMILES not in demo database. In full implementation, this would use RDKit-JS to parse any SMILES string.');
+                    return;
+                }
+
+                // Create MOL format string for 3Dmol.js
+                const molData = createMOLFormat(molecule);
+                
+                // Add molecule to viewer
+                viewer3d.addModel(molData, 'mol');
+                
+                // Apply styling
+                const styleOptions = getStyleOptions(style);
+                viewer3d.setStyle({}, styleOptions);
+                
+                // Center and render
+                viewer3d.zoomTo();
+                viewer3d.render();
+
+                // Update molecule info
+                showMoleculeInfo(smiles);
+                currentMolecule = molecule;
+
+                showSuccess('3D structure generated successfully!');
+
+            } catch (error) {
+                showError('Error generating 3D structure: ' + error.message);
+            }
+        }
+
+        // Create MOL format string from molecule data
+        function createMOLFormat(molecule) {
+            const atoms = molecule.atoms;
+            const bonds = molecule.bonds;
+            
+            let mol = '';
+            mol += '\\n\\n\\n'; // Header lines
+            mol += `${atoms.length.toString().padStart(3)}${bonds.length.toString().padStart(3)}  0  0  0  0  0  0  0  0999 V2000\\n`;
+            
+            // Atom block
+            atoms.forEach(atom => {
+                const x = atom.x.toFixed(4).padStart(10);
+                const y = atom.y.toFixed(4).padStart(10);
+                const z = atom.z.toFixed(4).padStart(10);
+                mol += `${x}${y}${z} ${atom.element.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0\\n`;
+            });
+            
+            // Bond block
+            bonds.forEach(bond => {
+                const from = (bond.from + 1).toString().padStart(3);
+                const to = (bond.to + 1).toString().padStart(3);
+                const order = Math.round(bond.order).toString().padStart(3);
+                mol += `${from}${to}${order}  0  0  0  0\\n`;
+            });
+            
+            mol += 'M  END\\n';
+            return mol;
+        }
+
+        // Get 3Dmol.js style options
+        function getStyleOptions(style) {
+            switch (style) {
+                case 'stick':
+                    return { stick: { radius: 0.2 } };
+                case 'ball-stick':
+                    return { stick: { radius: 0.15 }, sphere: { scale: 0.3 } };
+                case 'sphere':
+                    return { sphere: {} };
+                case 'wireframe':
+                    return { line: {} };
+                default:
+                    return { stick: { radius: 0.15 }, sphere: { scale: 0.3 } };
+            }
+        }
+
+        // Load example molecule
+        function loadExample(smiles, name) {
+            document.getElementById('smilesInput').value = smiles;
+            generateFromSMILES();
+        }
+
+        // Show molecule information
+        function showMoleculeInfo(smiles) {
+            const formula = getMolecularFormula(smiles);
+            const weight = getMolecularWeight(smiles);
+            
+            const content = `
+                <div class="property"><strong>SMILES:</strong> ${smiles}</div>
+                <div class="property"><strong>Formula:</strong> ${formula}</div>
+                <div class="property"><strong>Weight:</strong> ${weight} g/mol</div>
+                <div class="property"><strong>Atoms:</strong> ${currentMolecule ? currentMolecule.atoms.length : 'N/A'}</div>
+                <div class="property"><strong>Bonds:</strong> ${currentMolecule ? currentMolecule.bonds.length : 'N/A'}</div>
+            `;
+            
+            document.getElementById('infoContent').innerHTML = content;
+            document.getElementById('moleculeInfo').style.display = 'block';
+        }
+
+        // Utility functions for status messages
+        function showStatus(message) {
+            const viewer = document.getElementById('viewer3d');
+            viewer.innerHTML = `<div class="status">${message}</div>`;
+        }
+
+        function showError(message) {
+            const viewer = document.getElementById('viewer3d');
+            viewer.innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        function showSuccess(message) {
+            setTimeout(() => {
+                const viewer = document.getElementById('viewer3d');
+                const successDiv = document.createElement('div');
+                successDiv.className = 'success';
+                successDiv.textContent = message;
+                successDiv.style.position = 'absolute';
+                successDiv.style.top = '10px';
+                successDiv.style.left = '10px';
+                successDiv.style.right = '10px';
+                successDiv.style.zIndex = '1000';
+                viewer.appendChild(successDiv);
+                
+                setTimeout(() => {
+                    if (successDiv.parentNode) {
+                        successDiv.parentNode.removeChild(successDiv);
+                    }
+                }, 3000);
+            }, 100);
+        }
+
+        // Chemical reaction visualization (simplified demo)
+        function visualizeReaction() {
+            const equation = document.getElementById('reactionInput').value.trim();
+            
+            if (!equation) {
+                document.getElementById('reactionViewer').innerHTML = '<div class="error">Please enter a chemical equation</div>';
+                return;
+            }
+
+            // Mock reaction visualization
+            document.getElementById('reactionViewer').innerHTML = `
+                <div class="status">
+                    <p><strong>Demo Reaction Analysis:</strong></p>
+                    <p>Equation: ${equation}</p>
+                    <p>In full implementation, this would:</p>
+                    <ul style="text-align: left; margin: 10px 0;">
+                        <li>Parse the chemical equation using CREB-JS</li>
+                        <li>Generate 3D structures for each species</li>
+                        <li>Show side-by-side reactants and products</li>
+                        <li>Animate the reaction mechanism</li>
+                        <li>Display thermodynamic data</li>
+                    </ul>
+                </div>
+            `;
+
+            document.getElementById('reactionContent').innerHTML = `
+                <div class="property"><strong>Status:</strong> Demo Mode</div>
+                <div class="property"><strong>Features:</strong> CREB equation balancing + 3D visualization</div>
+                <div class="property"><strong>Integration:</strong> PubChem data + molecular rendering</div>
+            `;
+            
+            document.getElementById('reactionInfo').style.display = 'block';
+        }
+
+        // Integration demonstrations
+        function demonstrateBalancingIntegration() {
+            document.getElementById('integrationDemo').innerHTML = `
+                <div class="status">
+                    <h4>🧮 Equation Balancing + Molecular Visualization</h4>
+                    <p>Integration concept:</p>
+                    <ul style="text-align: left; margin: 10px 0;">
+                        <li><strong>Input:</strong> Unbalanced chemical equation</li>
+                        <li><strong>CREB Processing:</strong> Balance equation using existing algorithms</li>
+                        <li><strong>Enhancement:</strong> Generate 3D structures for each species</li>
+                        <li><strong>Output:</strong> Balanced equation with interactive molecular models</li>
+                    </ul>
+                    <p><strong>Example:</strong> H₂ + O₂ → H₂O</p>
+                    <p><strong>Result:</strong> 2H₂ + O₂ → 2H₂O + molecular structures</p>
+                </div>
+            `;
+            
+            showIntegrationInfo('Equation Balancing', 'Combine CREB balancing algorithms with 3D molecular visualization');
+        }
+
+        function demonstrateThermodynamicsIntegration() {
+            document.getElementById('integrationDemo').innerHTML = `
+                <div class="status">
+                    <h4>🔥 Thermodynamics + Molecular Models</h4>
+                    <p>Integration concept:</p>
+                    <ul style="text-align: left; margin: 10px 0;">
+                        <li><strong>Energy Profiles:</strong> Show molecular structures at reaction coordinates</li>
+                        <li><strong>Transition States:</strong> Visualize bond breaking/forming</li>
+                        <li><strong>Temperature Effects:</strong> Show molecular motion/vibration</li>
+                        <li><strong>Interactive Plots:</strong> Click energy profile points to see 3D structures</li>
+                    </ul>
+                    <p><strong>Innovation:</strong> First chemistry library to combine thermodynamic calculations with real-time 3D molecular visualization</p>
+                </div>
+            `;
+            
+            showIntegrationInfo('Thermodynamics', 'Enhanced energy profiles with molecular structure visualization');
+        }
+
+        function demonstratePubChemIntegration() {
+            document.getElementById('integrationDemo').innerHTML = `
+                <div class="status">
+                    <h4>🌐 PubChem + 3D Structures</h4>
+                    <p>Integration concept:</p>
+                    <ul style="text-align: left; margin: 10px 0;">
+                        <li><strong>Data Source:</strong> Use existing PubChem SMILES/InChI data</li>
+                        <li><strong>3D Generation:</strong> Convert SMILES to 3D coordinates</li>
+                        <li><strong>Caching:</strong> Store generated structures for performance</li>
+                        <li><strong>Validation:</strong> Cross-reference with PubChem molecular data</li>
+                    </ul>
+                    <p><strong>Benefit:</strong> Automatic 3D visualization for 100M+ compounds</p>
+                </div>
+            `;
+            
+            showIntegrationInfo('PubChem Integration', 'Leverage existing chemical database with 3D rendering');
+        }
+
+        function showIntegrationInfo(feature, description) {
+            document.getElementById('integrationContent').innerHTML = `
+                <div class="property"><strong>Feature:</strong> ${feature}</div>
+                <div class="property"><strong>Description:</strong> ${description}</div>
+                <div class="property"><strong>Implementation:</strong> 3Dmol.js + RDKit-JS + CREB-JS</div>
+                <div class="property"><strong>Timeline:</strong> 2-3 weeks for basic implementation</div>
+            `;
+            
+            document.getElementById('integrationInfo').style.display = 'block';
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Auto-load ethanol example
+            setTimeout(() => {
+                loadExample('CCO', 'Ethanol');
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
