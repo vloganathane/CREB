@@ -142,3 +142,16 @@ linkedin-post.md
 *.tar.gz
 *.rar
 *.7z
+
+# Temporary test files
+test-*.js
+test-*.mjs
+test-*.ts
+debug-*.js
+verify-*.js
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+
+# VS Code settings
+.vscode/settings.json

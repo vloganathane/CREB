@@ -86,7 +86,7 @@ export class EnhancedBalancer {
       };
 
     } catch (error) {
-      console.error('Error in enhanced balancer:', error);
+      // Note: Error in enhanced balancer - using fallback
       return {
         equation,
         isBalanced: false,

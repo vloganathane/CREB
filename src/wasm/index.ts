@@ -4,16 +4,6 @@
  * Part of Q4 2025 Performance Optimization initiative
  */
 
-// Ensure WebAssembly types are available
-declare global {
-  namespace WebAssembly {
-    class Memory {
-      constructor(descriptor: { initial: number; maximum?: number });
-      buffer: ArrayBuffer;
-    }
-  }
-}
-
 // WebAssembly module interface
 export interface CREBWasmModule {
   // Matrix operations for equation balancing

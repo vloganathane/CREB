@@ -228,7 +228,7 @@ export class ThermodynamicsCalculator {
         data.set(formula, properties);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.warn(`Could not fetch or validate thermodynamic data for ${formula}: ${errorMessage}`);
+        // Note: Could not fetch thermodynamic data, using estimated values
         // Use estimated values or throw error
         const estimatedProperties = this.estimateThermodynamicProperties(formula);
         

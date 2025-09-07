@@ -280,9 +280,9 @@ class WebAssemblyCalculator {
       };
       
       this.initialized = true;
-      console.log('WebAssembly calculator initialized (simulated)');
+      // Note: WebAssembly calculator initialized (simulated)
     } catch (error) {
-      console.warn('WebAssembly not available, falling back to JavaScript:', error);
+      // Note: WebAssembly not available, falling back to JavaScript
       this.initialized = false;
     }
   }

@@ -80,7 +80,7 @@ export class CREBError extends Error {
       context: {
         ...context,
         timestamp: new Date(),
-        version: '1.5.0' // TODO: Get from package.json
+        version: '1.6.0'
       },
       timestamp: new Date(),
       stackTrace: this.stack,

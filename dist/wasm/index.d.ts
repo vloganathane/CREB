@@ -3,17 +3,6 @@
  * High-performance computing for critical chemistry calculations
  * Part of Q4 2025 Performance Optimization initiative
  */
-declare global {
-    namespace WebAssembly {
-        class Memory {
-            constructor(descriptor: {
-                initial: number;
-                maximum?: number;
-            });
-            buffer: ArrayBuffer;
-        }
-    }
-}
 export interface CREBWasmModule {
     balanceEquationMatrix(matrix: Float64Array, rows: number, cols: number): Float64Array;
     gaussianElimination(matrix: Float64Array, size: number): Float64Array;

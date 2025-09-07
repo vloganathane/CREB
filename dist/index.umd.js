@@ -240,7 +240,7 @@
                 context: {
                     ...context,
                     timestamp: new Date(),
-                    version: '1.5.0' // TODO: Get from package.json
+                    version: '1.6.0'
                 },
                 timestamp: new Date(),
                 stackTrace: this.stack,
@@ -9512,7 +9512,7 @@
                 // 2. Use a proxy service that provides API access to NIST
                 // 3. Use cached NIST data that's periodically updated
                 const url = `${this.baseURL}?${params}`;
-                console.log(`Would query NIST at: ${url}`);
+                // Note: Would query NIST at: ${url}
                 // Return mock data for demonstration
                 return this.getMockNISTData(identifier);
             }

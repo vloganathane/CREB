@@ -22,6 +22,9 @@
     "test:creb": "jest",
     "test:pubchem": "cd packages/pubchem-js && npm test",
     "dev": "rollup -c -w",
+    "lint": "npx tsc --noEmit",
+    "lint:fix": "npx tsc --noEmit && echo 'TypeScript check passed'",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

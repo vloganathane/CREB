@@ -100,7 +100,7 @@ export class NISTWebBookIntegration {
       // 3. Use cached NIST data that's periodically updated
       
       const url = `${this.baseURL}?${params}`;
-      console.log(`Would query NIST at: ${url}`);
+      // Note: Would query NIST at: ${url}
       
       // Return mock data for demonstration
       return this.getMockNISTData(identifier);
