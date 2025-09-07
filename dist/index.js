@@ -1,6 +1,27 @@
 'use strict';
 
 require('reflect-metadata');
+var events = require('events');
+var fs = require('fs');
+
+function _interopNamespaceDefault(e) {
+    var n = Object.create(null);
+    if (e) {
+        Object.keys(e).forEach(function (k) {
+            if (k !== 'default') {
+                var d = Object.getOwnPropertyDescriptor(e, k);
+                Object.defineProperty(n, k, d.get ? d : {
+                    enumerable: true,
+                    get: function () { return e[k]; }
+                });
+            }
+        });
+    }
+    n.default = e;
+    return Object.freeze(n);
+}
+
+var fs__namespace = /*#__PURE__*/_interopNamespaceDefault(fs);
 
 /**
  * Chemical elements and their atomic masses
@@ -5897,11 +5918,3816 @@ function getDependencyTokens(constructor) {
 const Singleton = (options = {}) => Injectable({ ...options, lifetime: ServiceLifetime.Singleton });
 const Transient = (options = {}) => Injectable({ ...options, lifetime: ServiceLifetime.Transient });
 
+/**
+ * Enhanced Error Handling for CREB-JS
+ * Provides structured error types with context, stack traces, and error classification
+ */
+exports.ErrorCategory = void 0;
+(function (ErrorCategory) {
+    ErrorCategory["VALIDATION"] = "VALIDATION";
+    ErrorCategory["NETWORK"] = "NETWORK";
+    ErrorCategory["COMPUTATION"] = "COMPUTATION";
+    ErrorCategory["DATA"] = "DATA";
+    ErrorCategory["SYSTEM"] = "SYSTEM";
+    ErrorCategory["EXTERNAL_API"] = "EXTERNAL_API";
+    ErrorCategory["TIMEOUT"] = "TIMEOUT";
+    ErrorCategory["RATE_LIMIT"] = "RATE_LIMIT";
+    ErrorCategory["AUTHENTICATION"] = "AUTHENTICATION";
+    ErrorCategory["PERMISSION"] = "PERMISSION";
+})(exports.ErrorCategory || (exports.ErrorCategory = {}));
+exports.ErrorSeverity = void 0;
+(function (ErrorSeverity) {
+    ErrorSeverity["LOW"] = "LOW";
+    ErrorSeverity["MEDIUM"] = "MEDIUM";
+    ErrorSeverity["HIGH"] = "HIGH";
+    ErrorSeverity["CRITICAL"] = "CRITICAL";
+})(exports.ErrorSeverity || (exports.ErrorSeverity = {}));
+/**
+ * Base CREB Error class with enhanced context and metadata
+ */
+class CREBError extends Error {
+    constructor(message, category, severity = exports.ErrorSeverity.MEDIUM, context = {}, options = {}) {
+        super(message);
+        this.name = 'CREBError';
+        // Ensure proper prototype chain for instanceof checks
+        Object.setPrototypeOf(this, CREBError.prototype);
+        this.metadata = {
+            category,
+            severity,
+            retryable: options.retryable ?? this.isRetryableByDefault(category),
+            errorCode: options.errorCode ?? this.generateErrorCode(category),
+            correlationId: options.correlationId ?? this.generateCorrelationId(),
+            context: {
+                ...context,
+                timestamp: new Date(),
+                version: '1.5.0' // TODO: Get from package.json
+            },
+            timestamp: new Date(),
+            stackTrace: this.stack,
+            innerError: options.innerError,
+            sugggestedAction: options.suggestedAction
+        };
+        // Capture stack trace for V8 engines
+        if (Error.captureStackTrace) {
+            Error.captureStackTrace(this, CREBError);
+        }
+    }
+    /**
+     * Serialize error for logging and telemetry
+     */
+    toJSON() {
+        return {
+            name: this.name,
+            message: this.message,
+            metadata: {
+                ...this.metadata,
+                innerError: this.metadata.innerError?.message
+            }
+        };
+    }
+    /**
+     * Create a sanitized version for client-side consumption
+     */
+    toClientSafe() {
+        return {
+            message: this.message,
+            category: this.metadata.category,
+            severity: this.metadata.severity,
+            errorCode: this.metadata.errorCode,
+            correlationId: this.metadata.correlationId,
+            retryable: this.metadata.retryable,
+            suggestedAction: this.metadata.sugggestedAction
+        };
+    }
+    /**
+     * Check if error is retryable based on category and context
+     */
+    isRetryable() {
+        return this.metadata.retryable;
+    }
+    /**
+     * Get human-readable error description
+     */
+    getDescription() {
+        const parts = [
+            `[${this.metadata.category}:${this.metadata.severity}]`,
+            this.message
+        ];
+        if (this.metadata.sugggestedAction) {
+            parts.push(`Suggestion: ${this.metadata.sugggestedAction}`);
+        }
+        return parts.join(' ');
+    }
+    isRetryableByDefault(category) {
+        const retryableCategories = [
+            exports.ErrorCategory.NETWORK,
+            exports.ErrorCategory.TIMEOUT,
+            exports.ErrorCategory.RATE_LIMIT,
+            exports.ErrorCategory.EXTERNAL_API
+        ];
+        return retryableCategories.includes(category);
+    }
+    generateErrorCode(category) {
+        const timestamp = Date.now().toString(36);
+        const random = Math.random().toString(36).substring(2, 8);
+        return `${category}_${timestamp}_${random}`.toUpperCase();
+    }
+    generateCorrelationId() {
+        return `creb_${Date.now()}_${Math.random().toString(36).substring(2, 12)}`;
+    }
+}
+/**
+ * Validation Error - for input validation failures
+ */
+class ValidationError extends CREBError {
+    constructor(message, context = {}, options = {}) {
+        super(message, exports.ErrorCategory.VALIDATION, exports.ErrorSeverity.MEDIUM, {
+            ...context,
+            field: options.field,
+            value: options.value,
+            constraint: options.constraint
+        }, {
+            retryable: false,
+            suggestedAction: 'Please check the input parameters and try again'
+        });
+        this.name = 'ValidationError';
+    }
+}
+/**
+ * Network Error - for network-related failures
+ */
+class NetworkError extends CREBError {
+    constructor(message, context = {}, options = {}) {
+        super(message, exports.ErrorCategory.NETWORK, exports.ErrorSeverity.HIGH, {
+            ...context,
+            statusCode: options.statusCode,
+            url: options.url,
+            method: options.method,
+            timeout: options.timeout
+        }, {
+            retryable: true,
+            suggestedAction: 'Check network connectivity and try again'
+        });
+        this.name = 'NetworkError';
+    }
+}
+/**
+ * External API Error - for third-party API failures
+ */
+class ExternalAPIError extends CREBError {
+    constructor(message, apiName, context = {}, options = {}) {
+        const severity = options.rateLimited ? exports.ErrorSeverity.MEDIUM : exports.ErrorSeverity.HIGH;
+        const category = options.rateLimited ? exports.ErrorCategory.RATE_LIMIT : exports.ErrorCategory.EXTERNAL_API;
+        super(message, category, severity, {
+            ...context,
+            apiName,
+            statusCode: options.statusCode,
+            responseBody: options.responseBody,
+            endpoint: options.endpoint
+        }, {
+            retryable: options.rateLimited || (!!options.statusCode && options.statusCode >= 500),
+            suggestedAction: options.rateLimited
+                ? 'Rate limit exceeded. Please wait before retrying'
+                : 'External service unavailable. Please try again later'
+        });
+        this.name = 'ExternalAPIError';
+    }
+}
+/**
+ * Computation Error - for calculation failures
+ */
+class ComputationError extends CREBError {
+    constructor(message, context = {}, options = {}) {
+        super(message, exports.ErrorCategory.COMPUTATION, exports.ErrorSeverity.MEDIUM, {
+            ...context,
+            algorithm: options.algorithm,
+            input: options.input,
+            expectedRange: options.expectedRange
+        }, {
+            retryable: false,
+            suggestedAction: 'Please verify input parameters and calculation constraints'
+        });
+        this.name = 'ComputationError';
+    }
+}
+/**
+ * System Error - for internal system failures
+ */
+class SystemError extends CREBError {
+    constructor(message, context = {}, options = {}) {
+        super(message, exports.ErrorCategory.SYSTEM, exports.ErrorSeverity.CRITICAL, {
+            ...context,
+            subsystem: options.subsystem,
+            resource: options.resource
+        }, {
+            retryable: false,
+            suggestedAction: 'Internal system error. Please contact support'
+        });
+        this.name = 'SystemError';
+    }
+}
+/**
+ * Error aggregation utility for collecting and analyzing multiple errors
+ */
+class ErrorAggregator {
+    constructor(maxErrors = 100) {
+        this.errors = [];
+        this.maxErrors = maxErrors;
+    }
+    /**
+     * Add an error to the aggregator
+     */
+    addError(error) {
+        this.errors.push(error);
+        // Keep only the most recent errors
+        if (this.errors.length > this.maxErrors) {
+            this.errors.shift();
+        }
+    }
+    /**
+     * Get errors by category
+     */
+    getErrorsByCategory(category) {
+        return this.errors.filter(error => error.metadata.category === category);
+    }
+    /**
+     * Get errors by severity
+     */
+    getErrorsBySeverity(severity) {
+        return this.errors.filter(error => error.metadata.severity === severity);
+    }
+    /**
+     * Get error statistics
+     */
+    getStatistics() {
+        const byCategory = {};
+        const bySeverity = {};
+        let retryableCount = 0;
+        // Initialize counters
+        Object.values(exports.ErrorCategory).forEach(cat => byCategory[cat] = 0);
+        Object.values(exports.ErrorSeverity).forEach(sev => bySeverity[sev] = 0);
+        // Count errors
+        this.errors.forEach(error => {
+            byCategory[error.metadata.category]++;
+            bySeverity[error.metadata.severity]++;
+            if (error.isRetryable()) {
+                retryableCount++;
+            }
+        });
+        return {
+            total: this.errors.length,
+            byCategory,
+            bySeverity,
+            retryableCount,
+            recentErrors: this.errors.slice(-10) // Last 10 errors
+        };
+    }
+    /**
+     * Clear all collected errors
+     */
+    clear() {
+        this.errors = [];
+    }
+    /**
+     * Get all errors as JSON for logging
+     */
+    toJSON() {
+        return this.errors.map(error => error.toJSON());
+    }
+}
+/**
+ * Utility functions for error handling
+ */
+class ErrorUtils {
+    /**
+     * Wrap a function with error handling and transformation
+     */
+    static withErrorHandling(fn, errorTransformer) {
+        return (...args) => {
+            try {
+                return fn(...args);
+            }
+            catch (error) {
+                throw errorTransformer ? errorTransformer(error) : ErrorUtils.transformUnknownError(error);
+            }
+        };
+    }
+    /**
+     * Wrap an async function with error handling and transformation
+     */
+    static withAsyncErrorHandling(fn, errorTransformer) {
+        return async (...args) => {
+            try {
+                return await fn(...args);
+            }
+            catch (error) {
+                throw errorTransformer ? errorTransformer(error) : ErrorUtils.transformUnknownError(error);
+            }
+        };
+    }
+    /**
+     * Transform unknown errors into CREBError instances
+     */
+    static transformUnknownError(error) {
+        if (error instanceof CREBError) {
+            return error;
+        }
+        if (error instanceof Error) {
+            return new SystemError(error.message, { originalError: error.name }, { subsystem: 'unknown' });
+        }
+        return new SystemError(typeof error === 'string' ? error : 'Unknown error occurred', { originalError: error });
+    }
+    /**
+     * Check if an error indicates a transient failure
+     */
+    static isTransientError(error) {
+        if (error instanceof CREBError) {
+            return error.isRetryable();
+        }
+        // Common patterns for transient errors
+        const transientPatterns = [
+            /timeout/i,
+            /connection/i,
+            /network/i,
+            /503/,
+            /502/,
+            /504/,
+            /rate limit/i
+        ];
+        const message = error?.message || String(error);
+        return transientPatterns.some(pattern => pattern.test(message));
+    }
+}
+
+/**
+ * Circuit Breaker Pattern Implementation for CREB-JS
+ * Prevents cascading failures by monitoring and controlling access to external resources
+ */
+exports.CircuitBreakerState = void 0;
+(function (CircuitBreakerState) {
+    CircuitBreakerState["CLOSED"] = "CLOSED";
+    CircuitBreakerState["OPEN"] = "OPEN";
+    CircuitBreakerState["HALF_OPEN"] = "HALF_OPEN"; // Testing if service recovered
+})(exports.CircuitBreakerState || (exports.CircuitBreakerState = {}));
+/**
+ * Circuit Breaker implementation for fault tolerance
+ */
+class CircuitBreaker {
+    constructor(name, config) {
+        this.name = name;
+        this.state = exports.CircuitBreakerState.CLOSED;
+        this.failureCount = 0;
+        this.successCount = 0;
+        this.stateChangedAt = new Date();
+        this.callHistory = [];
+        // Default configuration
+        const defaultConfig = {
+            failureThreshold: 5,
+            failureRate: 50,
+            monitoringWindow: 60000, // 1 minute
+            timeout: 30000, // 30 seconds
+            successThreshold: 3,
+            minimumCalls: 10,
+            isFailure: (error) => true, // All errors count as failures by default
+            onStateChange: () => { },
+            onCircuitOpen: () => { },
+            onCircuitClose: () => { }
+        };
+        // Merge with provided config
+        this.config = {
+            ...defaultConfig,
+            ...config
+        };
+    }
+    /**
+     * Execute a function with circuit breaker protection
+     */
+    async execute(fn) {
+        if (this.state === exports.CircuitBreakerState.OPEN) {
+            if (this.shouldAttemptReset()) {
+                this.setState(exports.CircuitBreakerState.HALF_OPEN);
+            }
+            else {
+                throw new ExternalAPIError(`Circuit breaker is OPEN for ${this.name}. Service is currently unavailable.`, this.name, {
+                    circuitBreakerState: this.state,
+                    nextAttemptTime: this.nextAttemptTime
+                }, {
+                    rateLimited: false,
+                    statusCode: 503
+                });
+            }
+        }
+        const startTime = Date.now();
+        try {
+            const result = await fn();
+            this.onSuccess(Date.now() - startTime);
+            return result;
+        }
+        catch (error) {
+            this.onFailure(error, Date.now() - startTime);
+            throw error;
+        }
+    }
+    /**
+     * Execute a synchronous function with circuit breaker protection
+     */
+    executeSync(fn) {
+        if (this.state === exports.CircuitBreakerState.OPEN) {
+            if (this.shouldAttemptReset()) {
+                this.setState(exports.CircuitBreakerState.HALF_OPEN);
+            }
+            else {
+                throw new ExternalAPIError(`Circuit breaker is OPEN for ${this.name}. Service is currently unavailable.`, this.name, {
+                    circuitBreakerState: this.state,
+                    nextAttemptTime: this.nextAttemptTime
+                }, {
+                    rateLimited: false,
+                    statusCode: 503
+                });
+            }
+        }
+        const startTime = Date.now();
+        try {
+            const result = fn();
+            this.onSuccess(Date.now() - startTime);
+            return result;
+        }
+        catch (error) {
+            this.onFailure(error, Date.now() - startTime);
+            throw error;
+        }
+    }
+    /**
+     * Get current circuit breaker metrics
+     */
+    getMetrics() {
+        const now = Date.now();
+        const recentCalls = this.getRecentCalls();
+        const totalCalls = recentCalls.length;
+        const failures = recentCalls.filter(call => !call.success).length;
+        return {
+            state: this.state,
+            failureCount: this.failureCount,
+            successCount: this.successCount,
+            totalCalls,
+            failureRate: totalCalls > 0 ? (failures / totalCalls) * 100 : 0,
+            lastFailureTime: this.lastFailureTime,
+            lastSuccessTime: this.lastSuccessTime,
+            stateChangedAt: this.stateChangedAt,
+            timeSinceStateChange: now - this.stateChangedAt.getTime(),
+            nextAttemptTime: this.nextAttemptTime
+        };
+    }
+    /**
+     * Reset the circuit breaker to closed state
+     */
+    reset() {
+        this.setState(exports.CircuitBreakerState.CLOSED);
+        this.failureCount = 0;
+        this.successCount = 0;
+        this.lastFailureTime = undefined;
+        this.nextAttemptTime = undefined;
+        this.callHistory = [];
+    }
+    /**
+     * Force the circuit breaker to open state
+     */
+    trip() {
+        this.setState(exports.CircuitBreakerState.OPEN);
+        this.setNextAttemptTime();
+        this.config.onCircuitOpen(new Error('Circuit breaker manually tripped'));
+    }
+    /**
+     * Check if the circuit breaker is currently open
+     */
+    isOpen() {
+        return this.state === exports.CircuitBreakerState.OPEN;
+    }
+    /**
+     * Check if the circuit breaker is currently half-open
+     */
+    isHalfOpen() {
+        return this.state === exports.CircuitBreakerState.HALF_OPEN;
+    }
+    /**
+     * Check if the circuit breaker is currently closed
+     */
+    isClosed() {
+        return this.state === exports.CircuitBreakerState.CLOSED;
+    }
+    onSuccess(duration) {
+        this.recordCall(true, duration);
+        this.successCount++;
+        this.lastSuccessTime = new Date();
+        if (this.state === exports.CircuitBreakerState.HALF_OPEN) {
+            if (this.successCount >= this.config.successThreshold) {
+                this.setState(exports.CircuitBreakerState.CLOSED);
+                this.failureCount = 0;
+                this.config.onCircuitClose();
+            }
+        }
+    }
+    onFailure(error, duration) {
+        if (this.config.isFailure(error)) {
+            this.recordCall(false, duration, error);
+            this.failureCount++;
+            this.lastFailureTime = new Date();
+            if (this.state === exports.CircuitBreakerState.HALF_OPEN) {
+                this.setState(exports.CircuitBreakerState.OPEN);
+                this.setNextAttemptTime();
+                this.config.onCircuitOpen(error);
+            }
+            else if (this.state === exports.CircuitBreakerState.CLOSED && this.shouldOpenCircuit()) {
+                this.setState(exports.CircuitBreakerState.OPEN);
+                this.setNextAttemptTime();
+                this.config.onCircuitOpen(error);
+            }
+        }
+    }
+    shouldOpenCircuit() {
+        const recentCalls = this.getRecentCalls();
+        // Check if we have minimum number of calls
+        if (recentCalls.length < this.config.minimumCalls) {
+            return false;
+        }
+        // Check failure count threshold
+        if (this.failureCount >= this.config.failureThreshold) {
+            return true;
+        }
+        // Check failure rate threshold
+        const failures = recentCalls.filter(call => !call.success).length;
+        const failureRate = (failures / recentCalls.length) * 100;
+        return failureRate >= this.config.failureRate;
+    }
+    shouldAttemptReset() {
+        return this.nextAttemptTime ? Date.now() >= this.nextAttemptTime.getTime() : false;
+    }
+    setState(newState) {
+        const previousState = this.state;
+        if (previousState !== newState) {
+            this.state = newState;
+            this.stateChangedAt = new Date();
+            // Reset counters on state change
+            if (newState === exports.CircuitBreakerState.CLOSED) {
+                this.failureCount = 0;
+                this.successCount = 0;
+            }
+            else if (newState === exports.CircuitBreakerState.HALF_OPEN) {
+                this.successCount = 0;
+            }
+            this.config.onStateChange(newState, previousState);
+        }
+    }
+    setNextAttemptTime() {
+        this.nextAttemptTime = new Date(Date.now() + this.config.timeout);
+    }
+    recordCall(success, duration, error) {
+        const record = {
+            timestamp: Date.now(),
+            success,
+            duration,
+            error
+        };
+        this.callHistory.push(record);
+        // Keep only recent calls within monitoring window
+        const cutoff = Date.now() - this.config.monitoringWindow;
+        this.callHistory = this.callHistory.filter(call => call.timestamp >= cutoff);
+    }
+    getRecentCalls() {
+        const cutoff = Date.now() - this.config.monitoringWindow;
+        return this.callHistory.filter(call => call.timestamp >= cutoff);
+    }
+}
+/**
+ * Circuit Breaker Manager for handling multiple circuit breakers
+ */
+class CircuitBreakerManager {
+    constructor() {
+        this.breakers = new Map();
+    }
+    /**
+     * Create or get a circuit breaker for a service
+     */
+    getBreaker(name, config) {
+        if (!this.breakers.has(name)) {
+            if (!config) {
+                throw new SystemError(`Circuit breaker configuration required for new service: ${name}`, { service: name }, { subsystem: 'CircuitBreakerManager' });
+            }
+            this.breakers.set(name, new CircuitBreaker(name, config));
+        }
+        return this.breakers.get(name);
+    }
+    /**
+     * Remove a circuit breaker
+     */
+    removeBreaker(name) {
+        return this.breakers.delete(name);
+    }
+    /**
+     * Get metrics for all circuit breakers
+     */
+    getAllMetrics() {
+        const metrics = {};
+        for (const [name, breaker] of this.breakers) {
+            metrics[name] = breaker.getMetrics();
+        }
+        return metrics;
+    }
+    /**
+     * Reset all circuit breakers
+     */
+    resetAll() {
+        for (const breaker of this.breakers.values()) {
+            breaker.reset();
+        }
+    }
+    /**
+     * Get health status of all services
+     */
+    getHealthStatus() {
+        const healthy = [];
+        const degraded = [];
+        const failed = [];
+        for (const [name, breaker] of this.breakers) {
+            const metrics = breaker.getMetrics();
+            if (metrics.state === exports.CircuitBreakerState.CLOSED) {
+                if (metrics.failureRate < 10) {
+                    healthy.push(name);
+                }
+                else {
+                    degraded.push(name);
+                }
+            }
+            else {
+                failed.push(name);
+            }
+        }
+        return {
+            healthy,
+            degraded,
+            failed,
+            total: this.breakers.size
+        };
+    }
+}
+// Global circuit breaker manager instance
+const circuitBreakerManager = new CircuitBreakerManager();
+/**
+ * Decorator for automatic circuit breaker protection
+ */
+function WithCircuitBreaker(name, config) {
+    return function (target, propertyKey, descriptor) {
+        const originalMethod = descriptor.value;
+        descriptor.value = async function (...args) {
+            const breaker = circuitBreakerManager.getBreaker(name, config);
+            return breaker.execute(() => originalMethod.apply(this, args));
+        };
+        return descriptor;
+    };
+}
+
+/**
+ * Retry Policy Implementation for CREB-JS
+ * Provides intelligent retry strategies with exponential backoff, jitter, and rate limiting
+ */
+exports.RetryStrategy = void 0;
+(function (RetryStrategy) {
+    RetryStrategy["FIXED_DELAY"] = "FIXED_DELAY";
+    RetryStrategy["LINEAR_BACKOFF"] = "LINEAR_BACKOFF";
+    RetryStrategy["EXPONENTIAL_BACKOFF"] = "EXPONENTIAL_BACKOFF";
+    RetryStrategy["EXPONENTIAL_BACKOFF_JITTER"] = "EXPONENTIAL_BACKOFF_JITTER";
+})(exports.RetryStrategy || (exports.RetryStrategy = {}));
+/**
+ * Rate limiter to respect API rate limits during retries
+ */
+class RateLimiter {
+    constructor(maxRequests, windowMs) {
+        this.maxRequests = maxRequests;
+        this.windowMs = windowMs;
+        this.requests = [];
+    }
+    /**
+     * Check if a request can be made within rate limits
+     */
+    canMakeRequest() {
+        const now = Date.now();
+        const windowStart = now - this.windowMs;
+        // Remove old requests outside the window
+        this.requests = this.requests.filter(time => time > windowStart);
+        return this.requests.length < this.maxRequests;
+    }
+    /**
+     * Record a request
+     */
+    recordRequest() {
+        this.requests.push(Date.now());
+    }
+    /**
+     * Get time until next request is allowed
+     */
+    getTimeUntilNextRequest() {
+        if (this.canMakeRequest()) {
+            return 0;
+        }
+        const oldestRequest = Math.min(...this.requests);
+        const windowStart = Date.now() - this.windowMs;
+        return Math.max(0, oldestRequest - windowStart);
+    }
+    /**
+     * Reset the rate limiter
+     */
+    reset() {
+        this.requests = [];
+    }
+}
+/**
+ * Retry Policy implementation with intelligent backoff strategies
+ */
+class RetryPolicy {
+    constructor(config, rateLimiter) {
+        // Default configuration with proper typing
+        const defaultConfig = {
+            maxAttempts: 3,
+            initialDelay: 1000,
+            maxDelay: 30000,
+            strategy: exports.RetryStrategy.EXPONENTIAL_BACKOFF_JITTER,
+            backoffMultiplier: 2,
+            jitterFactor: 0.1,
+            shouldRetry: (error, attempt) => {
+                // Default retry logic - retry on any error (except for specific non-retryable ones)
+                // If it's a CREB error, use its retryable flag
+                if (error instanceof CREBError) {
+                    return error.isRetryable();
+                }
+                // For other errors, retry unless they're clearly non-retryable
+                const message = error?.message || String(error);
+                const nonRetryablePatterns = [
+                    /authorization/i,
+                    /forbidden/i,
+                    /401/,
+                    /403/,
+                    /404/,
+                    /validation/i,
+                    /syntax/i
+                ];
+                return !nonRetryablePatterns.some(pattern => pattern.test(message));
+            },
+            onRetry: () => { },
+            onFailure: () => { },
+            onSuccess: () => { }
+        };
+        this.config = {
+            ...defaultConfig,
+            ...config
+        };
+        this.rateLimiter = rateLimiter;
+    }
+    /**
+     * Execute a function with retry logic
+     */
+    async execute(fn) {
+        const startTime = Date.now();
+        let attempt = 1;
+        let totalDelay = 0;
+        let lastError;
+        const delays = [];
+        // Global timeout setup
+        let globalTimeoutId;
+        let globalTimeoutPromise;
+        if (this.config.globalTimeout) {
+            globalTimeoutPromise = new Promise((_, reject) => {
+                globalTimeoutId = setTimeout(() => {
+                    reject(new CREBError(`Global timeout of ${this.config.globalTimeout}ms exceeded`, exports.ErrorCategory.TIMEOUT, exports.ErrorSeverity.HIGH, { globalTimeout: this.config.globalTimeout, attempt }));
+                }, this.config.globalTimeout);
+            });
+        }
+        try {
+            while (attempt <= this.config.maxAttempts) {
+                try {
+                    // Check rate limits
+                    if (this.rateLimiter) {
+                        while (!this.rateLimiter.canMakeRequest()) {
+                            const waitTime = this.rateLimiter.getTimeUntilNextRequest();
+                            if (waitTime > 0) {
+                                await this.delay(waitTime);
+                            }
+                        }
+                        this.rateLimiter.recordRequest();
+                    }
+                    // Execute with timeout if specified
+                    let result;
+                    if (this.config.attemptTimeout) {
+                        const timeoutPromise = this.createTimeoutPromise(this.config.attemptTimeout, attempt);
+                        const promises = [fn()];
+                        if (globalTimeoutPromise)
+                            promises.push(globalTimeoutPromise);
+                        promises.push(timeoutPromise);
+                        result = await Promise.race(promises);
+                    }
+                    else {
+                        const promises = [fn()];
+                        if (globalTimeoutPromise)
+                            promises.push(globalTimeoutPromise);
+                        result = await Promise.race(promises);
+                    }
+                    // Success!
+                    const executionTime = Date.now() - startTime;
+                    const metrics = {
+                        totalAttempts: attempt,
+                        successfulAttempts: 1,
+                        failedAttempts: attempt - 1,
+                        averageDelay: delays.length > 0 ? totalDelay / delays.length : 0,
+                        totalDelay,
+                        executionTime
+                    };
+                    this.config.onSuccess(result, attempt);
+                    return {
+                        result,
+                        metrics,
+                        succeeded: true
+                    };
+                }
+                catch (error) {
+                    lastError = error;
+                    // Check if we should retry
+                    if (!this.config.shouldRetry(error, attempt) || attempt >= this.config.maxAttempts) {
+                        break;
+                    }
+                    // Calculate delay for next attempt
+                    const delay = this.calculateDelay(attempt);
+                    delays.push(delay);
+                    totalDelay += delay;
+                    this.config.onRetry(error, attempt, delay);
+                    // Wait before next attempt
+                    await this.delay(delay);
+                    attempt++;
+                }
+            }
+            // All retries exhausted
+            const executionTime = Date.now() - startTime;
+            const metrics = {
+                totalAttempts: attempt,
+                successfulAttempts: 0,
+                failedAttempts: attempt,
+                averageDelay: delays.length > 0 ? totalDelay / delays.length : 0,
+                totalDelay,
+                lastError,
+                executionTime
+            };
+            this.config.onFailure(lastError, attempt);
+            return {
+                result: undefined,
+                metrics,
+                succeeded: false,
+                finalError: lastError
+            };
+        }
+        finally {
+            if (globalTimeoutId) {
+                clearTimeout(globalTimeoutId);
+            }
+        }
+    }
+    /**
+     * Execute a synchronous function with retry logic
+     */
+    executeSync(fn) {
+        const startTime = Date.now();
+        let attempt = 1;
+        let totalDelay = 0;
+        let lastError;
+        const delays = [];
+        while (attempt <= this.config.maxAttempts) {
+            try {
+                // Check rate limits (blocking)
+                if (this.rateLimiter) {
+                    while (!this.rateLimiter.canMakeRequest()) {
+                        const waitTime = this.rateLimiter.getTimeUntilNextRequest();
+                        if (waitTime > 0) {
+                            // Synchronous delay (not recommended for production)
+                            const start = Date.now();
+                            while (Date.now() - start < waitTime) {
+                                // Busy wait
+                            }
+                        }
+                    }
+                    this.rateLimiter.recordRequest();
+                }
+                const result = fn();
+                // Success!
+                const executionTime = Date.now() - startTime;
+                const metrics = {
+                    totalAttempts: attempt,
+                    successfulAttempts: 1,
+                    failedAttempts: attempt - 1,
+                    averageDelay: delays.length > 0 ? totalDelay / delays.length : 0,
+                    totalDelay,
+                    executionTime
+                };
+                this.config.onSuccess(result, attempt);
+                return {
+                    result,
+                    metrics,
+                    succeeded: true
+                };
+            }
+            catch (error) {
+                lastError = error;
+                // Check if we should retry
+                if (!this.config.shouldRetry(error, attempt) || attempt >= this.config.maxAttempts) {
+                    break;
+                }
+                // Calculate delay for next attempt
+                const delay = this.calculateDelay(attempt);
+                delays.push(delay);
+                totalDelay += delay;
+                this.config.onRetry(error, attempt, delay);
+                attempt++;
+            }
+        }
+        // All retries exhausted
+        const executionTime = Date.now() - startTime;
+        const metrics = {
+            totalAttempts: attempt,
+            successfulAttempts: 0,
+            failedAttempts: attempt,
+            averageDelay: delays.length > 0 ? totalDelay / delays.length : 0,
+            totalDelay,
+            lastError,
+            executionTime
+        };
+        this.config.onFailure(lastError, attempt);
+        return {
+            result: undefined,
+            metrics,
+            succeeded: false,
+            finalError: lastError
+        };
+    }
+    calculateDelay(attempt) {
+        let delay;
+        switch (this.config.strategy) {
+            case exports.RetryStrategy.FIXED_DELAY:
+                delay = this.config.initialDelay;
+                break;
+            case exports.RetryStrategy.LINEAR_BACKOFF:
+                delay = this.config.initialDelay * attempt;
+                break;
+            case exports.RetryStrategy.EXPONENTIAL_BACKOFF:
+                delay = this.config.initialDelay * Math.pow(this.config.backoffMultiplier, attempt - 1);
+                break;
+            case exports.RetryStrategy.EXPONENTIAL_BACKOFF_JITTER:
+                const exponentialDelay = this.config.initialDelay * Math.pow(this.config.backoffMultiplier, attempt - 1);
+                const jitter = exponentialDelay * this.config.jitterFactor * Math.random();
+                delay = exponentialDelay + jitter;
+                break;
+            default:
+                delay = this.config.initialDelay;
+        }
+        // Cap at maximum delay
+        return Math.min(delay, this.config.maxDelay);
+    }
+    async delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    createTimeoutPromise(timeoutMs, attempt) {
+        return new Promise((_, reject) => {
+            setTimeout(() => {
+                reject(new CREBError(`Attempt ${attempt} timed out after ${timeoutMs}ms`, exports.ErrorCategory.TIMEOUT, exports.ErrorSeverity.MEDIUM, { attemptTimeout: timeoutMs, attempt }));
+            }, timeoutMs);
+        });
+    }
+}
+/**
+ * Predefined retry policies for common scenarios
+ */
+class RetryPolicies {
+    /**
+     * Conservative retry policy for critical operations
+     */
+    static conservative() {
+        return new RetryPolicy({
+            maxAttempts: 2,
+            initialDelay: 2000,
+            maxDelay: 10000,
+            strategy: exports.RetryStrategy.EXPONENTIAL_BACKOFF_JITTER,
+            backoffMultiplier: 2,
+            jitterFactor: 0.1
+        });
+    }
+    /**
+     * Aggressive retry policy for non-critical operations
+     */
+    static aggressive() {
+        return new RetryPolicy({
+            maxAttempts: 5,
+            initialDelay: 500,
+            maxDelay: 30000,
+            strategy: exports.RetryStrategy.EXPONENTIAL_BACKOFF_JITTER,
+            backoffMultiplier: 2,
+            jitterFactor: 0.2
+        });
+    }
+    /**
+     * Quick retry policy for fast operations
+     */
+    static quick() {
+        return new RetryPolicy({
+            maxAttempts: 3,
+            initialDelay: 100,
+            maxDelay: 1000,
+            strategy: exports.RetryStrategy.LINEAR_BACKOFF,
+            backoffMultiplier: 1.5,
+            jitterFactor: 0.1
+        });
+    }
+    /**
+     * Network-specific retry policy with rate limiting
+     */
+    static network(maxRequestsPerMinute = 60) {
+        const rateLimiter = new RateLimiter(maxRequestsPerMinute, 60000);
+        return new RetryPolicy({
+            maxAttempts: 4,
+            initialDelay: 1000,
+            maxDelay: 20000,
+            strategy: exports.RetryStrategy.EXPONENTIAL_BACKOFF_JITTER,
+            backoffMultiplier: 2,
+            jitterFactor: 0.15,
+            shouldRetry: (error, attempt) => {
+                // Retry on network errors, timeouts, and 5xx status codes
+                if (error instanceof CREBError) {
+                    return error.isRetryable() && attempt < 4;
+                }
+                return ErrorUtils.isTransientError(error) && attempt < 4;
+            }
+        }, rateLimiter);
+    }
+    /**
+     * Database-specific retry policy
+     */
+    static database() {
+        return new RetryPolicy({
+            maxAttempts: 3,
+            initialDelay: 500,
+            maxDelay: 5000,
+            strategy: exports.RetryStrategy.EXPONENTIAL_BACKOFF,
+            backoffMultiplier: 2,
+            jitterFactor: 0.1,
+            shouldRetry: (error, attempt) => {
+                // Common database transient errors
+                const message = error?.message?.toLowerCase() || '';
+                const transientPatterns = [
+                    'connection',
+                    'timeout',
+                    'deadlock',
+                    'lock timeout',
+                    'temporary failure'
+                ];
+                return transientPatterns.some(pattern => message.includes(pattern)) && attempt < 3;
+            }
+        });
+    }
+}
+/**
+ * Decorator for automatic retry functionality
+ */
+function WithRetry(policy) {
+    return function (target, propertyKey, descriptor) {
+        const originalMethod = descriptor.value;
+        descriptor.value = async function (...args) {
+            const result = await policy.execute(() => originalMethod.apply(this, args));
+            if (result.succeeded) {
+                return result.result;
+            }
+            else {
+                throw result.finalError;
+            }
+        };
+        return descriptor;
+    };
+}
+/**
+ * Utility function to create a retry policy with default settings
+ */
+function createRetryPolicy(overrides = {}) {
+    return new RetryPolicy({
+        maxAttempts: 3,
+        initialDelay: 1000,
+        maxDelay: 10000,
+        strategy: exports.RetryStrategy.EXPONENTIAL_BACKOFF_JITTER,
+        backoffMultiplier: 2,
+        jitterFactor: 0.1,
+        ...overrides
+    });
+}
+
+/**
+ * Enhanced Error Handling Integration Example
+ * Demonstrates how to use circuit breakers, retry policies, and structured errors
+ * in real-world scenarios within CREB-JS
+ */
+/**
+ * Example: Enhanced NIST Integration with Error Handling
+ */
+class EnhancedNISTIntegration {
+    constructor() {
+        // Configure circuit breaker for NIST API
+        this.circuitBreaker = circuitBreakerManager.getBreaker('nist-api', {
+            failureThreshold: 5,
+            failureRate: 30,
+            monitoringWindow: 60000, // 1 minute
+            timeout: 30000, // 30 seconds
+            successThreshold: 3,
+            minimumCalls: 10,
+            onStateChange: (newState, oldState) => {
+                console.log(`NIST Circuit Breaker: ${oldState} → ${newState}`);
+            },
+            onCircuitOpen: (error) => {
+                console.error('NIST API circuit breaker opened:', error);
+            },
+            onCircuitClose: () => {
+                console.log('NIST API circuit breaker closed - service recovered');
+            }
+        });
+        // Configure retry policy with rate limiting
+        this.retryPolicy = RetryPolicies.network(60); // 60 requests per minute
+        // Error aggregator for monitoring
+        this.errorAggregator = new ErrorAggregator(500);
+    }
+    /**
+     * Get thermodynamic data with full error handling
+     */
+    async getThermodynamicData(compoundName) {
+        const operation = async () => {
+            try {
+                // Simulate NIST API call
+                const response = await this.makeNISTRequest(`/thermo/search?name=${encodeURIComponent(compoundName)}`);
+                return response;
+            }
+            catch (error) {
+                // Transform error into appropriate CREB error type
+                if (error instanceof Error && error.message.includes('network')) {
+                    throw new NetworkError('Failed to connect to NIST database', { compoundName, operation: 'getThermodynamicData' }, { url: 'https://webbook.nist.gov/cgi/cbook.cgi', method: 'GET' });
+                }
+                else if (error instanceof Error && error.message.includes('429')) {
+                    throw new ExternalAPIError('NIST API rate limit exceeded', 'NIST', { compoundName }, { statusCode: 429, rateLimited: true });
+                }
+                else {
+                    throw new ExternalAPIError('NIST API request failed', 'NIST', { compoundName }, { statusCode: 500 });
+                }
+            }
+        };
+        try {
+            // Apply circuit breaker and retry policy
+            const result = await this.circuitBreaker.execute(async () => {
+                const retryResult = await this.retryPolicy.execute(operation);
+                if (retryResult.succeeded) {
+                    return retryResult.result;
+                }
+                else {
+                    throw retryResult.finalError;
+                }
+            });
+            return result;
+        }
+        catch (error) {
+            const crebError = ErrorUtils.transformUnknownError(error);
+            this.errorAggregator.addError(crebError);
+            throw crebError;
+        }
+    }
+    /**
+     * Simulated NIST API request (would be real HTTP request in production)
+     */
+    async makeNISTRequest(endpoint) {
+        // Simulate various failure scenarios for demonstration
+        const random = Math.random();
+        if (random < 0.1) {
+            throw new Error('network timeout');
+        }
+        else if (random < 0.15) {
+            throw new Error('HTTP 429 rate limit');
+        }
+        else if (random < 0.2) {
+            throw new Error('HTTP 500 server error');
+        }
+        // Simulate successful response
+        return {
+            compound: endpoint.split('name=')[1],
+            thermodynamicData: {
+                enthalpy: -393.5,
+                entropy: 213.8,
+                gibbs: -394.4
+            }
+        };
+    }
+    /**
+     * Get error statistics and health metrics
+     */
+    getHealthMetrics() {
+        return {
+            circuitBreaker: this.circuitBreaker.getMetrics(),
+            errors: this.errorAggregator.getStatistics(),
+            retryMetrics: {
+                // In a real implementation, you'd track retry metrics
+                totalRetries: 0,
+                successAfterRetry: 0,
+                ultimateFailures: 0
+            }
+        };
+    }
+}
+/**
+ * Example: Enhanced PubChem Integration with Error Handling
+ */
+class EnhancedPubChemIntegration {
+    constructor() {
+        // PubChem has stricter rate limits
+        this.rateLimiter = new RateLimiter(5, 1000); // 5 requests per second
+        this.circuitBreaker = circuitBreakerManager.getBreaker('pubchem-api', {
+            failureThreshold: 3,
+            failureRate: 25,
+            monitoringWindow: 60000,
+            timeout: 60000, // Longer timeout for PubChem
+            successThreshold: 2,
+            minimumCalls: 5
+        });
+        this.retryPolicy = new RetryPolicy({
+            maxAttempts: 4,
+            initialDelay: 2000, // Start with 2 second delay
+            maxDelay: 30000,
+            strategy: exports.RetryStrategy.EXPONENTIAL_BACKOFF_JITTER,
+            backoffMultiplier: 2,
+            jitterFactor: 0.2,
+            shouldRetry: (error, attempt) => {
+                if (error instanceof ExternalAPIError) {
+                    // Always retry rate limits, retry 5xx errors, don't retry 4xx (except 429)
+                    if (error.metadata.category === exports.ErrorCategory.RATE_LIMIT)
+                        return true;
+                    const statusCode = error.metadata.context.statusCode;
+                    return statusCode >= 500 || statusCode === 429;
+                }
+                return ErrorUtils.isTransientError(error) && attempt < 4;
+            },
+            onRetry: (error, attempt, delay) => {
+                console.log(`PubChem retry attempt ${attempt} after ${delay}ms: ${error.message}`);
+            }
+        }, this.rateLimiter);
+    }
+    /**
+     * Search for compounds with enhanced error handling
+     */
+    async searchCompounds(query) {
+        const operation = async () => {
+            // Simulate API call
+            return this.makePubChemRequest(`/compound/name/${encodeURIComponent(query)}/JSON`);
+        };
+        return this.circuitBreaker.execute(async () => {
+            const result = await this.retryPolicy.execute(operation);
+            if (result.succeeded) {
+                return result.result;
+            }
+            else {
+                throw result.finalError;
+            }
+        });
+    }
+    async makePubChemRequest(endpoint) {
+        // Simulate PubChem API behavior
+        const random = Math.random();
+        if (random < 0.05) {
+            throw new ExternalAPIError('PubChem service temporarily unavailable', 'PubChem', { endpoint }, { statusCode: 503 });
+        }
+        else if (random < 0.1) {
+            throw new ExternalAPIError('PubChem rate limit exceeded', 'PubChem', { endpoint }, { statusCode: 429, rateLimited: true });
+        }
+        // Simulate successful response
+        return [
+            {
+                CID: 12345,
+                name: endpoint.split('/')[3],
+                molecularFormula: 'C6H12O6',
+                molecularWeight: 180.16
+            }
+        ];
+    }
+}
+/**
+ * Example: Enhanced SQLite Storage with Error Handling
+ */
+class EnhancedSQLiteStorage {
+    constructor() {
+        // Database operations use specialized retry policy
+        this.retryPolicy = RetryPolicies.database();
+        this.errorAggregator = new ErrorAggregator(100);
+    }
+    /**
+     * Store data with retry logic for transient database failures
+     */
+    async storeData(table, data) {
+        const operation = async () => {
+            // Simulate database operation
+            await this.executeDatabaseOperation('INSERT', table, data);
+        };
+        try {
+            const result = await this.retryPolicy.execute(operation);
+            if (!result.succeeded) {
+                throw result.finalError;
+            }
+        }
+        catch (error) {
+            const crebError = ErrorUtils.transformUnknownError(error);
+            this.errorAggregator.addError(crebError);
+            throw crebError;
+        }
+    }
+    async executeDatabaseOperation(operation, table, data) {
+        // Simulate various database failure scenarios
+        const random = Math.random();
+        if (random < 0.02) {
+            throw new Error('database connection timeout');
+        }
+        else if (random < 0.03) {
+            throw new Error('deadlock detected');
+        }
+        else if (random < 0.04) {
+            throw new Error('temporary failure in writing to disk');
+        }
+        // Simulate successful operation
+        console.log(`Database ${operation} on ${table} completed successfully`);
+    }
+}
+/**
+ * Example: System Health Monitor using Error Handling Components
+ */
+class SystemHealthMonitor {
+    constructor() {
+        this.errorAggregator = new ErrorAggregator(1000);
+        this.circuitBreakerManager = circuitBreakerManager;
+    }
+    /**
+     * Monitor system health and provide detailed status
+     */
+    getSystemHealth() {
+        const circuitBreakerHealth = this.circuitBreakerManager.getHealthStatus();
+        const errorStats = this.errorAggregator.getStatistics();
+        // Determine overall health
+        let overall = 'healthy';
+        if (circuitBreakerHealth.failed.length > 0) {
+            overall = 'critical';
+        }
+        else if (circuitBreakerHealth.degraded.length > 0 || errorStats.bySeverity.HIGH > 5) {
+            overall = 'degraded';
+        }
+        // Generate recommendations
+        const recommendations = [];
+        if (circuitBreakerHealth.failed.length > 0) {
+            recommendations.push(`${circuitBreakerHealth.failed.length} service(s) are failing: ${circuitBreakerHealth.failed.join(', ')}`);
+        }
+        if (errorStats.bySeverity.CRITICAL > 0) {
+            recommendations.push(`${errorStats.bySeverity.CRITICAL} critical error(s) detected - immediate attention required`);
+        }
+        if (errorStats.retryableCount > errorStats.total * 0.7) {
+            recommendations.push('High percentage of retryable errors suggests network or external service issues');
+        }
+        return {
+            overall,
+            services: {
+                total: circuitBreakerHealth.total,
+                healthy: circuitBreakerHealth.healthy.length,
+                degraded: circuitBreakerHealth.degraded.length,
+                failed: circuitBreakerHealth.failed.length,
+                details: this.circuitBreakerManager.getAllMetrics()
+            },
+            errors: errorStats,
+            recommendations
+        };
+    }
+    /**
+     * Add error to monitoring
+     */
+    reportError(error) {
+        this.errorAggregator.addError(error);
+    }
+    /**
+     * Clear error history
+     */
+    clearErrorHistory() {
+        this.errorAggregator.clear();
+    }
+}
+/**
+ * Example: Graceful Degradation Service
+ */
+class GracefulDegradationService {
+    constructor() {
+        this.nistIntegration = new EnhancedNISTIntegration();
+        this.pubchemIntegration = new EnhancedPubChemIntegration();
+        this.localCache = new Map();
+    }
+    /**
+     * Get thermodynamic data with graceful degradation
+     */
+    async getThermodynamicDataWithFallback(compoundName) {
+        // Try cache first
+        const cachedData = this.localCache.get(compoundName);
+        if (cachedData) {
+            return {
+                data: cachedData,
+                source: 'cache',
+                confidence: 0.9
+            };
+        }
+        // Try NIST (primary source)
+        try {
+            const nistData = await this.nistIntegration.getThermodynamicData(compoundName);
+            this.localCache.set(compoundName, nistData);
+            return {
+                data: nistData,
+                source: 'nist',
+                confidence: 1.0
+            };
+        }
+        catch (error) {
+            console.warn(`NIST failed for ${compoundName}:`, error instanceof CREBError ? error.getDescription() : error);
+        }
+        // Try PubChem (secondary source)
+        try {
+            const pubchemData = await this.pubchemIntegration.searchCompounds(compoundName);
+            const estimatedThermoData = this.estimateThermodynamicData(pubchemData[0]);
+            this.localCache.set(compoundName, estimatedThermoData);
+            return {
+                data: estimatedThermoData,
+                source: 'pubchem',
+                confidence: 0.7
+            };
+        }
+        catch (error) {
+            console.warn(`PubChem failed for ${compoundName}:`, error instanceof CREBError ? error.getDescription() : error);
+        }
+        // Fallback to estimation
+        const estimatedData = this.estimateThermodynamicData({ name: compoundName });
+        return {
+            data: estimatedData,
+            source: 'estimated',
+            confidence: 0.3
+        };
+    }
+    estimateThermodynamicData(compoundInfo) {
+        // Simple estimation logic (would be more sophisticated in real implementation)
+        return {
+            compound: compoundInfo.name,
+            thermodynamicData: {
+                enthalpy: -200, // Estimated values
+                entropy: 150,
+                gibbs: -180
+            },
+            note: 'Estimated values - use with caution'
+        };
+    }
+}
+// Example usage and testing
+async function demonstrateEnhancedErrorHandling() {
+    console.log('=== Enhanced Error Handling Demo ===\n');
+    // Create service instances
+    const nistService = new EnhancedNISTIntegration();
+    const healthMonitor = new SystemHealthMonitor();
+    const degradationService = new GracefulDegradationService();
+    // Test successful operation
+    console.log('1. Testing successful operation:');
+    try {
+        const data = await nistService.getThermodynamicData('water');
+        console.log('✓ Successfully retrieved data:', data);
+    }
+    catch (error) {
+        console.log('✗ Operation failed:', error instanceof CREBError ? error.getDescription() : error);
+    }
+    // Test multiple operations to trigger various error scenarios
+    console.log('\n2. Testing multiple operations (some may fail):');
+    const compounds = ['methane', 'ethane', 'propane', 'butane', 'pentane'];
+    for (const compound of compounds) {
+        try {
+            const result = await degradationService.getThermodynamicDataWithFallback(compound);
+            console.log(`✓ ${compound}: Got data from ${result.source} (confidence: ${result.confidence})`);
+        }
+        catch (error) {
+            console.log(`✗ ${compound}: Failed completely:`, error instanceof CREBError ? error.getDescription() : error);
+            if (error instanceof CREBError) {
+                healthMonitor.reportError(error);
+            }
+        }
+    }
+    // Display system health
+    console.log('\n3. System Health Status:');
+    const health = healthMonitor.getSystemHealth();
+    console.log(`Overall Status: ${health.overall.toUpperCase()}`);
+    console.log(`Services: ${health.services.healthy}/${health.services.total} healthy`);
+    console.log(`Recent Errors: ${health.errors.total} (${health.errors.retryableCount} retryable)`);
+    if (health.recommendations.length > 0) {
+        console.log('Recommendations:');
+        health.recommendations.forEach(rec => console.log(`  • ${rec}`));
+    }
+    // Display detailed metrics
+    console.log('\n4. Detailed Service Metrics:');
+    const nistMetrics = nistService.getHealthMetrics();
+    console.log('NIST Circuit Breaker:', nistMetrics.circuitBreaker);
+    console.log('Error Statistics:', nistMetrics.errors);
+}
+
+/**
+ * Configuration Schema Definitions
+ *
+ * This file contains validation schemas for all configuration types.
+ * Schemas are used for runtime validation and documentation generation.
+ */
+/**
+ * Cache configuration schema
+ */
+const cacheConfigSchema = {
+    maxSize: {
+        type: 'number',
+        required: true,
+        min: 1,
+        max: 100000,
+        default: 1000,
+        description: 'Maximum number of items to store in cache'
+    },
+    ttl: {
+        type: 'number',
+        required: true,
+        min: 1000,
+        max: 86400000, // 24 hours
+        default: 300000, // 5 minutes
+        description: 'Time to live for cache entries in milliseconds'
+    },
+    strategy: {
+        type: 'string',
+        required: true,
+        enum: ['lru', 'lfu', 'fifo'],
+        default: 'lru',
+        description: 'Cache eviction strategy'
+    }
+};
+/**
+ * Performance configuration schema
+ */
+const performanceConfigSchema = {
+    enableWasm: {
+        type: 'boolean',
+        required: true,
+        default: false,
+        description: 'Enable WebAssembly acceleration for calculations'
+    },
+    workerThreads: {
+        type: 'number',
+        required: true,
+        min: 1,
+        max: 16,
+        default: 4,
+        description: 'Number of worker threads for parallel processing'
+    },
+    batchSize: {
+        type: 'number',
+        required: true,
+        min: 1,
+        max: 10000,
+        default: 100,
+        description: 'Batch size for bulk operations'
+    }
+};
+/**
+ * Data configuration schema
+ */
+const dataConfigSchema = {
+    providers: {
+        type: 'array',
+        required: true,
+        items: {
+            type: 'string',
+            enum: ['sqlite', 'nist', 'pubchem', 'local']
+        },
+        default: ['sqlite', 'local'],
+        description: 'List of data providers to use'
+    },
+    syncInterval: {
+        type: 'number',
+        required: true,
+        min: 60000, // 1 minute
+        max: 86400000, // 24 hours
+        default: 3600000, // 1 hour
+        description: 'Data synchronization interval in milliseconds'
+    },
+    offlineMode: {
+        type: 'boolean',
+        required: true,
+        default: false,
+        description: 'Enable offline mode (no network requests)'
+    }
+};
+/**
+ * Logging configuration schema
+ */
+const loggingConfigSchema = {
+    level: {
+        type: 'string',
+        required: true,
+        enum: ['debug', 'info', 'warn', 'error'],
+        default: 'info',
+        description: 'Minimum log level to output'
+    },
+    format: {
+        type: 'string',
+        required: true,
+        enum: ['json', 'text'],
+        default: 'text',
+        description: 'Log output format'
+    },
+    destinations: {
+        type: 'array',
+        required: true,
+        items: {
+            type: 'string',
+            enum: ['console', 'file', 'remote']
+        },
+        default: ['console'],
+        description: 'Log output destinations'
+    }
+};
+/**
+ * Main CREB configuration schema
+ */
+const crebConfigSchema = {
+    cache: {
+        type: 'object',
+        required: true,
+        properties: cacheConfigSchema,
+        description: 'Cache configuration settings'
+    },
+    performance: {
+        type: 'object',
+        required: true,
+        properties: performanceConfigSchema,
+        description: 'Performance optimization settings'
+    },
+    data: {
+        type: 'object',
+        required: true,
+        properties: dataConfigSchema,
+        description: 'Data provider configuration'
+    },
+    logging: {
+        type: 'object',
+        required: true,
+        properties: loggingConfigSchema,
+        description: 'Logging configuration'
+    }
+};
+/**
+ * Default configuration values
+ */
+const defaultConfig = {
+    cache: {
+        maxSize: 1000,
+        ttl: 300000, // 5 minutes
+        strategy: 'lru'
+    },
+    performance: {
+        enableWasm: false,
+        workerThreads: 4,
+        batchSize: 100
+    },
+    data: {
+        providers: ['sqlite', 'local'],
+        syncInterval: 3600000, // 1 hour
+        offlineMode: false
+    },
+    logging: {
+        level: 'info',
+        format: 'text',
+        destinations: ['console']
+    }
+};
+/**
+ * Validate a configuration object against schema
+ */
+function validateConfig(config, schema, path = '') {
+    const errors = [];
+    const warnings = [];
+    if (typeof config !== 'object' || config === null) {
+        errors.push({
+            path,
+            message: 'Configuration must be an object',
+            value: config,
+            expectedType: 'object'
+        });
+        return { isValid: false, errors, warnings };
+    }
+    const configObj = config;
+    // Check required properties
+    for (const [key, property] of Object.entries(schema)) {
+        const currentPath = path ? `${path}.${key}` : key;
+        const value = configObj[key];
+        if (property.required && value === undefined) {
+            errors.push({
+                path: currentPath,
+                message: `Required property '${key}' is missing`,
+                value: undefined,
+                expectedType: property.type
+            });
+            continue;
+        }
+        if (value === undefined)
+            continue;
+        // Type validation
+        const typeValid = validateType(value, property, currentPath, errors);
+        if (!typeValid)
+            continue;
+        // Range validation for numbers
+        if (property.type === 'number' && typeof value === 'number') {
+            if (property.min !== undefined && value < property.min) {
+                errors.push({
+                    path: currentPath,
+                    message: `Value ${value} is below minimum ${property.min}`,
+                    value
+                });
+            }
+            if (property.max !== undefined && value > property.max) {
+                errors.push({
+                    path: currentPath,
+                    message: `Value ${value} is above maximum ${property.max}`,
+                    value
+                });
+            }
+        }
+        // Enum validation
+        if (property.enum && !property.enum.includes(value)) {
+            errors.push({
+                path: currentPath,
+                message: `Value '${value}' is not one of allowed values: ${property.enum.join(', ')}`,
+                value,
+                expectedType: `enum: ${property.enum.join(' | ')}`
+            });
+        }
+        // Array validation
+        if (property.type === 'array' && Array.isArray(value) && property.items) {
+            value.forEach((item, index) => {
+                const itemPath = `${currentPath}[${index}]`;
+                validateType(item, property.items, itemPath, errors);
+                if (property.items.enum && !property.items.enum.includes(item)) {
+                    errors.push({
+                        path: itemPath,
+                        message: `Array item '${item}' is not one of allowed values: ${property.items.enum.join(', ')}`,
+                        value: item
+                    });
+                }
+            });
+        }
+        // Object validation (recursive)
+        if (property.type === 'object' && property.properties) {
+            const nestedResult = validateConfig(value, property.properties, currentPath);
+            errors.push(...nestedResult.errors);
+            warnings.push(...nestedResult.warnings);
+        }
+    }
+    return {
+        isValid: errors.length === 0,
+        errors,
+        warnings
+    };
+}
+/**
+ * Validate value type
+ */
+function validateType(value, property, path, errors, warnings) {
+    const actualType = Array.isArray(value) ? 'array' : typeof value;
+    if (actualType !== property.type) {
+        errors.push({
+            path,
+            message: `Expected ${property.type}, got ${actualType}`,
+            value,
+            expectedType: property.type
+        });
+        return false;
+    }
+    return true;
+}
+/**
+ * Generate documentation from schema
+ */
+function generateSchemaDocumentation(schema, title) {
+    let doc = `# ${title}\n\n`;
+    for (const [key, property] of Object.entries(schema)) {
+        doc += `## ${key}\n\n`;
+        doc += `**Type:** ${property.type}\n`;
+        doc += `**Required:** ${property.required ? 'Yes' : 'No'}\n`;
+        if (property.default !== undefined) {
+            doc += `**Default:** \`${JSON.stringify(property.default)}\`\n`;
+        }
+        if (property.description) {
+            doc += `**Description:** ${property.description}\n`;
+        }
+        if (property.enum) {
+            doc += `**Allowed Values:** ${property.enum.map(v => `\`${v}\``).join(', ')}\n`;
+        }
+        if (property.min !== undefined || property.max !== undefined) {
+            doc += `**Range:** `;
+            if (property.min !== undefined)
+                doc += `min: ${property.min}`;
+            if (property.min !== undefined && property.max !== undefined)
+                doc += ', ';
+            if (property.max !== undefined)
+                doc += `max: ${property.max}`;
+            doc += '\n';
+        }
+        doc += '\n';
+    }
+    return doc;
+}
+
+/**
+ * Configuration Manager for CREB-JS
+ *
+ * Provides centralized, type-safe configuration management with support for:
+ * - Environment variable overrides
+ * - Runtime configuration updates
+ * - Configuration validation
+ * - Hot-reload capability
+ * - Schema-based documentation generation
+ */
+/**
+ * Configuration Manager class
+ * Provides type-safe configuration management with validation and hot-reload
+ */
+class ConfigManager extends events.EventEmitter {
+    constructor(initialConfig) {
+        super();
+        this.watchers = [];
+        this.configHistory = [];
+        this.environmentMapping = this.createDefaultEnvironmentMapping();
+        this.hotReloadConfig = {
+            enabled: false,
+            watchFiles: [],
+            debounceMs: 1000,
+            excludePaths: ['logging.level'] // Exclude critical settings from hot-reload
+        };
+        // Initialize with default config
+        this.config = { ...defaultConfig };
+        this.metadata = {
+            version: '1.0.0',
+            lastModified: new Date(),
+            source: {
+                type: 'default',
+                priority: 1,
+                description: 'Default configuration'
+            },
+            checksum: this.calculateChecksum(this.config)
+        };
+        // Apply initial config if provided
+        if (initialConfig) {
+            this.updateConfig(initialConfig);
+        }
+        // Load from environment variables
+        this.loadFromEnvironment();
+    }
+    /**
+     * Get the current configuration
+     */
+    getConfig() {
+        return this.deepFreeze({ ...this.config });
+    }
+    /**
+     * Get a specific configuration value by path
+     */
+    get(path) {
+        const keys = path.split('.');
+        let value = this.config;
+        for (const key of keys) {
+            if (value && typeof value === 'object' && key in value) {
+                value = value[key];
+            }
+            else {
+                throw new Error(`Configuration path '${path}' not found`);
+            }
+        }
+        return value;
+    }
+    /**
+     * Set a specific configuration value by path
+     */
+    set(path, value) {
+        const keys = path.split('.');
+        const oldValue = this.get(path);
+        // Create a deep copy of config for modification
+        const newConfig = JSON.parse(JSON.stringify(this.config));
+        let current = newConfig;
+        for (let i = 0; i < keys.length - 1; i++) {
+            current = current[keys[i]];
+        }
+        current[keys[keys.length - 1]] = value;
+        // Validate the change
+        const validationResult = this.validateConfiguration(newConfig);
+        if (!validationResult.isValid) {
+            throw new Error(`Configuration validation failed: ${validationResult.errors.map(e => e.message).join(', ')}`);
+        }
+        // Apply the change
+        this.config = newConfig;
+        this.updateMetadata('runtime');
+        // Emit change event
+        const changeEvent = {
+            path,
+            oldValue,
+            newValue: value,
+            timestamp: new Date()
+        };
+        this.emit('configChanged', changeEvent);
+        this.emit(`configChanged:${path}`, changeEvent);
+    }
+    /**
+     * Update configuration with partial changes
+     */
+    updateConfig(partialConfig) {
+        const mergedConfig = this.mergeConfigs(this.config, partialConfig);
+        const validationResult = this.validateConfiguration(mergedConfig);
+        if (validationResult.isValid) {
+            const oldConfig = { ...this.config };
+            this.config = mergedConfig;
+            this.updateMetadata('runtime');
+            this.saveToHistory();
+            // Emit change events for each changed property
+            this.emitChangeEvents(oldConfig, this.config);
+        }
+        return validationResult;
+    }
+    /**
+     * Load configuration from file
+     */
+    async loadFromFile(filePath) {
+        try {
+            const fileContent = await fs__namespace.promises.readFile(filePath, 'utf8');
+            const fileConfig = JSON.parse(fileContent);
+            const result = this.updateConfig(fileConfig);
+            if (result.isValid) {
+                this.updateMetadata('file');
+                // Set up hot-reload if enabled
+                if (this.hotReloadConfig.enabled) {
+                    this.watchConfigFile(filePath);
+                }
+            }
+            return result;
+        }
+        catch (error) {
+            return {
+                isValid: false,
+                errors: [{
+                        path: '',
+                        message: `Failed to load config file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                        value: filePath
+                    }],
+                warnings: []
+            };
+        }
+    }
+    /**
+     * Save configuration to file
+     */
+    async saveToFile(filePath) {
+        const configWithMetadata = {
+            ...this.config,
+            _metadata: this.metadata
+        };
+        await fs__namespace.promises.writeFile(filePath, JSON.stringify(configWithMetadata, null, 2), 'utf8');
+    }
+    /**
+     * Load configuration from environment variables
+     */
+    loadFromEnvironment() {
+        const envConfig = {};
+        for (const [configPath, envVar] of Object.entries(this.environmentMapping)) {
+            const envValue = process.env[envVar];
+            if (envValue !== undefined) {
+                this.setNestedValue(envConfig, configPath, this.parseEnvironmentValue(envValue));
+            }
+        }
+        if (Object.keys(envConfig).length > 0) {
+            this.updateConfig(envConfig);
+            this.updateMetadata('environment');
+        }
+    }
+    /**
+     * Validate current configuration
+     */
+    validateConfiguration(config = this.config) {
+        return validateConfig(config, crebConfigSchema);
+    }
+    /**
+     * Enable hot-reload for configuration files
+     */
+    enableHotReload(options = {}) {
+        this.hotReloadConfig = { ...this.hotReloadConfig, ...options, enabled: true };
+    }
+    /**
+     * Disable hot-reload
+     */
+    disableHotReload() {
+        this.hotReloadConfig.enabled = false;
+        this.watchers.forEach(watcher => watcher.close());
+        this.watchers = [];
+    }
+    /**
+     * Get configuration metadata
+     */
+    getMetadata() {
+        return Object.freeze({ ...this.metadata });
+    }
+    /**
+     * Get configuration history
+     */
+    getHistory() {
+        return this.configHistory.map(entry => ({
+            config: this.deepFreeze({ ...entry.config }),
+            timestamp: entry.timestamp
+        }));
+    }
+    /**
+     * Reset configuration to defaults
+     */
+    resetToDefaults() {
+        const oldConfig = { ...this.config };
+        this.config = { ...defaultConfig };
+        this.updateMetadata('default');
+        this.emitChangeEvents(oldConfig, this.config);
+    }
+    /**
+     * Generate documentation for current configuration schema
+     */
+    generateDocumentation() {
+        return generateSchemaDocumentation(crebConfigSchema, 'CREB Configuration');
+    }
+    /**
+     * Get configuration as JSON string
+     */
+    toJSON() {
+        return JSON.stringify(this.config, null, 2);
+    }
+    /**
+     * Get configuration summary for debugging
+     */
+    getSummary() {
+        const validation = this.validateConfiguration();
+        return `
+CREB Configuration Summary
+=========================
+Version: ${this.metadata.version}
+Last Modified: ${this.metadata.lastModified.toISOString()}
+Source: ${this.metadata.source.type}
+Valid: ${validation.isValid}
+Errors: ${validation.errors.length}
+Warnings: ${validation.warnings.length}
+Hot Reload: ${this.hotReloadConfig.enabled ? 'Enabled' : 'Disabled'}
+
+Current Configuration:
+${this.toJSON()}
+    `.trim();
+    }
+    /**
+     * Dispose of resources
+     */
+    dispose() {
+        this.disableHotReload();
+        this.removeAllListeners();
+    }
+    // Private methods
+    createDefaultEnvironmentMapping() {
+        return {
+            'cache.maxSize': 'CREB_CACHE_MAX_SIZE',
+            'cache.ttl': 'CREB_CACHE_TTL',
+            'cache.strategy': 'CREB_CACHE_STRATEGY',
+            'performance.enableWasm': 'CREB_ENABLE_WASM',
+            'performance.workerThreads': 'CREB_WORKER_THREADS',
+            'performance.batchSize': 'CREB_BATCH_SIZE',
+            'data.providers': 'CREB_DATA_PROVIDERS',
+            'data.syncInterval': 'CREB_SYNC_INTERVAL',
+            'data.offlineMode': 'CREB_OFFLINE_MODE',
+            'logging.level': 'CREB_LOG_LEVEL',
+            'logging.format': 'CREB_LOG_FORMAT',
+            'logging.destinations': 'CREB_LOG_DESTINATIONS'
+        };
+    }
+    parseEnvironmentValue(value) {
+        // Try to parse as boolean
+        if (value.toLowerCase() === 'true')
+            return true;
+        if (value.toLowerCase() === 'false')
+            return false;
+        // Try to parse as number
+        const numValue = Number(value);
+        if (!isNaN(numValue))
+            return numValue;
+        // Try to parse as JSON array
+        if (value.startsWith('[') && value.endsWith(']')) {
+            try {
+                return JSON.parse(value);
+            }
+            catch {
+                // Fall back to comma-separated values
+                return value.slice(1, -1).split(',').map(v => v.trim());
+            }
+        }
+        // Return as string
+        return value;
+    }
+    setNestedValue(obj, path, value) {
+        const keys = path.split('.');
+        let current = obj;
+        for (let i = 0; i < keys.length - 1; i++) {
+            if (!(keys[i] in current)) {
+                current[keys[i]] = {};
+            }
+            current = current[keys[i]];
+        }
+        current[keys[keys.length - 1]] = value;
+    }
+    mergeConfigs(base, partial) {
+        const result = { ...base };
+        for (const [key, value] of Object.entries(partial)) {
+            if (value !== undefined) {
+                if (typeof value === 'object' && !Array.isArray(value)) {
+                    result[key] = {
+                        ...base[key],
+                        ...value
+                    };
+                }
+                else {
+                    result[key] = value;
+                }
+            }
+        }
+        return result;
+    }
+    updateMetadata(sourceType) {
+        this.metadata = {
+            ...this.metadata,
+            lastModified: new Date(),
+            source: {
+                type: sourceType,
+                priority: sourceType === 'environment' ? 3 : sourceType === 'file' ? 2 : 1,
+                description: `Configuration loaded from ${sourceType}`
+            },
+            checksum: this.calculateChecksum(this.config)
+        };
+    }
+    calculateChecksum(config) {
+        const str = JSON.stringify(config);
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+        return hash.toString(16);
+    }
+    saveToHistory() {
+        this.configHistory.push({
+            config: { ...this.config },
+            timestamp: new Date()
+        });
+        // Keep only last 10 entries
+        if (this.configHistory.length > 10) {
+            this.configHistory.shift();
+        }
+    }
+    emitChangeEvents(oldConfig, newConfig) {
+        const changes = this.findConfigChanges(oldConfig, newConfig);
+        for (const change of changes) {
+            this.emit('configChanged', change);
+            this.emit(`configChanged:${change.path}`, change);
+        }
+    }
+    findConfigChanges(oldConfig, newConfig, prefix = '') {
+        const changes = [];
+        for (const [key, newValue] of Object.entries(newConfig)) {
+            const path = prefix ? `${prefix}.${key}` : key;
+            const oldValue = oldConfig[key];
+            if (typeof newValue === 'object' && !Array.isArray(newValue) && newValue !== null) {
+                changes.push(...this.findConfigChanges(oldValue || {}, newValue, path));
+            }
+            else if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
+                changes.push({
+                    path,
+                    oldValue,
+                    newValue,
+                    timestamp: new Date()
+                });
+            }
+        }
+        return changes;
+    }
+    watchConfigFile(filePath) {
+        const watcher = fs__namespace.watch(filePath, { persistent: false }, (eventType) => {
+            if (eventType === 'change') {
+                setTimeout(() => {
+                    this.loadFromFile(filePath).catch(error => {
+                        this.emit('error', new Error(`Hot-reload failed: ${error.message}`));
+                    });
+                }, this.hotReloadConfig.debounceMs);
+            }
+        });
+        this.watchers.push(watcher);
+    }
+    /**
+     * Deep freeze an object to make it truly immutable
+     */
+    deepFreeze(obj) {
+        // Get property names
+        Object.getOwnPropertyNames(obj).forEach(prop => {
+            const value = obj[prop];
+            // Freeze properties before freezing self
+            if (value && typeof value === 'object') {
+                this.deepFreeze(value);
+            }
+        });
+        return Object.freeze(obj);
+    }
+}
+/**
+ * Singleton configuration manager instance
+ */
+const configManager = new ConfigManager();
+/**
+ * Convenience function to get configuration value
+ */
+function getConfig(path) {
+    return configManager.get(path);
+}
+/**
+ * Convenience function to set configuration value
+ */
+function setConfig(path, value) {
+    configManager.set(path, value);
+}
+/**
+ * Convenience function to get full configuration
+ */
+function getFullConfig() {
+    return configManager.getConfig();
+}
+
+/**
+ * Configuration Types for CREB-JS
+ *
+ * Defines all configuration interfaces and types used throughout the application.
+ * This file serves as the single source of truth for configuration structure.
+ */
+/**
+ * Type guard for CREBConfig
+ */
+function isCREBConfig(obj) {
+    return (typeof obj === 'object' &&
+        obj !== null &&
+        'cache' in obj &&
+        'performance' in obj &&
+        'data' in obj &&
+        'logging' in obj);
+}
+
+/**
+ * Cache Eviction Policies for CREB-JS
+ *
+ * Implements various cache eviction strategies including LRU, LFU, FIFO, TTL, and Random.
+ * Each policy provides different trade-offs between performance and memory efficiency.
+ */
+/**
+ * Least Recently Used (LRU) eviction policy
+ * Evicts entries that haven't been accessed for the longest time
+ */
+class LRUEvictionPolicy {
+    constructor() {
+        this.strategy = 'lru';
+    }
+    selectEvictionCandidates(entries, config, targetCount) {
+        const candidates = [];
+        for (const [key, entry] of entries.entries()) {
+            candidates.push({ key, lastAccessed: entry.lastAccessed });
+        }
+        // Sort by last accessed time (oldest first)
+        candidates.sort((a, b) => a.lastAccessed - b.lastAccessed);
+        return candidates.slice(0, targetCount).map(c => c.key);
+    }
+    onAccess(entry) {
+        entry.lastAccessed = Date.now();
+        entry.accessCount++;
+    }
+    onInsert(entry) {
+        const now = Date.now();
+        entry.lastAccessed = now;
+        entry.accessCount = 1;
+    }
+}
+/**
+ * Least Frequently Used (LFU) eviction policy
+ * Evicts entries with the lowest access frequency
+ */
+class LFUEvictionPolicy {
+    constructor() {
+        this.strategy = 'lfu';
+    }
+    selectEvictionCandidates(entries, config, targetCount) {
+        const candidates = [];
+        for (const [key, entry] of entries.entries()) {
+            candidates.push({
+                key,
+                accessCount: entry.accessCount,
+                lastAccessed: entry.lastAccessed
+            });
+        }
+        // Sort by access count (lowest first), then by last accessed for ties
+        candidates.sort((a, b) => {
+            if (a.accessCount !== b.accessCount) {
+                return a.accessCount - b.accessCount;
+            }
+            return a.lastAccessed - b.lastAccessed;
+        });
+        return candidates.slice(0, targetCount).map(c => c.key);
+    }
+    onAccess(entry) {
+        entry.lastAccessed = Date.now();
+        entry.accessCount++;
+    }
+    onInsert(entry) {
+        const now = Date.now();
+        entry.lastAccessed = now;
+        entry.accessCount = 1;
+    }
+}
+/**
+ * First In, First Out (FIFO) eviction policy
+ * Evicts entries in the order they were inserted
+ */
+class FIFOEvictionPolicy {
+    constructor() {
+        this.strategy = 'fifo';
+    }
+    selectEvictionCandidates(entries, config, targetCount) {
+        const candidates = [];
+        for (const [key, entry] of entries.entries()) {
+            candidates.push({ key, insertionOrder: entry.insertionOrder });
+        }
+        // Sort by insertion order (oldest first)
+        candidates.sort((a, b) => a.insertionOrder - b.insertionOrder);
+        return candidates.slice(0, targetCount).map(c => c.key);
+    }
+    onAccess(entry) {
+        entry.lastAccessed = Date.now();
+        entry.accessCount++;
+    }
+    onInsert(entry) {
+        const now = Date.now();
+        entry.lastAccessed = now;
+        entry.accessCount = 1;
+    }
+}
+/**
+ * Time To Live (TTL) eviction policy
+ * Evicts expired entries first, then falls back to LRU
+ */
+class TTLEvictionPolicy {
+    constructor() {
+        this.strategy = 'ttl';
+    }
+    selectEvictionCandidates(entries, config, targetCount) {
+        const now = Date.now();
+        const expired = [];
+        const nonExpired = [];
+        for (const [key, entry] of entries.entries()) {
+            if (entry.ttl > 0 && now >= entry.expiresAt) {
+                expired.push(key);
+            }
+            else {
+                nonExpired.push({ key, lastAccessed: entry.lastAccessed });
+            }
+        }
+        // Return expired entries first
+        if (expired.length >= targetCount) {
+            return expired.slice(0, targetCount);
+        }
+        // If not enough expired entries, use LRU for the rest
+        const remaining = targetCount - expired.length;
+        nonExpired.sort((a, b) => a.lastAccessed - b.lastAccessed);
+        return [...expired, ...nonExpired.slice(0, remaining).map(c => c.key)];
+    }
+    onAccess(entry) {
+        entry.lastAccessed = Date.now();
+        entry.accessCount++;
+    }
+    onInsert(entry) {
+        const now = Date.now();
+        entry.lastAccessed = now;
+        entry.accessCount = 1;
+    }
+}
+/**
+ * Random eviction policy
+ * Evicts random entries (useful for testing and as fallback)
+ */
+class RandomEvictionPolicy {
+    constructor() {
+        this.strategy = 'random';
+    }
+    selectEvictionCandidates(entries, config, targetCount) {
+        const keys = Array.from(entries.keys());
+        const candidates = [];
+        // Fisher-Yates shuffle to get random keys
+        for (let i = 0; i < targetCount && i < keys.length; i++) {
+            const randomIndex = Math.floor(Math.random() * (keys.length - i)) + i;
+            [keys[i], keys[randomIndex]] = [keys[randomIndex], keys[i]];
+            candidates.push(keys[i]);
+        }
+        return candidates;
+    }
+    onAccess(entry) {
+        entry.lastAccessed = Date.now();
+        entry.accessCount++;
+    }
+    onInsert(entry) {
+        const now = Date.now();
+        entry.lastAccessed = now;
+        entry.accessCount = 1;
+    }
+}
+/**
+ * Eviction policy factory
+ */
+class EvictionPolicyFactory {
+    /**
+     * Get eviction policy instance
+     */
+    static getPolicy(strategy) {
+        const policy = this.policies.get(strategy);
+        if (!policy) {
+            throw new Error(`Unknown eviction strategy: ${strategy}`);
+        }
+        return policy;
+    }
+    /**
+     * Register custom eviction policy
+     */
+    static registerPolicy(policy) {
+        this.policies.set(policy.strategy, policy);
+    }
+    /**
+     * Get all available strategies
+     */
+    static getAvailableStrategies() {
+        return Array.from(this.policies.keys());
+    }
+}
+EvictionPolicyFactory.policies = new Map([
+    ['lru', new LRUEvictionPolicy()],
+    ['lfu', new LFUEvictionPolicy()],
+    ['fifo', new FIFOEvictionPolicy()],
+    ['ttl', new TTLEvictionPolicy()],
+    ['random', new RandomEvictionPolicy()]
+]);
+/**
+ * Adaptive eviction policy that switches strategies based on access patterns
+ */
+class AdaptiveEvictionPolicy {
+    constructor(fallbackStrategy = 'lru') {
+        this.fallbackStrategy = fallbackStrategy;
+        this.strategy = 'lru'; // Default fallback
+        this.performanceHistory = new Map();
+        this.evaluationWindow = 100; // Number of operations to evaluate
+        this.operationCount = 0;
+        this.currentPolicy = EvictionPolicyFactory.getPolicy(fallbackStrategy);
+        // Initialize performance tracking
+        for (const strategy of EvictionPolicyFactory.getAvailableStrategies()) {
+            this.performanceHistory.set(strategy, []);
+        }
+    }
+    selectEvictionCandidates(entries, config, targetCount) {
+        this.operationCount++;
+        // Periodically evaluate and potentially switch strategies
+        if (this.operationCount % this.evaluationWindow === 0) {
+            this.evaluateAndAdapt(entries, config);
+        }
+        return this.currentPolicy.selectEvictionCandidates(entries, config, targetCount);
+    }
+    onAccess(entry) {
+        this.currentPolicy.onAccess(entry);
+    }
+    onInsert(entry) {
+        this.currentPolicy.onInsert(entry);
+    }
+    /**
+     * Evaluate current performance and adapt strategy if needed
+     */
+    evaluateAndAdapt(entries, config) {
+        // Calculate access pattern metrics
+        const now = Date.now();
+        let totalAccesses = 0;
+        let recentAccesses = 0;
+        let accessVariance = 0;
+        let meanAccess = 0;
+        const accessCounts = [];
+        for (const entry of entries.values()) {
+            totalAccesses += entry.accessCount;
+            accessCounts.push(entry.accessCount);
+            // Count recent accesses (last hour)
+            if (now - entry.lastAccessed < 3600000) {
+                recentAccesses++;
+            }
+        }
+        if (accessCounts.length > 0) {
+            meanAccess = totalAccesses / accessCounts.length;
+            accessVariance = accessCounts.reduce((sum, count) => sum + Math.pow(count - meanAccess, 2), 0) / accessCounts.length;
+        }
+        // Determine optimal strategy based on patterns
+        let optimalStrategy;
+        if (accessVariance > meanAccess * 2) {
+            // High variance suggests some items are much more popular -> LFU
+            optimalStrategy = 'lfu';
+        }
+        else if (recentAccesses / entries.size > 0.8) {
+            // Most items accessed recently -> LRU
+            optimalStrategy = 'lru';
+        }
+        else if (totalAccesses / entries.size < 2) {
+            // Low overall access -> FIFO
+            optimalStrategy = 'fifo';
+        }
+        else {
+            // Mixed pattern -> TTL
+            optimalStrategy = 'ttl';
+        }
+        // Switch strategy if different from current
+        if (optimalStrategy !== this.currentPolicy.strategy) {
+            this.currentPolicy = EvictionPolicyFactory.getPolicy(optimalStrategy);
+        }
+    }
+    /**
+     * Get current strategy being used
+     */
+    getCurrentStrategy() {
+        return this.currentPolicy.strategy;
+    }
+}
+
+/**
+ * Cache Metrics Collection and Analysis for CREB-JS
+ *
+ * Provides comprehensive metrics collection, analysis, and reporting for cache performance.
+ * Includes real-time monitoring, historical analysis, and performance recommendations.
+ */
+/**
+ * Real-time cache metrics collector
+ */
+class CacheMetricsCollector {
+    constructor() {
+        this.history = [];
+        this.maxHistorySize = 100;
+        this.eventCounts = new Map();
+        this.accessTimes = [];
+        this.maxAccessTimeSamples = 1000;
+        this.resetStats();
+    }
+    /**
+     * Reset all statistics
+     */
+    resetStats() {
+        this.stats = {
+            hits: 0,
+            misses: 0,
+            hitRate: 0,
+            size: 0,
+            memoryUsage: 0,
+            memoryUtilization: 0,
+            evictions: 0,
+            expirations: 0,
+            averageAccessTime: 0,
+            evictionBreakdown: {
+                'lru': 0,
+                'lfu': 0,
+                'fifo': 0,
+                'ttl': 0,
+                'random': 0
+            },
+            lastUpdated: Date.now()
+        };
+        this.eventCounts.clear();
+        this.accessTimes = [];
+    }
+    /**
+     * Record a cache event
+     */
+    recordEvent(event) {
+        const currentCount = this.eventCounts.get(event.type) || 0;
+        this.eventCounts.set(event.type, currentCount + 1);
+        switch (event.type) {
+            case 'hit':
+                this.stats.hits++;
+                break;
+            case 'miss':
+                this.stats.misses++;
+                break;
+            case 'eviction':
+                this.stats.evictions++;
+                if (event.metadata?.strategy) {
+                    this.stats.evictionBreakdown[event.metadata.strategy]++;
+                }
+                break;
+            case 'expiration':
+                this.stats.expirations++;
+                break;
+        }
+        // Record access time if available
+        if (event.metadata?.latency !== undefined) {
+            this.accessTimes.push(event.metadata.latency);
+            if (this.accessTimes.length > this.maxAccessTimeSamples) {
+                this.accessTimes.shift(); // Remove oldest sample
+            }
+        }
+        this.updateComputedStats();
+    }
+    /**
+     * Update cache size and memory usage
+     */
+    updateCacheInfo(size, memoryUsage, maxMemory) {
+        this.stats.size = size;
+        this.stats.memoryUsage = memoryUsage;
+        this.stats.memoryUtilization = maxMemory > 0 ? (memoryUsage / maxMemory) * 100 : 0;
+        this.stats.lastUpdated = Date.now();
+    }
+    /**
+     * Get current statistics
+     */
+    getStats() {
+        return { ...this.stats };
+    }
+    /**
+     * Get comprehensive metrics with historical data and trends
+     */
+    getMetrics() {
+        const current = this.getStats();
+        // Calculate trends
+        const trends = this.calculateTrends();
+        // Calculate peaks
+        const peaks = this.calculatePeaks();
+        return {
+            current,
+            history: [...this.history],
+            trends,
+            peaks
+        };
+    }
+    /**
+     * Take a snapshot of current stats for historical tracking
+     */
+    takeSnapshot() {
+        const snapshot = this.getStats();
+        this.history.push(snapshot);
+        if (this.history.length > this.maxHistorySize) {
+            this.history.shift(); // Remove oldest snapshot
+        }
+    }
+    /**
+     * Get event counts
+     */
+    getEventCounts() {
+        return new Map(this.eventCounts);
+    }
+    /**
+     * Get access time percentiles
+     */
+    getAccessTimePercentiles() {
+        if (this.accessTimes.length === 0) {
+            return { p50: 0, p90: 0, p95: 0, p99: 0 };
+        }
+        const sorted = [...this.accessTimes].sort((a, b) => a - b);
+        sorted.length;
+        return {
+            p50: this.getPercentile(sorted, 50),
+            p90: this.getPercentile(sorted, 90),
+            p95: this.getPercentile(sorted, 95),
+            p99: this.getPercentile(sorted, 99)
+        };
+    }
+    /**
+     * Update computed statistics
+     */
+    updateComputedStats() {
+        const total = this.stats.hits + this.stats.misses;
+        this.stats.hitRate = total > 0 ? (this.stats.hits / total) * 100 : 0;
+        if (this.accessTimes.length > 0) {
+            this.stats.averageAccessTime = this.accessTimes.reduce((sum, time) => sum + time, 0) / this.accessTimes.length;
+        }
+        this.stats.lastUpdated = Date.now();
+    }
+    /**
+     * Calculate performance trends
+     */
+    calculateTrends() {
+        if (this.history.length < 3) {
+            return {
+                hitRateTrend: 'stable',
+                memoryTrend: 'stable',
+                latencyTrend: 'stable'
+            };
+        }
+        const recent = this.history.slice(-3);
+        // Hit rate trend
+        const hitRateChange = recent[2].hitRate - recent[0].hitRate;
+        const hitRateTrend = Math.abs(hitRateChange) < 1 ? 'stable' :
+            hitRateChange > 0 ? 'improving' : 'declining';
+        // Memory trend
+        const memoryChange = recent[2].memoryUtilization - recent[0].memoryUtilization;
+        const memoryTrend = Math.abs(memoryChange) < 5 ? 'stable' :
+            memoryChange > 0 ? 'increasing' : 'decreasing';
+        // Latency trend
+        const latencyChange = recent[2].averageAccessTime - recent[0].averageAccessTime;
+        const latencyTrend = Math.abs(latencyChange) < 0.1 ? 'stable' :
+            latencyChange < 0 ? 'improving' : 'degrading';
+        return {
+            hitRateTrend,
+            memoryTrend,
+            latencyTrend
+        };
+    }
+    /**
+     * Calculate peak performance metrics
+     */
+    calculatePeaks() {
+        if (this.history.length === 0) {
+            return {
+                maxHitRate: this.stats.hitRate,
+                maxMemoryUsage: this.stats.memoryUsage,
+                minLatency: this.stats.averageAccessTime
+            };
+        }
+        const allStats = [...this.history, this.stats];
+        return {
+            maxHitRate: Math.max(...allStats.map(s => s.hitRate)),
+            maxMemoryUsage: Math.max(...allStats.map(s => s.memoryUsage)),
+            minLatency: Math.min(...allStats.map(s => s.averageAccessTime))
+        };
+    }
+    /**
+     * Get percentile value from sorted array
+     */
+    getPercentile(sorted, percentile) {
+        const index = Math.ceil((percentile / 100) * sorted.length) - 1;
+        return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
+    }
+}
+/**
+ * Cache performance analyzer
+ */
+class CachePerformanceAnalyzer {
+    /**
+     * Analyze cache performance and provide recommendations
+     */
+    static analyze(metrics) {
+        const { current, trends, history } = metrics;
+        const issues = [];
+        const recommendations = [];
+        const insights = [];
+        let score = 100;
+        // Analyze hit rate
+        if (current.hitRate < 50) {
+            score -= 30;
+            issues.push('Low cache hit rate');
+            recommendations.push('Consider increasing cache size or optimizing access patterns');
+        }
+        else if (current.hitRate < 70) {
+            score -= 15;
+            issues.push('Moderate cache hit rate');
+            recommendations.push('Review cache eviction strategy');
+        }
+        // Analyze memory utilization
+        if (current.memoryUtilization > 90) {
+            score -= 20;
+            issues.push('High memory utilization');
+            recommendations.push('Increase memory limit or improve eviction policy');
+        }
+        else if (current.memoryUtilization < 30) {
+            insights.push('Low memory utilization - cache size could be reduced');
+        }
+        // Analyze access time
+        if (current.averageAccessTime > 5) {
+            score -= 15;
+            issues.push('High average access time');
+            recommendations.push('Check for lock contention or optimize data structures');
+        }
+        // Analyze trends
+        if (trends.hitRateTrend === 'declining') {
+            score -= 10;
+            issues.push('Declining hit rate trend');
+            recommendations.push('Monitor access patterns and consider adaptive caching');
+        }
+        if (trends.latencyTrend === 'degrading') {
+            score -= 10;
+            issues.push('Increasing access latency');
+            recommendations.push('Profile cache operations for performance bottlenecks');
+        }
+        // Analyze eviction distribution
+        const totalEvictions = Object.values(current.evictionBreakdown).reduce((sum, count) => sum + count, 0);
+        if (totalEvictions > 0) {
+            const dominantStrategy = Object.entries(current.evictionBreakdown)
+                .reduce((max, [strategy, count]) => count > max.count ? { strategy, count } : max, { strategy: '', count: 0 });
+            if (dominantStrategy.count / totalEvictions > 0.8) {
+                insights.push(`Cache primarily using ${dominantStrategy.strategy} eviction`);
+            }
+            else {
+                insights.push('Cache using mixed eviction strategies - consider adaptive policy');
+            }
+        }
+        // Historical comparison
+        if (history.length > 0) {
+            const baseline = history[0];
+            const hitRateImprovement = current.hitRate - baseline.hitRate;
+            if (hitRateImprovement > 10) {
+                insights.push('Significant hit rate improvement observed');
+            }
+            else if (hitRateImprovement < -10) {
+                issues.push('Hit rate has declined significantly');
+                recommendations.push('Review recent changes to access patterns or cache configuration');
+            }
+        }
+        return {
+            score: Math.max(0, score),
+            issues,
+            recommendations,
+            insights
+        };
+    }
+    /**
+     * Generate performance report
+     */
+    static generateReport(metrics) {
+        const analysis = this.analyze(metrics);
+        const { current } = metrics;
+        let report = '# Cache Performance Report\n\n';
+        report += `## Overall Score: ${analysis.score}/100\n\n`;
+        report += '## Current Statistics\n';
+        report += `- Hit Rate: ${current.hitRate.toFixed(2)}%\n`;
+        report += `- Cache Size: ${current.size} entries\n`;
+        report += `- Memory Usage: ${(current.memoryUsage / 1024 / 1024).toFixed(2)} MB (${current.memoryUtilization.toFixed(1)}%)\n`;
+        report += `- Average Access Time: ${current.averageAccessTime.toFixed(2)}ms\n`;
+        report += `- Evictions: ${current.evictions}\n`;
+        report += `- Expirations: ${current.expirations}\n\n`;
+        report += '## Trends\n';
+        report += `- Hit Rate: ${metrics.trends.hitRateTrend}\n`;
+        report += `- Memory Usage: ${metrics.trends.memoryTrend}\n`;
+        report += `- Latency: ${metrics.trends.latencyTrend}\n\n`;
+        if (analysis.issues.length > 0) {
+            report += '## Issues\n';
+            analysis.issues.forEach(issue => {
+                report += `- ${issue}\n`;
+            });
+            report += '\n';
+        }
+        if (analysis.recommendations.length > 0) {
+            report += '## Recommendations\n';
+            analysis.recommendations.forEach(rec => {
+                report += `- ${rec}\n`;
+            });
+            report += '\n';
+        }
+        if (analysis.insights.length > 0) {
+            report += '## Insights\n';
+            analysis.insights.forEach(insight => {
+                report += `- ${insight}\n`;
+            });
+            report += '\n';
+        }
+        return report;
+    }
+}
+
+/**
+ * Advanced Cache Implementation for CREB-JS
+ *
+ * Production-ready cache with TTL, multiple eviction policies, metrics,
+ * memory management, and thread safety.
+ */
+/**
+ * Default cache configuration
+ */
+const DEFAULT_CONFIG = {
+    maxSize: 1000,
+    defaultTtl: 3600000, // 1 hour
+    evictionStrategy: 'lru',
+    fallbackStrategy: 'fifo',
+    maxMemoryBytes: 100 * 1024 * 1024, // 100MB
+    enableMetrics: true,
+    metricsInterval: 60000, // 1 minute
+    autoCleanup: true,
+    cleanupInterval: 300000, // 5 minutes
+    threadSafe: true
+};
+/**
+ * Advanced cache implementation with comprehensive features
+ */
+class AdvancedCache {
+    constructor(config = {}) {
+        this.entries = new Map();
+        this.listeners = new Map();
+        this.insertionCounter = 0;
+        this.mutex = new AsyncMutex();
+        this.config = { ...DEFAULT_CONFIG, ...config };
+        this.metrics = new CacheMetricsCollector();
+        // Start background tasks
+        if (this.config.autoCleanup) {
+            this.startCleanupTimer();
+        }
+        if (this.config.enableMetrics) {
+            this.startMetricsTimer();
+        }
+    }
+    /**
+     * Get value from cache
+     */
+    async get(key) {
+        const startTime = Date.now();
+        if (this.config.threadSafe) {
+            return this.mutex.runExclusive(() => this.getInternal(key, startTime));
+        }
+        else {
+            return this.getInternal(key, startTime);
+        }
+    }
+    /**
+     * Set value in cache
+     */
+    async set(key, value, ttl) {
+        const startTime = Date.now();
+        if (this.config.threadSafe) {
+            return this.mutex.runExclusive(() => this.setInternal(key, value, ttl, startTime));
+        }
+        else {
+            return this.setInternal(key, value, ttl, startTime);
+        }
+    }
+    /**
+     * Check if key exists in cache
+     */
+    async has(key) {
+        const entry = this.entries.get(key);
+        if (!entry)
+            return false;
+        // Check if expired
+        const now = Date.now();
+        if (entry.ttl > 0 && now >= entry.expiresAt) {
+            await this.deleteInternal(key);
+            return false;
+        }
+        return true;
+    }
+    /**
+     * Delete entry from cache
+     */
+    async delete(key) {
+        if (this.config.threadSafe) {
+            return this.mutex.runExclusive(() => this.deleteInternal(key));
+        }
+        else {
+            return this.deleteInternal(key);
+        }
+    }
+    /**
+     * Clear all entries
+     */
+    async clear() {
+        if (this.config.threadSafe) {
+            return this.mutex.runExclusive(() => this.clearInternal());
+        }
+        else {
+            return this.clearInternal();
+        }
+    }
+    /**
+     * Get current cache statistics
+     */
+    getStats() {
+        this.updateMetrics();
+        return this.metrics.getStats();
+    }
+    /**
+     * Get detailed metrics
+     */
+    getMetrics() {
+        this.metrics.takeSnapshot();
+        return this.metrics.getMetrics();
+    }
+    /**
+     * Force cleanup of expired entries
+     */
+    async cleanup() {
+        if (this.config.threadSafe) {
+            return this.mutex.runExclusive(() => this.cleanupInternal());
+        }
+        else {
+            return this.cleanupInternal();
+        }
+    }
+    /**
+     * Add event listener
+     */
+    addEventListener(type, listener) {
+        if (!this.listeners.has(type)) {
+            this.listeners.set(type, new Set());
+        }
+        this.listeners.get(type).add(listener);
+    }
+    /**
+     * Remove event listener
+     */
+    removeEventListener(type, listener) {
+        const typeListeners = this.listeners.get(type);
+        if (typeListeners) {
+            typeListeners.delete(listener);
+        }
+    }
+    /**
+     * Get all keys
+     */
+    keys() {
+        return Array.from(this.entries.keys());
+    }
+    /**
+     * Get cache size
+     */
+    size() {
+        return this.entries.size;
+    }
+    /**
+     * Get memory usage in bytes
+     */
+    memoryUsage() {
+        let total = 0;
+        for (const entry of this.entries.values()) {
+            total += entry.sizeBytes;
+        }
+        return total;
+    }
+    /**
+     * Check if cache is healthy
+     */
+    async healthCheck() {
+        const metrics = this.getMetrics();
+        const analysis = CachePerformanceAnalyzer.analyze(metrics);
+        return {
+            healthy: analysis.score >= 70,
+            issues: analysis.issues,
+            recommendations: analysis.recommendations
+        };
+    }
+    /**
+     * Shutdown cache and cleanup resources
+     */
+    shutdown() {
+        if (this.cleanupTimer) {
+            clearInterval(this.cleanupTimer);
+        }
+        if (this.metricsTimer) {
+            clearInterval(this.metricsTimer);
+        }
+    }
+    // Internal implementation methods
+    async getInternal(key, startTime) {
+        const entry = this.entries.get(key);
+        const latency = Date.now() - startTime;
+        if (!entry) {
+            this.emitEvent('miss', key, undefined, { latency });
+            return { success: true, hit: false, latency };
+        }
+        // Check if expired
+        const now = Date.now();
+        if (entry.ttl > 0 && now >= entry.expiresAt) {
+            await this.deleteInternal(key);
+            this.emitEvent('miss', key, undefined, { latency, expired: true });
+            return { success: true, hit: false, latency, metadata: { expired: true } };
+        }
+        // Update access metadata
+        const policy = EvictionPolicyFactory.getPolicy(this.config.evictionStrategy);
+        policy.onAccess(entry);
+        this.emitEvent('hit', key, entry.value, { latency });
+        return { success: true, value: entry.value, hit: true, latency };
+    }
+    async setInternal(key, value, ttl, startTime) {
+        const now = Date.now();
+        const entryTtl = ttl ?? this.config.defaultTtl;
+        const latency = startTime ? now - startTime : 0;
+        // Calculate size estimate
+        const sizeBytes = this.estimateSize(value);
+        // Check memory constraints before adding
+        const currentMemory = this.memoryUsage();
+        if (this.config.maxMemoryBytes > 0 && currentMemory + sizeBytes > this.config.maxMemoryBytes) {
+            await this.evictForMemory(sizeBytes);
+        }
+        // Check size constraints and evict if necessary
+        if (this.entries.size >= this.config.maxSize) {
+            await this.evictEntries(1);
+        }
+        // Create new entry
+        const entry = {
+            value,
+            createdAt: now,
+            lastAccessed: now,
+            accessCount: 1,
+            ttl: entryTtl,
+            expiresAt: entryTtl > 0 ? now + entryTtl : 0,
+            sizeBytes,
+            insertionOrder: this.insertionCounter++
+        };
+        // Update access metadata
+        const policy = EvictionPolicyFactory.getPolicy(this.config.evictionStrategy);
+        policy.onInsert(entry);
+        // Store entry
+        this.entries.set(key, entry);
+        this.emitEvent('set', key, value, { latency });
+        return { success: true, hit: false, latency };
+    }
+    async deleteInternal(key) {
+        const entry = this.entries.get(key);
+        if (!entry)
+            return false;
+        this.entries.delete(key);
+        this.emitEvent('delete', key, entry.value);
+        return true;
+    }
+    async clearInternal() {
+        this.entries.clear();
+        this.insertionCounter = 0;
+        this.emitEvent('clear');
+    }
+    async cleanupInternal() {
+        const now = Date.now();
+        const expiredKeys = [];
+        for (const [key, entry] of this.entries.entries()) {
+            if (entry.ttl > 0 && now >= entry.expiresAt) {
+                expiredKeys.push(key);
+            }
+        }
+        for (const key of expiredKeys) {
+            this.entries.delete(key);
+            this.emitEvent('expiration', key);
+        }
+        return expiredKeys.length;
+    }
+    async evictEntries(count) {
+        const policy = EvictionPolicyFactory.getPolicy(this.config.evictionStrategy);
+        const candidates = policy.selectEvictionCandidates(this.entries, this.config, count);
+        for (const key of candidates) {
+            const entry = this.entries.get(key);
+            if (entry) {
+                this.entries.delete(key);
+                this.emitEvent('eviction', key, entry.value, {
+                    strategy: this.config.evictionStrategy
+                });
+            }
+        }
+    }
+    async evictForMemory(requiredBytes) {
+        const currentMemory = this.memoryUsage();
+        const targetMemory = this.config.maxMemoryBytes - requiredBytes;
+        if (currentMemory <= targetMemory)
+            return;
+        const bytesToEvict = currentMemory - targetMemory;
+        let evictedBytes = 0;
+        const policy = EvictionPolicyFactory.getPolicy(this.config.evictionStrategy);
+        while (evictedBytes < bytesToEvict && this.entries.size > 0) {
+            const candidates = policy.selectEvictionCandidates(this.entries, this.config, 1);
+            if (candidates.length === 0)
+                break;
+            const key = candidates[0];
+            const entry = this.entries.get(key);
+            if (entry) {
+                evictedBytes += entry.sizeBytes;
+                this.entries.delete(key);
+                this.emitEvent('eviction', key, entry.value, {
+                    strategy: this.config.evictionStrategy,
+                    reason: 'memory-pressure',
+                    memoryBefore: currentMemory,
+                    memoryAfter: currentMemory - evictedBytes
+                });
+            }
+        }
+        if (evictedBytes < bytesToEvict) {
+            this.emitEvent('memory-pressure', undefined, undefined, {
+                reason: 'Unable to free sufficient memory'
+            });
+        }
+    }
+    estimateSize(value) {
+        // Simple size estimation - could be improved with more sophisticated analysis
+        const str = JSON.stringify(value);
+        return str.length * 2; // Rough estimate for UTF-16 encoding
+    }
+    emitEvent(type, key, value, metadata) {
+        const event = {
+            type,
+            key,
+            value,
+            timestamp: Date.now(),
+            metadata
+        };
+        // Record in metrics
+        this.metrics.recordEvent(event);
+        // Notify listeners
+        const typeListeners = this.listeners.get(type);
+        if (typeListeners) {
+            for (const listener of typeListeners) {
+                try {
+                    listener(event);
+                }
+                catch (error) {
+                    console.warn('Cache event listener error:', error);
+                }
+            }
+        }
+    }
+    updateMetrics() {
+        const size = this.entries.size;
+        const memory = this.memoryUsage();
+        this.metrics.updateCacheInfo(size, memory, this.config.maxMemoryBytes);
+    }
+    startCleanupTimer() {
+        this.cleanupTimer = setInterval(async () => {
+            try {
+                await this.cleanup();
+            }
+            catch (error) {
+                console.warn('Cache cleanup error:', error);
+            }
+        }, this.config.cleanupInterval);
+    }
+    startMetricsTimer() {
+        this.metricsTimer = setInterval(() => {
+            this.metrics.takeSnapshot();
+            this.emitEvent('stats-update');
+        }, this.config.metricsInterval);
+    }
+}
+/**
+ * Simple async mutex for thread safety
+ */
+class AsyncMutex {
+    constructor() {
+        this.locked = false;
+        this.queue = [];
+    }
+    async runExclusive(fn) {
+        return new Promise((resolve, reject) => {
+            const run = async () => {
+                this.locked = true;
+                try {
+                    const result = await fn();
+                    resolve(result);
+                }
+                catch (error) {
+                    reject(error);
+                }
+                finally {
+                    this.locked = false;
+                    const next = this.queue.shift();
+                    if (next) {
+                        next();
+                    }
+                }
+            };
+            if (this.locked) {
+                this.queue.push(run);
+            }
+            else {
+                run();
+            }
+        });
+    }
+}
+/**
+ * Cache factory for creating configured cache instances
+ */
+class CacheFactory {
+    static create(configOrPreset) {
+        if (typeof configOrPreset === 'string') {
+            const presetConfig = this.presets[configOrPreset];
+            if (!presetConfig) {
+                throw new Error(`Unknown cache preset: ${configOrPreset}`);
+            }
+            return new AdvancedCache(presetConfig);
+        }
+        else {
+            return new AdvancedCache(configOrPreset);
+        }
+    }
+    /**
+     * Register custom preset
+     */
+    static registerPreset(name, config) {
+        this.presets[name] = config;
+    }
+    /**
+     * Get available presets
+     */
+    static getPresets() {
+        return Object.keys(this.presets);
+    }
+}
+CacheFactory.presets = {
+    'small': {
+        maxSize: 100,
+        maxMemoryBytes: 10 * 1024 * 1024, // 10MB
+        defaultTtl: 1800000, // 30 minutes
+        evictionStrategy: 'lru'
+    },
+    'medium': {
+        maxSize: 1000,
+        maxMemoryBytes: 50 * 1024 * 1024, // 50MB
+        defaultTtl: 3600000, // 1 hour
+        evictionStrategy: 'lru'
+    },
+    'large': {
+        maxSize: 10000,
+        maxMemoryBytes: 200 * 1024 * 1024, // 200MB
+        defaultTtl: 7200000, // 2 hours
+        evictionStrategy: 'lfu'
+    },
+    'memory-optimized': {
+        maxSize: 500,
+        maxMemoryBytes: 25 * 1024 * 1024, // 25MB
+        defaultTtl: 1800000, // 30 minutes
+        evictionStrategy: 'lfu',
+        autoCleanup: true,
+        cleanupInterval: 60000 // 1 minute
+    },
+    'performance-optimized': {
+        maxSize: 5000,
+        maxMemoryBytes: 100 * 1024 * 1024, // 100MB
+        defaultTtl: 3600000, // 1 hour
+        evictionStrategy: 'lru',
+        threadSafe: false, // Better performance but not thread-safe
+        enableMetrics: false // Better performance
+    }
+};
+
+/**
+ * Advanced Cache Integration Example for CREB-JS
+ *
+ * Demonstrates how to integrate the advanced caching system with existing
+ * CREB-JS components and replace the legacy PerformanceCache.
+ */
+/**
+ * Enhanced ThermodynamicsCalculator with advanced caching
+ */
+class CachedThermodynamicsCalculator {
+    constructor() {
+        this.cache = CacheFactory.create('performance-optimized');
+        // Set up cache monitoring
+        this.setupCacheMonitoring();
+    }
+    /**
+     * Calculate thermodynamic properties with caching
+     */
+    async calculateThermodynamics(equation, temperature, pressure) {
+        const cacheKey = `thermo_${equation}_${temperature}_${pressure}`;
+        // Try cache first
+        const cached = await this.cache.get(cacheKey);
+        if (cached.hit) {
+            return cached.value;
+        }
+        // Perform calculation (mock implementation)
+        const result = await this.performCalculation(equation, temperature, pressure);
+        // Cache the result with appropriate TTL
+        await this.cache.set(cacheKey, result, this.getTTLForCalculation(result));
+        return result;
+    }
+    /**
+     * Get cache performance statistics
+     */
+    getCacheStats() {
+        return this.cache.getStats();
+    }
+    /**
+     * Perform health check
+     */
+    async healthCheck() {
+        return this.cache.healthCheck();
+    }
+    /**
+     * Shutdown and cleanup
+     */
+    shutdown() {
+        this.cache.shutdown();
+    }
+    async performCalculation(equation, temperature, pressure) {
+        // Simulate calculation time
+        await new Promise(resolve => setTimeout(resolve, 50));
+        return {
+            equation,
+            temperature,
+            pressure,
+            enthalpy: Math.random() * 1000,
+            entropy: Math.random() * 500,
+            gibbs: Math.random() * 800,
+            calculatedAt: Date.now()
+        };
+    }
+    getTTLForCalculation(result) {
+        // More complex calculations get longer TTL
+        if (result.equation.length > 50) {
+            return 3600000; // 1 hour
+        }
+        else if (result.equation.length > 20) {
+            return 1800000; // 30 minutes
+        }
+        else {
+            return 600000; // 10 minutes
+        }
+    }
+    setupCacheMonitoring() {
+        // Monitor cache performance
+        this.cache.addEventListener('memory-pressure', (event) => {
+            console.warn('Cache memory pressure detected:', event.metadata);
+        });
+        this.cache.addEventListener('stats-update', () => {
+            const stats = this.cache.getStats();
+            if (stats.hitRate < 50) {
+                console.warn('Low cache hit rate detected:', stats.hitRate);
+            }
+        });
+        // Log eviction events for debugging
+        this.cache.addEventListener('eviction', (event) => {
+            console.debug('Cache eviction:', {
+                key: event.key,
+                strategy: event.metadata?.strategy,
+                reason: event.metadata?.reason
+            });
+        });
+    }
+}
+/**
+ * Enhanced Chemical Database Manager with advanced caching
+ */
+class CachedChemicalDatabase {
+    constructor() {
+        this.compoundCache = CacheFactory.create('large');
+        this.queryCache = CacheFactory.create('medium');
+        this.setupCacheOptimization();
+    }
+    /**
+     * Get compound data with intelligent caching
+     */
+    async getCompound(formula) {
+        const cached = await this.compoundCache.get(formula);
+        if (cached.hit) {
+            return cached.value;
+        }
+        // Fetch from database
+        const compound = await this.fetchCompoundFromDB(formula);
+        if (compound) {
+            // Cache with TTL based on data freshness requirements
+            const ttl = this.isCommonCompound(formula) ? 86400000 : 3600000; // 24h vs 1h
+            await this.compoundCache.set(formula, compound, ttl);
+        }
+        return compound;
+    }
+    /**
+     * Search compounds with query result caching
+     */
+    async searchCompounds(query, filters = {}) {
+        const cacheKey = `search_${query}_${JSON.stringify(filters)}`;
+        const cached = await this.queryCache.get(cacheKey);
+        if (cached.hit) {
+            return cached.value;
+        }
+        const results = await this.performSearch(query, filters);
+        // Cache search results for shorter time (more dynamic)
+        await this.queryCache.set(cacheKey, results, 300000); // 5 minutes
+        return results;
+    }
+    /**
+     * Get combined cache statistics
+     */
+    getCacheReport() {
+        const compoundStats = this.compoundCache.getStats();
+        const queryStats = this.queryCache.getStats();
+        return `
+Cache Performance Report:
+
+Compound Cache:
+- Hit Rate: ${compoundStats.hitRate.toFixed(2)}%
+- Entries: ${compoundStats.size}
+- Memory: ${(compoundStats.memoryUsage / 1024 / 1024).toFixed(2)} MB
+
+Query Cache:
+- Hit Rate: ${queryStats.hitRate.toFixed(2)}%
+- Entries: ${queryStats.size}
+- Memory: ${(queryStats.memoryUsage / 1024 / 1024).toFixed(2)} MB
+
+Overall Performance:
+- Combined Hit Rate: ${((compoundStats.hits + queryStats.hits) / (compoundStats.hits + compoundStats.misses + queryStats.hits + queryStats.misses) * 100).toFixed(2)}%
+- Total Memory: ${((compoundStats.memoryUsage + queryStats.memoryUsage) / 1024 / 1024).toFixed(2)} MB
+    `.trim();
+    }
+    /**
+     * Optimize cache performance based on usage patterns
+     */
+    async optimizeCaches() {
+        const compoundMetrics = this.compoundCache.getMetrics();
+        const queryMetrics = this.queryCache.getMetrics();
+        // If compound cache hit rate is low, increase size
+        if (compoundMetrics.current.hitRate < 60) {
+            console.log('Compound cache performance is low, consider increasing size');
+        }
+        // If memory utilization is high, force cleanup
+        if (compoundMetrics.current.memoryUtilization > 85) {
+            await this.compoundCache.cleanup();
+        }
+        if (queryMetrics.current.memoryUtilization > 85) {
+            await this.queryCache.cleanup();
+        }
+    }
+    shutdown() {
+        this.compoundCache.shutdown();
+        this.queryCache.shutdown();
+    }
+    async fetchCompoundFromDB(formula) {
+        // Simulate database fetch
+        await new Promise(resolve => setTimeout(resolve, 100));
+        return {
+            formula,
+            name: `Compound ${formula}`,
+            molarMass: Math.random() * 500,
+            properties: {
+                meltingPoint: Math.random() * 1000,
+                boilingPoint: Math.random() * 2000,
+                density: Math.random() * 5
+            },
+            lastUpdated: Date.now()
+        };
+    }
+    async performSearch(query, filters) {
+        // Simulate search operation
+        await new Promise(resolve => setTimeout(resolve, 200));
+        const resultCount = Math.floor(Math.random() * 20) + 1;
+        const results = [];
+        for (let i = 0; i < resultCount; i++) {
+            results.push({
+                formula: `${query}${i}`,
+                name: `Result ${i} for ${query}`,
+                relevance: Math.random()
+            });
+        }
+        return results.sort((a, b) => b.relevance - a.relevance);
+    }
+    isCommonCompound(formula) {
+        // Common compounds that change rarely
+        const common = ['H2O', 'CO2', 'NaCl', 'H2SO4', 'HCl', 'NH3', 'CH4', 'C2H5OH'];
+        return common.includes(formula);
+    }
+    setupCacheOptimization() {
+        // Auto-optimization every 10 minutes
+        setInterval(() => {
+            this.optimizeCaches().catch(error => {
+                console.warn('Cache optimization error:', error);
+            });
+        }, 600000);
+    }
+}
+/**
+ * Cache-aware equation balancer
+ */
+class CachedEquationBalancer {
+    constructor() {
+        this.cache = CacheFactory.create({
+            maxSize: 2000,
+            defaultTtl: 7200000, // 2 hours (balanced equations don't change)
+            evictionStrategy: 'lfu', // Frequent equations are more valuable
+            enableMetrics: true
+        });
+    }
+    async balanceEquation(equation) {
+        // Normalize equation for consistent caching
+        const normalizedEquation = this.normalizeEquation(equation);
+        const cached = await this.cache.get(normalizedEquation);
+        if (cached.hit) {
+            return { ...cached.value, fromCache: true };
+        }
+        // Perform balancing
+        const result = await this.performBalancing(normalizedEquation);
+        // Cache successful results
+        if (result.success) {
+            await this.cache.set(normalizedEquation, result);
+        }
+        return { ...result, fromCache: false };
+    }
+    /**
+     * Get equations that would benefit from precomputation
+     */
+    getFrequentEquations(minAccess = 5) {
+        // This would require access to cache internals or additional tracking
+        // For now, return mock data
+        return [
+            { equation: 'H2 + O2 = H2O', accessCount: 15 },
+            { equation: 'CH4 + O2 = CO2 + H2O', accessCount: 12 },
+            { equation: 'C2H5OH + O2 = CO2 + H2O', accessCount: 8 }
+        ];
+    }
+    async precomputeFrequentEquations() {
+        const frequent = this.getFrequentEquations();
+        for (const { equation } of frequent) {
+            const cached = await this.cache.get(equation);
+            if (!cached.hit) {
+                await this.balanceEquation(equation);
+            }
+        }
+    }
+    getPerformanceReport() {
+        const stats = this.cache.getStats();
+        const metrics = this.cache.getMetrics();
+        return `
+Equation Balancer Cache Report:
+
+Performance:
+- Hit Rate: ${stats.hitRate.toFixed(2)}%
+- Average Response Time: ${stats.averageAccessTime.toFixed(2)}ms
+- Cached Equations: ${stats.size}
+
+Trends:
+- Hit Rate Trend: ${metrics.trends.hitRateTrend}
+- Memory Trend: ${metrics.trends.memoryTrend}
+- Latency Trend: ${metrics.trends.latencyTrend}
+
+Recommendations:
+${this.generateRecommendations(stats, metrics)}
+    `.trim();
+    }
+    shutdown() {
+        this.cache.shutdown();
+    }
+    normalizeEquation(equation) {
+        // Remove extra spaces and standardize formatting
+        return equation
+            .replace(/\s+/g, ' ')
+            .replace(/\s*=\s*/g, ' = ')
+            .replace(/\s*\+\s*/g, ' + ')
+            .trim();
+    }
+    async performBalancing(equation) {
+        // Simulate equation balancing
+        await new Promise(resolve => setTimeout(resolve, 75));
+        return {
+            equation,
+            balanced: equation, // Would be actual balanced equation
+            coefficients: [1, 1, 1], // Mock coefficients
+            success: true,
+            method: 'matrix',
+            calculatedAt: Date.now()
+        };
+    }
+    generateRecommendations(stats, metrics) {
+        const recommendations = [];
+        if (stats.hitRate < 70) {
+            recommendations.push('- Consider increasing cache size for better hit rate');
+        }
+        if (metrics.trends.latencyTrend === 'degrading') {
+            recommendations.push('- Monitor for performance bottlenecks');
+        }
+        if (stats.memoryUtilization > 80) {
+            recommendations.push('- Consider memory cleanup or size optimization');
+        }
+        if (recommendations.length === 0) {
+            recommendations.push('- Cache performance is optimal');
+        }
+        return recommendations.join('\n');
+    }
+}
+/**
+ * Multi-level cache for hierarchical data
+ */
+class MultiLevelCache {
+    constructor() {
+        this.l1Cache = CacheFactory.create('small'); // Fast, small cache
+        this.l2Cache = CacheFactory.create('medium'); // Medium cache
+        this.l3Cache = CacheFactory.create('large'); // Large, persistent cache
+    }
+    async get(key) {
+        // Try L1 first (fastest)
+        let result = await this.l1Cache.get(key);
+        if (result.hit) {
+            return { value: result.value, level: 'L1', latency: result.latency };
+        }
+        // Try L2
+        result = await this.l2Cache.get(key);
+        if (result.hit) {
+            // Promote to L1
+            await this.l1Cache.set(key, result.value);
+            return { value: result.value, level: 'L2', latency: result.latency };
+        }
+        // Try L3
+        result = await this.l3Cache.get(key);
+        if (result.hit) {
+            // Promote to L2 (and potentially L1)
+            await this.l2Cache.set(key, result.value);
+            return { value: result.value, level: 'L3', latency: result.latency };
+        }
+        return { value: undefined, level: 'MISS', latency: 0 };
+    }
+    async set(key, value, level = 'L1') {
+        switch (level) {
+            case 'L1':
+                await this.l1Cache.set(key, value);
+                break;
+            case 'L2':
+                await this.l2Cache.set(key, value);
+                break;
+            case 'L3':
+                await this.l3Cache.set(key, value);
+                break;
+        }
+    }
+    getAggregatedStats() {
+        const l1Stats = this.l1Cache.getStats();
+        const l2Stats = this.l2Cache.getStats();
+        const l3Stats = this.l3Cache.getStats();
+        return {
+            l1: l1Stats,
+            l2: l2Stats,
+            l3: l3Stats,
+            combined: {
+                totalHits: l1Stats.hits + l2Stats.hits + l3Stats.hits,
+                totalMisses: l1Stats.misses + l2Stats.misses + l3Stats.misses,
+                totalSize: l1Stats.size + l2Stats.size + l3Stats.size,
+                totalMemory: l1Stats.memoryUsage + l2Stats.memoryUsage + l3Stats.memoryUsage
+            }
+        };
+    }
+    shutdown() {
+        this.l1Cache.shutdown();
+        this.l2Cache.shutdown();
+        this.l3Cache.shutdown();
+    }
+}
+/**
+ * Example usage and migration guide
+ */
+function demonstrateAdvancedCaching() {
+    console.log('🚀 Advanced Caching System Demo\n');
+    // Example 1: Replace legacy PerformanceCache
+    console.log('1. Creating optimized caches for different use cases:');
+    const equationCache = CacheFactory.create('performance-optimized');
+    const thermodynamicsCache = CacheFactory.create('memory-optimized');
+    const compoundCache = CacheFactory.create('large');
+    console.log('✅ Created specialized caches\n');
+    // Example 2: Monitor cache performance
+    console.log('2. Setting up cache monitoring:');
+    equationCache.addEventListener('stats-update', () => {
+        const stats = equationCache.getStats();
+        console.log(`Equation cache hit rate: ${stats.hitRate.toFixed(2)}%`);
+    });
+    console.log('✅ Monitoring configured\n');
+    // Example 3: Use with existing CREB components
+    console.log('3. Integration examples:');
+    const cachedCalculator = new CachedThermodynamicsCalculator();
+    const cachedDatabase = new CachedChemicalDatabase();
+    const cachedBalancer = new CachedEquationBalancer();
+    console.log('✅ Integrated with CREB components\n');
+    console.log('4. Performance benefits:');
+    console.log('- TTL-based expiration prevents stale data');
+    console.log('- Multiple eviction strategies optimize for different access patterns');
+    console.log('- Comprehensive metrics enable performance monitoring');
+    console.log('- Thread-safe operations support concurrent access');
+    console.log('- Memory management prevents OOM errors');
+    console.log('- Event system enables reactive optimization\n');
+    // Cleanup
+    setTimeout(() => {
+        equationCache.shutdown();
+        thermodynamicsCache.shutdown();
+        compoundCache.shutdown();
+        cachedCalculator.shutdown();
+        cachedDatabase.shutdown();
+        cachedBalancer.shutdown();
+        console.log('✅ Demo completed, caches shut down');
+    }, 1000);
+}
+
+exports.AdaptiveEvictionPolicy = AdaptiveEvictionPolicy;
+exports.AdvancedCache = AdvancedCache;
 exports.AdvancedKineticsAnalyzer = AdvancedKineticsAnalyzer;
+exports.CREBError = CREBError;
+exports.CREBValidationError = ValidationError;
+exports.CacheFactory = CacheFactory;
+exports.CachedChemicalDatabase = CachedChemicalDatabase;
+exports.CachedEquationBalancer = CachedEquationBalancer;
+exports.CachedThermodynamicsCalculator = CachedThermodynamicsCalculator;
 exports.ChemicalDatabaseManager = ChemicalDatabaseManager;
 exports.ChemicalEquationBalancer = ChemicalEquationBalancer;
 exports.ChemicalFormulaError = ChemicalFormulaError;
+exports.CircuitBreaker = CircuitBreaker;
+exports.CircuitBreakerManager = CircuitBreakerManager;
 exports.CircularDependencyError = CircularDependencyError;
+exports.ComputationError = ComputationError;
+exports.ConfigManager = ConfigManager;
 exports.Container = Container;
 exports.DataValidationService = DataValidationService;
 exports.ELEMENTS_LIST = ELEMENTS_LIST;
@@ -5909,38 +9735,72 @@ exports.ElementCounter = ElementCounter;
 exports.EnergyProfileGenerator = EnergyProfileGenerator;
 exports.EnhancedBalancer = EnhancedBalancer;
 exports.EnhancedChemicalEquationBalancer = EnhancedChemicalEquationBalancer;
+exports.EnhancedNISTIntegration = EnhancedNISTIntegration;
+exports.EnhancedPubChemIntegration = EnhancedPubChemIntegration;
+exports.EnhancedSQLiteStorage = EnhancedSQLiteStorage;
 exports.EnhancedStoichiometry = EnhancedStoichiometry;
 exports.EquationBalancingError = EquationBalancingError;
 exports.EquationParser = EquationParser;
+exports.ErrorAggregator = ErrorAggregator;
+exports.ErrorUtils = ErrorUtils;
+exports.EvictionPolicyFactory = EvictionPolicyFactory;
+exports.ExternalAPIError = ExternalAPIError;
+exports.FIFOEvictionPolicy = FIFOEvictionPolicy;
+exports.GracefulDegradationService = GracefulDegradationService;
 exports.INJECTABLE_METADATA_KEY = INJECTABLE_METADATA_KEY;
 exports.Inject = Inject;
 exports.Injectable = Injectable;
+exports.LFUEvictionPolicy = LFUEvictionPolicy;
+exports.LRUEvictionPolicy = LRUEvictionPolicy;
 exports.MaxDepthExceededError = MaxDepthExceededError;
 exports.MechanismAnalyzer = MechanismAnalyzer;
+exports.MultiLevelCache = MultiLevelCache;
 exports.NISTWebBookIntegration = NISTWebBookIntegration;
+exports.NetworkError = NetworkError;
 exports.Optional = Optional;
 exports.PARAMETER_SYMBOLS = PARAMETER_SYMBOLS;
 exports.PERIODIC_TABLE = PERIODIC_TABLE;
+exports.RandomEvictionPolicy = RandomEvictionPolicy;
+exports.RateLimiter = RateLimiter;
 exports.ReactionKinetics = ReactionKinetics;
 exports.ReactionSafetyAnalyzer = ReactionSafetyAnalyzer;
+exports.RetryPolicies = RetryPolicies;
+exports.RetryPolicy = RetryPolicy;
 exports.ServiceNotFoundError = ServiceNotFoundError;
 exports.Singleton = Singleton;
 exports.Stoichiometry = Stoichiometry;
+exports.SystemError = SystemError;
+exports.SystemHealthMonitor = SystemHealthMonitor;
+exports.TTLEvictionPolicy = TTLEvictionPolicy;
 exports.ThermodynamicsCalculator = ThermodynamicsCalculator;
 exports.ThermodynamicsEquationBalancer = ThermodynamicsEquationBalancer;
 exports.Transient = Transient;
+exports.WithCircuitBreaker = WithCircuitBreaker;
+exports.WithRetry = WithRetry;
 exports.calculateMolarWeight = calculateMolarWeight;
+exports.circuitBreakerManager = circuitBreakerManager;
+exports.configManager = configManager;
 exports.container = container;
 exports.createChemicalFormula = createChemicalFormula;
 exports.createElementSymbol = createElementSymbol;
 exports.createEnergyProfile = createEnergyProfile;
+exports.createRetryPolicy = createRetryPolicy;
 exports.createToken = createToken;
+exports.defaultConfig = defaultConfig;
+exports.demonstrateAdvancedCaching = demonstrateAdvancedCaching;
+exports.demonstrateEnhancedErrorHandling = demonstrateEnhancedErrorHandling;
 exports.exportEnergyProfile = exportEnergyProfile;
+exports.generateSchemaDocumentation = generateSchemaDocumentation;
+exports.getConfig = getConfig;
 exports.getDependencyTokens = getDependencyTokens;
+exports.getFullConfig = getFullConfig;
 exports.getInjectableMetadata = getInjectableMetadata;
 exports.isBalancedEquation = isBalancedEquation;
+exports.isCREBConfig = isCREBConfig;
 exports.isChemicalFormula = isChemicalFormula;
 exports.isElementSymbol = isElementSymbol;
 exports.isInjectable = isInjectable;
 exports.parseFormula = parseFormula;
+exports.setConfig = setConfig;
+exports.validateConfig = validateConfig;
 //# sourceMappingURL=index.js.map

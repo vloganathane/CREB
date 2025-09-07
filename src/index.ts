@@ -220,3 +220,40 @@ export {
   validateConfig,
   generateSchemaDocumentation
 } from './config/schemas/validation';
+
+// Advanced Caching System (v1.6.0 - Performance Optimization)
+export {
+  AdvancedCache,
+  CacheFactory,
+  CachedThermodynamicsCalculator,
+  CachedChemicalDatabase,
+  CachedEquationBalancer,
+  MultiLevelCache,
+  demonstrateAdvancedCaching
+} from './performance/cache/CacheIntegration';
+
+export {
+  type AdvancedCacheConfig,
+  type CacheEntry,
+  type CacheResult,
+  type CacheEventListener,
+  type CacheEvent,
+  type CacheMetrics,
+  type CacheStats,
+  type EvictionStrategy,
+  type CacheEventType,
+  type EvictionPolicy,
+  type IAdvancedCache,
+  type CacheFactoryConfig,
+  type MultiLevelCacheConfig
+} from './performance/cache/types';
+
+export {
+  LRUEvictionPolicy,
+  LFUEvictionPolicy,
+  FIFOEvictionPolicy,
+  TTLEvictionPolicy,
+  RandomEvictionPolicy,
+  AdaptiveEvictionPolicy,
+  EvictionPolicyFactory
+} from './performance/cache/EvictionPolicies';

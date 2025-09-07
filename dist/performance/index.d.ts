@@ -137,7 +137,7 @@ declare class PerformanceMonitor {
     /**
      * Get performance statistics
      */
-    static getStats(operation?: string): {
+    static getStats(operation?: string): Record<string, any> | {
         operation: string;
         count: number;
         average?: undefined;
@@ -155,7 +155,7 @@ declare class PerformanceMonitor {
         max: number;
         p95: number;
         p99: number;
-    } | Record<string, any>;
+    };
     /**
      * Clear measurements
      */
@@ -201,7 +201,7 @@ declare class OptimizedBalancer {
                 total: number;
             };
         };
-        performance: {
+        performance: Record<string, any> | {
             operation: string;
             count: number;
             average?: undefined;
@@ -219,7 +219,7 @@ declare class OptimizedBalancer {
             max: number;
             p95: number;
             p99: number;
-        } | Record<string, any>;
+        };
         wasmAvailable: boolean;
     };
 }
