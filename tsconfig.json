@@ -12,7 +12,9 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "moduleResolution": "node"
+    "moduleResolution": "node",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   },
   "include": ["src/**/*", "examples/advanced/enhanced-typescript-demo.ts"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]

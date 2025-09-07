@@ -112,3 +112,111 @@ export {
   type ValidationWarning,
   type DatabaseProvider
 } from './data';
+
+// Dependency Injection Container (v1.6.0 - Architecture Improvement)
+export {
+  Container,
+  ServiceLifetime,
+  CircularDependencyError,
+  ServiceNotFoundError,
+  MaxDepthExceededError,
+  createToken,
+  container,
+  type ServiceToken,
+  type ServiceFactory,
+  type Constructor,
+  type ServiceRegistration,
+  type ContainerOptions,
+  type ContainerMetrics,
+  type IDisposable
+} from './core/Container';
+
+export {
+  Injectable,
+  Inject,
+  Optional,
+  Singleton,
+  Transient,
+  getInjectableMetadata,
+  isInjectable,
+  getDependencyTokens,
+  type InjectableMetadata,
+  type InjectableOptions,
+  INJECTABLE_METADATA_KEY
+} from './core/decorators/Injectable';
+
+// Enhanced Error Handling (v1.6.0 - Resilience & Reliability)
+export {
+  CREBError,
+  ValidationError as CREBValidationError,
+  NetworkError,
+  ExternalAPIError,
+  ComputationError,
+  SystemError,
+  ErrorAggregator,
+  ErrorUtils,
+  ErrorCategory,
+  ErrorSeverity,
+  type ErrorContext,
+  type ErrorMetadata
+} from './core/errors/CREBError';
+
+export {
+  CircuitBreaker,
+  CircuitBreakerManager,
+  circuitBreakerManager,
+  WithCircuitBreaker,
+  CircuitBreakerState,
+  type CircuitBreakerConfig,
+  type CircuitBreakerMetrics
+} from './core/resilience/CircuitBreaker';
+
+export {
+  RetryPolicy,
+  RetryPolicies,
+  RateLimiter,
+  WithRetry,
+  createRetryPolicy,
+  RetryStrategy,
+  type RetryConfig,
+  type RetryMetrics,
+  type RetryResult
+} from './core/resilience/RetryPolicy';
+
+export {
+  EnhancedNISTIntegration,
+  EnhancedPubChemIntegration,
+  EnhancedSQLiteStorage,
+  SystemHealthMonitor,
+  GracefulDegradationService,
+  demonstrateEnhancedErrorHandling
+} from './core/ErrorHandlingIntegrationExample';
+
+// Export configuration management
+export {
+  ConfigManager,
+  configManager,
+  getConfig,
+  setConfig,
+  getFullConfig
+} from './config/ConfigManager';
+
+export {
+  type CREBConfig,
+  type PartialCREBConfig,
+  type CacheConfig,
+  type PerformanceConfig,
+  type DataConfig,
+  type LoggingConfig,
+  type ConfigValidationResult,
+  type ConfigChangeEvent,
+  type ConfigPath,
+  type ConfigValueType,
+  isCREBConfig
+} from './config/types';
+
+export {
+  defaultConfig,
+  validateConfig,
+  generateSchemaDocumentation
+} from './config/schemas/validation';
