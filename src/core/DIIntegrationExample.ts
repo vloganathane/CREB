@@ -15,6 +15,7 @@ import {
   type ServiceToken
 } from '../core/Container';
 import { Injectable, Singleton } from '../core/decorators/Injectable';
+import { AdvancedCache } from '../performance/cache/AdvancedCache';
 
 // Define service tokens for better type safety
 const ILoggerToken = createToken<ILogger>('ILogger');
@@ -29,9 +30,9 @@ interface ILogger {
 }
 
 interface ICache {
-  get(key: string): any;
-  set(key: string, value: any): void;
-  clear(): void;
+  get(key: string): Promise<any>;
+  set(key: string, value: any): Promise<void>;
+  clear(): Promise<void>;
 }
 
 interface ICalculator {
@@ -58,22 +59,27 @@ class EnhancedLogger implements ILogger {
 
 @Injectable()
 class SimpleCache implements ICache {
-  private cache = new Map<string, any>();
+  private cache = new AdvancedCache<any>({
+    maxSize: 500,
+    defaultTtl: 1800000, // 30 minutes
+    enableMetrics: true
+  });
 
-  get(key: string): any {
-    return this.cache.get(key);
+  async get(key: string): Promise<any> {
+    const result = await this.cache.get(key);
+    return result.hit ? result.value : undefined;
   }
 
-  set(key: string, value: any): void {
-    this.cache.set(key, value);
+  async set(key: string, value: any): Promise<void> {
+    await this.cache.set(key, value);
   }
 
-  clear(): void {
-    this.cache.clear();
+  async clear(): Promise<void> {
+    await this.cache.clear();
   }
 
   size(): number {
-    return this.cache.size;
+    return this.cache.size();
   }
 }
 
@@ -142,7 +148,7 @@ class CREBApplication {
 
   getCacheStats(): { size: number } {
     return {
-      size: (this.cache as SimpleCache).size(),
+      size: (this.cache as any).size(),
     };
   }
 }
@@ -159,7 +165,7 @@ export function setupDIContainer(): Container {
 
   // Register services using manual dependency specification
   container.registerClass(EnhancedLogger, [], ServiceLifetime.Singleton, ILoggerToken);
-  container.registerClass(SimpleCache, [], ServiceLifetime.Singleton, ICacheToken);
+  container.registerInstance(ICacheToken, new SimpleCache());
   
   container.registerClass(
     CachedCalculator,
@@ -260,7 +266,7 @@ export function createTestContainer(): Container {
 
   // Register mock implementations for testing
   container.registerInstance(ILoggerToken, new MockLogger());
-  container.registerClass(SimpleCache, [], ServiceLifetime.Singleton, ICacheToken);
+  container.registerInstance(ICacheToken, new SimpleCache());
   
   container.registerClass(
     CachedCalculator,

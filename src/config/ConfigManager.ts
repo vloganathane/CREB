@@ -29,11 +29,14 @@ import {
   crebConfigSchema,
   generateSchemaDocumentation 
 } from './schemas/validation';
+import { ValidationError, SystemError } from '../core/errors/CREBError';
+import { Singleton } from '../core/decorators/Injectable';
 
 /**
  * Configuration Manager class
  * Provides type-safe configuration management with validation and hot-reload
  */
+@Singleton()
 export class ConfigManager extends EventEmitter {
   private config: CREBConfig;
   private metadata: ConfigMetadata;
@@ -93,7 +96,11 @@ export class ConfigManager extends EventEmitter {
       if (value && typeof value === 'object' && key in value) {
         value = value[key];
       } else {
-        throw new Error(`Configuration path '${path}' not found`);
+        throw new ValidationError(
+          `Configuration path '${path}' not found`,
+          { path, keys, currentKey: key },
+          { field: 'configPath', value: path, constraint: 'path must exist in configuration' }
+        );
       }
     }
     
@@ -120,7 +127,11 @@ export class ConfigManager extends EventEmitter {
     // Validate the change
     const validationResult = this.validateConfiguration(newConfig);
     if (!validationResult.isValid) {
-      throw new Error(`Configuration validation failed: ${validationResult.errors.map(e => e.message).join(', ')}`);
+      throw new ValidationError(
+        `Configuration validation failed: ${validationResult.errors.map(e => e.message).join(', ')}`,
+        { path, value, errors: validationResult.errors },
+        { field: 'configValue', value: value, constraint: 'must pass validation schema' }
+      );
     }
     
     // Apply the change
@@ -180,11 +191,17 @@ export class ConfigManager extends EventEmitter {
       
       return result;
     } catch (error) {
+      const configError = new SystemError(
+        `Failed to load config file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        { filePath, operation: 'loadFromFile' },
+        { subsystem: 'configuration', resource: 'file-system' }
+      );
+      
       return {
         isValid: false,
         errors: [{
           path: '',
-          message: `Failed to load config file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          message: configError.message,
           value: filePath
         }],
         warnings: []

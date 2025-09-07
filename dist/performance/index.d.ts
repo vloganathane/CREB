@@ -190,17 +190,7 @@ declare class OptimizedBalancer {
      * Get balancer statistics
      */
     getStats(): {
-        cache: {
-            hits: number;
-            misses: number;
-            hitRate: number;
-            sizes: {
-                equation: number;
-                thermodynamics: number;
-                kinetics: number;
-                total: number;
-            };
-        };
+        cache: import("./cache/types").CacheStats;
         performance: Record<string, any> | {
             operation: string;
             count: number;
@@ -224,4 +214,5 @@ declare class OptimizedBalancer {
     };
 }
 export { PerformanceCache, MemoryManager, LazyLoader, WebAssemblyCalculator, PerformanceMonitor, OptimizedBalancer };
+export { AdvancedCache, CacheFactory, CachedThermodynamicsCalculator, CachedChemicalDatabase, CachedEquationBalancer, MultiLevelCache } from './cache/CacheIntegration';
 //# sourceMappingURL=index.d.ts.map

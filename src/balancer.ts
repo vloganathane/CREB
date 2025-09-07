@@ -1,5 +1,7 @@
 import { EquationParser, getElementsInReaction } from './utils';
 import { EquationData, LinearSystem, BalancedEquation } from './types';
+import { ComputationError } from './core/errors/CREBError';
+import { Injectable } from './core/decorators/Injectable';
 
 /**
  * Linear equation system generator and solver
@@ -78,7 +80,10 @@ export class LinearEquationSolver {
       }
     }
     
-    throw new Error('Unable to balance equation: Could not find integer coefficients');
+    throw new ComputationError(
+      'Unable to balance equation: Could not find integer coefficients',
+      { maxCoeff, numSpecies, operation: 'equation_balancing' }
+    );
   }
 
   /**
@@ -173,6 +178,7 @@ export class LinearEquationSolver {
  * Chemical equation balancer
  * Based on the main CREB functionality
  */
+@Injectable()
 export class ChemicalEquationBalancer {
   /**
    * Balances a chemical equation and returns the balanced equation string
@@ -187,7 +193,10 @@ export class ChemicalEquationBalancer {
       
       return this.formatBalancedEquation(reactants, products, coefficients);
     } catch (error) {
-      throw new Error(`Failed to balance equation "${equation}": ${error}`);
+      throw new ComputationError(
+        `Failed to balance equation "${equation}": ${error}`,
+        { equation, operation: 'equation_balancing', originalError: error }
+      );
     }
   }
 

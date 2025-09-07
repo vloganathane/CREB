@@ -5,6 +5,15 @@
 
 import { ChemicalEquationBalancer } from './balancer';
 import { BalancedEquation } from './types';
+import { 
+  ComputationError, 
+  ValidationError, 
+  ErrorCategory, 
+  ErrorSeverity,
+  ErrorUtils 
+} from './core/errors/CREBError';
+import { Injectable } from './core/decorators/Injectable';
+import { AdvancedCache } from './performance/cache/AdvancedCache';
 
 // Import type definitions for PubChem integration
 // Note: In production, this would import from 'creb-pubchem-js'
@@ -58,8 +67,13 @@ export interface SafetyInfo {
   signalWord?: 'Danger' | 'Warning';
 }
 
+@Injectable()
 export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
-  private compoundCache: Map<string, CompoundInfo> = new Map();
+  private compoundCache = new AdvancedCache<CompoundInfo>({
+    maxSize: 1000,
+    defaultTtl: 7200000, // 2 hours
+    evictionStrategy: 'lru'
+  });
 
   /**
    * Balance equation with safety and hazard information
@@ -356,7 +370,10 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
           }
           
           if (!found) {
-            throw new Error(`Could not resolve compound name: "${name}". Try using the chemical formula instead.`);
+            throw new ComputationError(
+              `Could not resolve compound name: "${name}". Try using the chemical formula instead.`,
+              { compoundName: name, operation: 'compound_resolution' }
+            );
           }
         }
       }
@@ -412,7 +429,10 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
       return enhanced;
       
     } catch (error) {
-      throw new Error(`Failed to balance equation by name: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new ComputationError(
+        `Failed to balance equation by name: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        { equation: commonNameEquation, operation: 'balance_by_name' }
+      );
     }
   }
 
@@ -470,8 +490,9 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
    */
   async getCompoundInfo(compoundName: string): Promise<CompoundInfo> {
     // Check cache first
-    if (this.compoundCache.has(compoundName)) {
-      return this.compoundCache.get(compoundName)!;
+    const cached = await this.compoundCache.get(compoundName);
+    if (cached.hit && cached.value) {
+      return cached.value;
     }
 
     const result: CompoundInfo = {
@@ -484,7 +505,7 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
       const pubchemModule = await this.loadPubChemModule();
       if (!pubchemModule) {
         result.error = 'PubChem module not available. Install creb-pubchem-js for enhanced functionality.';
-        this.compoundCache.set(compoundName, result);
+        await this.compoundCache.set(compoundName, result);
         return result;
       }
 
@@ -534,7 +555,7 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
     }
 
     // Cache the result
-    this.compoundCache.set(compoundName, result);
+    await this.compoundCache.set(compoundName, result);
     return result;
   }
 
@@ -585,7 +606,10 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
     // Split by = or -> or →
     const parts = cleanEquation.split(/\s*(?:=|->|→)\s*/);
     if (parts.length !== 2) {
-      throw new Error('Invalid equation format. Expected format: "reactants = products"');
+      throw new ValidationError(
+        'Invalid equation format. Expected format: "reactants = products"',
+        { equation: cleanEquation, operation: 'parse_equation' }
+      );
     }
     
     const [reactantsPart, productsPart] = parts;
@@ -602,7 +626,10 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
       .map(name => this.cleanCompoundName(name));
     
     if (reactantNames.length === 0 || productNames.length === 0) {
-      throw new Error('Invalid equation: must have at least one reactant and one product');
+      throw new ValidationError(
+        'Invalid equation: must have at least one reactant and one product',
+        { reactantCount: reactantNames.length, productCount: productNames.length, operation: 'parse_equation' }
+      );
     }
     
     return { reactantNames, productNames };
@@ -750,7 +777,10 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
       if (compound?.molecularWeight) {
         reactantMass += coefficient * compound.molecularWeight;
       } else {
-        throw new Error(`Missing molecular weight for reactant: ${species}`);
+        throw new ComputationError(
+          `Missing molecular weight for reactant: ${species}`,
+          { species, coefficient, operation: 'mass_balance_validation' }
+        );
       }
     }
 
@@ -763,7 +793,10 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
       if (compound?.molecularWeight) {
         productMass += coefficient * compound.molecularWeight;
       } else {
-        throw new Error(`Missing molecular weight for product: ${species}`);
+        throw new ComputationError(
+          `Missing molecular weight for product: ${species}`,
+          { species, coefficient, operation: 'mass_balance_validation' }
+        );
       }
     }
 
@@ -819,14 +852,15 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
   /**
    * Clear the compound cache
    */
-  clearCache(): void {
-    this.compoundCache.clear();
+  async clearCache(): Promise<void> {
+    await this.compoundCache.clear();
   }
 
   /**
    * Get cached compound info without making new requests
    */
-  getCachedCompoundInfo(compoundName: string): CompoundInfo | undefined {
-    return this.compoundCache.get(compoundName);
+  async getCachedCompoundInfo(compoundName: string): Promise<CompoundInfo | undefined> {
+    const result = await this.compoundCache.get(compoundName);
+    return result.hit ? result.value : undefined;
   }
 }

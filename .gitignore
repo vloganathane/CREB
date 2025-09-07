@@ -78,6 +78,15 @@ tmp/
 temp/
 .tmp/
 
+# Development and debug files (keep root clean)
+debug-*.js
+debug-*.mjs
+test-*.mjs
+demo-*.ts
+show-*.mjs
+*-test-script.*
+*-experiment.*
+
 # Local project tracking (not for public repo)
 scripts/
 docs/
@@ -97,8 +106,6 @@ marketing/
 # Test scripts and experimental files
 test-scripts/
 **/test-scripts/
-**/*-test-script.*
-**/*-experiment.*
 fix_code_blocks.py
 
 # Marketing and temporary content

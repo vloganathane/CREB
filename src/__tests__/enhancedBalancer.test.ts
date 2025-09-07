@@ -63,7 +63,7 @@ describe('EnhancedChemicalEquationBalancer', () => {
       
       expect(info1).toEqual(info2);
       
-      const cached = balancer.getCachedCompoundInfo('H2O');
+      const cached = await balancer.getCachedCompoundInfo('H2O');
       expect(cached).toEqual(info1);
     });
   });
@@ -148,10 +148,10 @@ describe('EnhancedChemicalEquationBalancer', () => {
   describe('Cache management', () => {
     test('should clear cache properly', async () => {
       await balancer.getCompoundInfo('H2O');
-      expect(balancer.getCachedCompoundInfo('H2O')).toBeDefined();
+      expect(await balancer.getCachedCompoundInfo('H2O')).toBeDefined();
       
-      balancer.clearCache();
-      expect(balancer.getCachedCompoundInfo('H2O')).toBeUndefined();
+      await balancer.clearCache();
+      expect(await balancer.getCachedCompoundInfo('H2O')).toBeUndefined();
     });
   });
 });

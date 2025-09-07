@@ -1,5 +1,6 @@
 import { PERIODIC_TABLE } from './constants';
 import { ElementCount } from './types';
+import { ValidationError } from './core/errors/CREBError';
 
 /**
  * Utility functions for chemical formula parsing and calculations
@@ -97,17 +98,26 @@ export class EquationParser {
   private splitIntoSpecies() {
     // Check if equation is empty or only whitespace
     if (!this.equation || this.equation.length === 0) {
-      throw new Error('Empty equation provided. Please enter a valid chemical equation.');
+      throw new ValidationError(
+        'Empty equation provided. Please enter a valid chemical equation.',
+        { equation: this.equation, operation: 'equation_parsing' }
+      );
     }
     
     const sides = this.equation.split(this.equationSplitter);
     if (sides.length !== 2) {
-      throw new Error('Invalid equation format. Must contain exactly one "=" sign.');
+      throw new ValidationError(
+        'Invalid equation format. Must contain exactly one "=" sign.',
+        { equation: this.equation, sides: sides.length, operation: 'equation_parsing' }
+      );
     }
     
     // Check if either side is empty
     if (!sides[0].trim() || !sides[1].trim()) {
-      throw new Error('Both sides of the equation must contain chemical species.');
+      throw new ValidationError(
+        'Both sides of the equation must contain chemical species.',
+        { equation: this.equation, leftSide: sides[0], rightSide: sides[1], operation: 'equation_parsing' }
+      );
     }
 
     const cleanSpecies = (speciesString: string): string[] => {
@@ -148,7 +158,10 @@ export function calculateMolarWeight(formula: string): number {
   let molarWeight = 0;
   for (const element in elementCounts) {
     if (!(element in PERIODIC_TABLE)) {
-      throw new Error(`Unknown element: ${element}`);
+      throw new ValidationError(
+        `Unknown element: ${element}`,
+        { element, formula, operation: 'molar_weight_calculation' }
+      );
     }
     molarWeight += elementCounts[element] * PERIODIC_TABLE[element];
   }

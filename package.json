@@ -1,7 +1,7 @@
 {
   "name": "creb-js",
-  "version": "1.5.0",
-  "description": "Chemical Reaction Equation Balancer - JavaScript Library",
+  "version": "1.6.0",
+  "description": "Advanced Chemical Reaction Equation Balancer with Thermodynamics & PubChem Integration",
   "type": "module",
   "main": "dist/index.esm.js",
   "module": "dist/index.esm.js",

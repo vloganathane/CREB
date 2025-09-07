@@ -1,9 +1,10 @@
 (function (global, factory) {
-    typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports, require('reflect-metadata'), require('events'), require('fs')) :
-    typeof define === 'function' && define.amd ? define(['exports', 'reflect-metadata', 'events', 'fs'], factory) :
-    (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.CREB = {}, null, global.events, global.fs));
-})(this, (function (exports, reflectMetadata, events, fs) { 'use strict';
+    typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports, require('reflect-metadata'), require('events'), require('fs'), require('worker_threads'), require('url'), require('path')) :
+    typeof define === 'function' && define.amd ? define(['exports', 'reflect-metadata', 'events', 'fs', 'worker_threads', 'url', 'path'], factory) :
+    (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.CREB = {}, null, global.events, global.fs, global.worker_threads, global.url, global.path));
+})(this, (function (exports, reflectMetadata, events, fs, worker_threads, url, path) { 'use strict';
 
+    var _documentCurrentScript = typeof document !== 'undefined' ? document.currentScript : null;
     function _interopNamespaceDefault(e) {
         var n = Object.create(null);
         if (e) {
@@ -22,6 +23,39 @@
     }
 
     var fs__namespace = /*#__PURE__*/_interopNamespaceDefault(fs);
+
+    /******************************************************************************
+    Copyright (c) Microsoft Corporation.
+
+    Permission to use, copy, modify, and/or distribute this software for any
+    purpose with or without fee is hereby granted.
+
+    THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+    REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+    AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+    INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+    LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+    OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+    PERFORMANCE OF THIS SOFTWARE.
+    ***************************************************************************** */
+    /* global Reflect, Promise, SuppressedError, Symbol, Iterator */
+
+
+    function __decorate(decorators, target, key, desc) {
+        var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+        if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+        else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+        return c > 3 && r && Object.defineProperty(target, key, r), r;
+    }
+
+    function __metadata(metadataKey, metadataValue) {
+        if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(metadataKey, metadataValue);
+    }
+
+    typeof SuppressedError === "function" ? SuppressedError : function (error, suppressed, message) {
+        var e = new Error(message);
+        return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
+    };
 
     /**
      * Chemical elements and their atomic masses
@@ -164,6 +198,347 @@
     const PARAMETER_SYMBOLS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
     /**
+     * Enhanced Error Handling for CREB-JS
+     * Provides structured error types with context, stack traces, and error classification
+     */
+    exports.ErrorCategory = void 0;
+    (function (ErrorCategory) {
+        ErrorCategory["VALIDATION"] = "VALIDATION";
+        ErrorCategory["NETWORK"] = "NETWORK";
+        ErrorCategory["COMPUTATION"] = "COMPUTATION";
+        ErrorCategory["DATA"] = "DATA";
+        ErrorCategory["SYSTEM"] = "SYSTEM";
+        ErrorCategory["EXTERNAL_API"] = "EXTERNAL_API";
+        ErrorCategory["TIMEOUT"] = "TIMEOUT";
+        ErrorCategory["RATE_LIMIT"] = "RATE_LIMIT";
+        ErrorCategory["AUTHENTICATION"] = "AUTHENTICATION";
+        ErrorCategory["PERMISSION"] = "PERMISSION";
+    })(exports.ErrorCategory || (exports.ErrorCategory = {}));
+    exports.ErrorSeverity = void 0;
+    (function (ErrorSeverity) {
+        ErrorSeverity["LOW"] = "LOW";
+        ErrorSeverity["MEDIUM"] = "MEDIUM";
+        ErrorSeverity["HIGH"] = "HIGH";
+        ErrorSeverity["CRITICAL"] = "CRITICAL";
+    })(exports.ErrorSeverity || (exports.ErrorSeverity = {}));
+    /**
+     * Base CREB Error class with enhanced context and metadata
+     */
+    class CREBError extends Error {
+        constructor(message, category, severity = exports.ErrorSeverity.MEDIUM, context = {}, options = {}) {
+            super(message);
+            this.name = 'CREBError';
+            // Ensure proper prototype chain for instanceof checks
+            Object.setPrototypeOf(this, CREBError.prototype);
+            this.metadata = {
+                category,
+                severity,
+                retryable: options.retryable ?? this.isRetryableByDefault(category),
+                errorCode: options.errorCode ?? this.generateErrorCode(category),
+                correlationId: options.correlationId ?? this.generateCorrelationId(),
+                context: {
+                    ...context,
+                    timestamp: new Date(),
+                    version: '1.5.0' // TODO: Get from package.json
+                },
+                timestamp: new Date(),
+                stackTrace: this.stack,
+                innerError: options.innerError,
+                sugggestedAction: options.suggestedAction
+            };
+            // Capture stack trace for V8 engines
+            if (Error.captureStackTrace) {
+                Error.captureStackTrace(this, CREBError);
+            }
+        }
+        /**
+         * Serialize error for logging and telemetry
+         */
+        toJSON() {
+            return {
+                name: this.name,
+                message: this.message,
+                metadata: {
+                    ...this.metadata,
+                    innerError: this.metadata.innerError?.message
+                }
+            };
+        }
+        /**
+         * Create a sanitized version for client-side consumption
+         */
+        toClientSafe() {
+            return {
+                message: this.message,
+                category: this.metadata.category,
+                severity: this.metadata.severity,
+                errorCode: this.metadata.errorCode,
+                correlationId: this.metadata.correlationId,
+                retryable: this.metadata.retryable,
+                suggestedAction: this.metadata.sugggestedAction
+            };
+        }
+        /**
+         * Check if error is retryable based on category and context
+         */
+        isRetryable() {
+            return this.metadata.retryable;
+        }
+        /**
+         * Get human-readable error description
+         */
+        getDescription() {
+            const parts = [
+                `[${this.metadata.category}:${this.metadata.severity}]`,
+                this.message
+            ];
+            if (this.metadata.sugggestedAction) {
+                parts.push(`Suggestion: ${this.metadata.sugggestedAction}`);
+            }
+            return parts.join(' ');
+        }
+        isRetryableByDefault(category) {
+            const retryableCategories = [
+                exports.ErrorCategory.NETWORK,
+                exports.ErrorCategory.TIMEOUT,
+                exports.ErrorCategory.RATE_LIMIT,
+                exports.ErrorCategory.EXTERNAL_API
+            ];
+            return retryableCategories.includes(category);
+        }
+        generateErrorCode(category) {
+            const timestamp = Date.now().toString(36);
+            const random = Math.random().toString(36).substring(2, 8);
+            return `${category}_${timestamp}_${random}`.toUpperCase();
+        }
+        generateCorrelationId() {
+            return `creb_${Date.now()}_${Math.random().toString(36).substring(2, 12)}`;
+        }
+    }
+    /**
+     * Validation Error - for input validation failures
+     */
+    class ValidationError extends CREBError {
+        constructor(message, context = {}, options = {}) {
+            super(message, exports.ErrorCategory.VALIDATION, exports.ErrorSeverity.MEDIUM, {
+                ...context,
+                field: options.field,
+                value: options.value,
+                constraint: options.constraint
+            }, {
+                retryable: false,
+                suggestedAction: 'Please check the input parameters and try again'
+            });
+            this.name = 'ValidationError';
+        }
+    }
+    /**
+     * Network Error - for network-related failures
+     */
+    class NetworkError extends CREBError {
+        constructor(message, context = {}, options = {}) {
+            super(message, exports.ErrorCategory.NETWORK, exports.ErrorSeverity.HIGH, {
+                ...context,
+                statusCode: options.statusCode,
+                url: options.url,
+                method: options.method,
+                timeout: options.timeout
+            }, {
+                retryable: true,
+                suggestedAction: 'Check network connectivity and try again'
+            });
+            this.name = 'NetworkError';
+        }
+    }
+    /**
+     * External API Error - for third-party API failures
+     */
+    class ExternalAPIError extends CREBError {
+        constructor(message, apiName, context = {}, options = {}) {
+            const severity = options.rateLimited ? exports.ErrorSeverity.MEDIUM : exports.ErrorSeverity.HIGH;
+            const category = options.rateLimited ? exports.ErrorCategory.RATE_LIMIT : exports.ErrorCategory.EXTERNAL_API;
+            super(message, category, severity, {
+                ...context,
+                apiName,
+                statusCode: options.statusCode,
+                responseBody: options.responseBody,
+                endpoint: options.endpoint
+            }, {
+                retryable: options.rateLimited || (!!options.statusCode && options.statusCode >= 500),
+                suggestedAction: options.rateLimited
+                    ? 'Rate limit exceeded. Please wait before retrying'
+                    : 'External service unavailable. Please try again later'
+            });
+            this.name = 'ExternalAPIError';
+        }
+    }
+    /**
+     * Computation Error - for calculation failures
+     */
+    class ComputationError extends CREBError {
+        constructor(message, context = {}, options = {}) {
+            super(message, exports.ErrorCategory.COMPUTATION, exports.ErrorSeverity.MEDIUM, {
+                ...context,
+                algorithm: options.algorithm,
+                input: options.input,
+                expectedRange: options.expectedRange
+            }, {
+                retryable: false,
+                suggestedAction: 'Please verify input parameters and calculation constraints'
+            });
+            this.name = 'ComputationError';
+        }
+    }
+    /**
+     * System Error - for internal system failures
+     */
+    class SystemError extends CREBError {
+        constructor(message, context = {}, options = {}) {
+            super(message, exports.ErrorCategory.SYSTEM, exports.ErrorSeverity.CRITICAL, {
+                ...context,
+                subsystem: options.subsystem,
+                resource: options.resource
+            }, {
+                retryable: false,
+                suggestedAction: 'Internal system error. Please contact support'
+            });
+            this.name = 'SystemError';
+        }
+    }
+    /**
+     * Error aggregation utility for collecting and analyzing multiple errors
+     */
+    class ErrorAggregator {
+        constructor(maxErrors = 100) {
+            this.errors = [];
+            this.maxErrors = maxErrors;
+        }
+        /**
+         * Add an error to the aggregator
+         */
+        addError(error) {
+            this.errors.push(error);
+            // Keep only the most recent errors
+            if (this.errors.length > this.maxErrors) {
+                this.errors.shift();
+            }
+        }
+        /**
+         * Get errors by category
+         */
+        getErrorsByCategory(category) {
+            return this.errors.filter(error => error.metadata.category === category);
+        }
+        /**
+         * Get errors by severity
+         */
+        getErrorsBySeverity(severity) {
+            return this.errors.filter(error => error.metadata.severity === severity);
+        }
+        /**
+         * Get error statistics
+         */
+        getStatistics() {
+            const byCategory = {};
+            const bySeverity = {};
+            let retryableCount = 0;
+            // Initialize counters
+            Object.values(exports.ErrorCategory).forEach(cat => byCategory[cat] = 0);
+            Object.values(exports.ErrorSeverity).forEach(sev => bySeverity[sev] = 0);
+            // Count errors
+            this.errors.forEach(error => {
+                byCategory[error.metadata.category]++;
+                bySeverity[error.metadata.severity]++;
+                if (error.isRetryable()) {
+                    retryableCount++;
+                }
+            });
+            return {
+                total: this.errors.length,
+                byCategory,
+                bySeverity,
+                retryableCount,
+                recentErrors: this.errors.slice(-10) // Last 10 errors
+            };
+        }
+        /**
+         * Clear all collected errors
+         */
+        clear() {
+            this.errors = [];
+        }
+        /**
+         * Get all errors as JSON for logging
+         */
+        toJSON() {
+            return this.errors.map(error => error.toJSON());
+        }
+    }
+    /**
+     * Utility functions for error handling
+     */
+    class ErrorUtils {
+        /**
+         * Wrap a function with error handling and transformation
+         */
+        static withErrorHandling(fn, errorTransformer) {
+            return (...args) => {
+                try {
+                    return fn(...args);
+                }
+                catch (error) {
+                    throw errorTransformer ? errorTransformer(error) : ErrorUtils.transformUnknownError(error);
+                }
+            };
+        }
+        /**
+         * Wrap an async function with error handling and transformation
+         */
+        static withAsyncErrorHandling(fn, errorTransformer) {
+            return async (...args) => {
+                try {
+                    return await fn(...args);
+                }
+                catch (error) {
+                    throw errorTransformer ? errorTransformer(error) : ErrorUtils.transformUnknownError(error);
+                }
+            };
+        }
+        /**
+         * Transform unknown errors into CREBError instances
+         */
+        static transformUnknownError(error) {
+            if (error instanceof CREBError) {
+                return error;
+            }
+            if (error instanceof Error) {
+                return new SystemError(error.message, { originalError: error.name }, { subsystem: 'unknown' });
+            }
+            return new SystemError(typeof error === 'string' ? error : 'Unknown error occurred', { originalError: error });
+        }
+        /**
+         * Check if an error indicates a transient failure
+         */
+        static isTransientError(error) {
+            if (error instanceof CREBError) {
+                return error.isRetryable();
+            }
+            // Common patterns for transient errors
+            const transientPatterns = [
+                /timeout/i,
+                /connection/i,
+                /network/i,
+                /503/,
+                /502/,
+                /504/,
+                /rate limit/i
+            ];
+            const message = error?.message || String(error);
+            return transientPatterns.some(pattern => pattern.test(message));
+        }
+    }
+
+    /**
      * Utility functions for chemical formula parsing and calculations
      */
     /**
@@ -242,15 +617,15 @@
         splitIntoSpecies() {
             // Check if equation is empty or only whitespace
             if (!this.equation || this.equation.length === 0) {
-                throw new Error('Empty equation provided. Please enter a valid chemical equation.');
+                throw new ValidationError('Empty equation provided. Please enter a valid chemical equation.', { equation: this.equation, operation: 'equation_parsing' });
             }
             const sides = this.equation.split(this.equationSplitter);
             if (sides.length !== 2) {
-                throw new Error('Invalid equation format. Must contain exactly one "=" sign.');
+                throw new ValidationError('Invalid equation format. Must contain exactly one "=" sign.', { equation: this.equation, sides: sides.length, operation: 'equation_parsing' });
             }
             // Check if either side is empty
             if (!sides[0].trim() || !sides[1].trim()) {
-                throw new Error('Both sides of the equation must contain chemical species.');
+                throw new ValidationError('Both sides of the equation must contain chemical species.', { equation: this.equation, leftSide: sides[0], rightSide: sides[1], operation: 'equation_parsing' });
             }
             const cleanSpecies = (speciesString) => {
                 return speciesString.split(this.speciesSplitter)
@@ -283,7 +658,7 @@
         let molarWeight = 0;
         for (const element in elementCounts) {
             if (!(element in PERIODIC_TABLE)) {
-                throw new Error(`Unknown element: ${element}`);
+                throw new ValidationError(`Unknown element: ${element}`, { element, formula, operation: 'molar_weight_calculation' });
             }
             molarWeight += elementCounts[element] * PERIODIC_TABLE[element];
         }
@@ -304,6 +679,131 @@
         });
         return Array.from(elements);
     }
+
+    /**
+     * Injectable decorator and related types for dependency injection
+     *
+     * Provides decorators and metadata for automatic dependency injection
+     * in the CREB-JS container system.
+     *
+     * @author Loganathane Virassamy
+     * @version 1.6.0
+     */
+    /**
+     * Service lifetime enumeration
+     */
+    var ServiceLifetime;
+    (function (ServiceLifetime) {
+        ServiceLifetime["Singleton"] = "singleton";
+        ServiceLifetime["Transient"] = "transient";
+    })(ServiceLifetime || (ServiceLifetime = {}));
+    /**
+     * Metadata key for injectable services
+     */
+    const INJECTABLE_METADATA_KEY = Symbol.for('injectable');
+    /**
+     * Metadata key for constructor parameters
+     */
+    const PARAM_TYPES_METADATA_KEY = 'design:paramtypes';
+    /**
+     * Injectable class decorator
+     *
+     * Marks a class as injectable and provides metadata for dependency injection.
+     *
+     * @param options Optional configuration for the injectable service
+     */
+    function Injectable(options = {}) {
+        return function (constructor) {
+            // Get constructor parameter types from TypeScript compiler
+            const paramTypes = Reflect.getMetadata(PARAM_TYPES_METADATA_KEY, constructor) || [];
+            // Create injectable metadata
+            const metadata = {
+                dependencies: paramTypes,
+                lifetime: options.lifetime || ServiceLifetime.Transient,
+                token: options.token,
+            };
+            // Store metadata on the constructor
+            Reflect.defineMetadata(INJECTABLE_METADATA_KEY, metadata, constructor);
+            return constructor;
+        };
+    }
+    /**
+     * Inject decorator for constructor parameters
+     *
+     * Explicitly specifies the token to inject for a constructor parameter.
+     * Useful when TypeScript reflection doesn't provide enough information.
+     *
+     * @param token The service token to inject
+     */
+    function Inject(token) {
+        return function (target, propertyKey, parameterIndex) {
+            const existingMetadata = Reflect.getMetadata(INJECTABLE_METADATA_KEY, target) || {};
+            const dependencies = existingMetadata.dependencies || [];
+            // Ensure dependencies array is large enough
+            while (dependencies.length <= parameterIndex) {
+                dependencies.push(undefined);
+            }
+            // Set the specific dependency
+            dependencies[parameterIndex] = token;
+            // Update metadata
+            const updatedMetadata = {
+                ...existingMetadata,
+                dependencies,
+            };
+            Reflect.defineMetadata(INJECTABLE_METADATA_KEY, updatedMetadata, target);
+        };
+    }
+    /**
+     * Optional decorator for constructor parameters
+     *
+     * Marks a dependency as optional, allowing injection to succeed
+     * even if the service is not registered.
+     *
+     * @param defaultValue Optional default value to use if service is not found
+     */
+    function Optional(defaultValue) {
+        return function (target, propertyKey, parameterIndex) {
+            const existingMetadata = Reflect.getMetadata(INJECTABLE_METADATA_KEY, target) || {};
+            const optionalDependencies = existingMetadata.optionalDependencies || new Set();
+            optionalDependencies.add(parameterIndex);
+            const updatedMetadata = {
+                ...existingMetadata,
+                optionalDependencies,
+                defaultValues: {
+                    ...existingMetadata.defaultValues,
+                    [parameterIndex]: defaultValue,
+                },
+            };
+            Reflect.defineMetadata(INJECTABLE_METADATA_KEY, updatedMetadata, target);
+        };
+    }
+    /**
+     * Get injectable metadata from a constructor
+     */
+    function getInjectableMetadata(constructor) {
+        return Reflect.getMetadata(INJECTABLE_METADATA_KEY, constructor);
+    }
+    /**
+     * Check if a constructor is marked as injectable
+     */
+    function isInjectable(constructor) {
+        return Reflect.hasMetadata(INJECTABLE_METADATA_KEY, constructor);
+    }
+    /**
+     * Helper function to extract dependency tokens from a constructor
+     */
+    function getDependencyTokens(constructor) {
+        const metadata = getInjectableMetadata(constructor);
+        if (!metadata) {
+            return [];
+        }
+        return metadata.dependencies || [];
+    }
+    /**
+     * Factory for creating injectable class decorators with specific lifetimes
+     */
+    const Singleton = (options = {}) => Injectable({ ...options, lifetime: ServiceLifetime.Singleton });
+    const Transient = (options = {}) => Injectable({ ...options, lifetime: ServiceLifetime.Transient });
 
     /**
      * Linear equation system generator and solver
@@ -357,7 +857,7 @@
             const system = this.generateLinearSystem();
             // For simple equations, try a brute force approach with small integer coefficients
             const maxCoeff = 10;
-            this.allSpecies.length;
+            const numSpecies = this.allSpecies.length;
             // Try different combinations of coefficients
             for (let attempt = 1; attempt <= maxCoeff; attempt++) {
                 const coefficients = this.findCoefficients(system, attempt);
@@ -365,7 +865,7 @@
                     return coefficients;
                 }
             }
-            throw new Error('Unable to balance equation: Could not find integer coefficients');
+            throw new ComputationError('Unable to balance equation: Could not find integer coefficients', { maxCoeff, numSpecies, operation: 'equation_balancing' });
         }
         /**
          * Tries to find valid coefficients using a systematic approach
@@ -443,7 +943,7 @@
      * Chemical equation balancer
      * Based on the main CREB functionality
      */
-    class ChemicalEquationBalancer {
+    exports.ChemicalEquationBalancer = class ChemicalEquationBalancer {
         /**
          * Balances a chemical equation and returns the balanced equation string
          */
@@ -456,7 +956,7 @@
                 return this.formatBalancedEquation(reactants, products, coefficients);
             }
             catch (error) {
-                throw new Error(`Failed to balance equation "${equation}": ${error}`);
+                throw new ComputationError(`Failed to balance equation "${equation}": ${error}`, { equation, operation: 'equation_balancing', originalError: error });
             }
         }
         /**
@@ -485,18 +985,21 @@
             const productSide = formatSide(products, reactants.length);
             return `${reactantSide} = ${productSide}`;
         }
-    }
+    };
+    exports.ChemicalEquationBalancer = __decorate([
+        Injectable()
+    ], exports.ChemicalEquationBalancer);
 
     /**
      * Stoichiometry calculator
      * Based on the Stoichiometry class from the original CREB project
      */
-    class Stoichiometry {
+    exports.Stoichiometry = class Stoichiometry {
         constructor(equation) {
             this.reactants = [];
             this.products = [];
             this.coefficients = [];
-            this.balancer = new ChemicalEquationBalancer();
+            this.balancer = new exports.ChemicalEquationBalancer();
             if (equation) {
                 this.equation = equation;
                 this.initializeFromEquation(equation);
@@ -523,13 +1026,13 @@
          */
         calculateRatios(selectedSpecies) {
             if (!this.equation) {
-                throw new Error('No equation provided. Initialize with an equation first.');
+                throw new ValidationError('No equation provided. Initialize with an equation first.', { operation: 'calculateRatios', selectedSpecies }, { field: 'equation', value: this.equation, constraint: 'must be initialized' });
             }
             const allSpecies = [...this.reactants, ...this.products];
             const selectedIndex = allSpecies.indexOf(selectedSpecies);
             if (selectedIndex === -1) {
                 const availableSpecies = allSpecies.join(', ');
-                throw new Error(`Species "${selectedSpecies}" not found in the equation. Available species: ${availableSpecies}`);
+                throw new ValidationError(`Species "${selectedSpecies}" not found in the equation. Available species: ${availableSpecies}`, { selectedSpecies, availableSpecies: allSpecies }, { field: 'selectedSpecies', value: selectedSpecies, constraint: `must be one of: ${availableSpecies}` });
             }
             const selectedCoefficient = this.coefficients[selectedIndex];
             return this.coefficients.map(coeff => coeff / selectedCoefficient);
@@ -539,7 +1042,7 @@
          */
         calculateFromMoles(selectedSpecies, moles) {
             if (!this.equation) {
-                throw new Error('No equation provided. Initialize with an equation first.');
+                throw new ValidationError('No equation provided. Initialize with an equation first.', { operation: 'calculateFromMoles', selectedSpecies, moles }, { field: 'equation', value: this.equation, constraint: 'must be initialized' });
             }
             const ratios = this.calculateRatios(selectedSpecies);
             const allSpecies = [...this.reactants, ...this.products];
@@ -577,7 +1080,7 @@
          */
         calculateFromGrams(selectedSpecies, grams) {
             if (!this.equation) {
-                throw new Error('No equation provided. Initialize with an equation first.');
+                throw new ValidationError('No equation provided. Initialize with an equation first.', { operation: 'calculateFromGrams', selectedSpecies, grams }, { field: 'equation', value: this.equation, constraint: 'must be initialized' });
             }
             const molarWeight = this.calculateMolarWeight(selectedSpecies);
             const moles = grams / molarWeight;
@@ -588,7 +1091,7 @@
          */
         getBalancedEquation() {
             if (!this.equation) {
-                throw new Error('No equation provided.');
+                throw new ValidationError('No equation provided.', { operation: 'getBalancedEquation' }, { field: 'equation', value: this.equation, constraint: 'must be initialized' });
             }
             return this.balancer.balance(this.equation);
         }
@@ -617,7 +1120,11 @@
         static calculateMolarWeight(formula) {
             return calculateMolarWeight(formula);
         }
-    }
+    };
+    exports.Stoichiometry = __decorate([
+        Injectable(),
+        __metadata("design:paramtypes", [String])
+    ], exports.Stoichiometry);
 
     /**
      * Advanced TypeScript Support for CREB Library
@@ -751,7 +1258,7 @@
      */
     class EnhancedBalancer {
         constructor() {
-            this.balancer = new ChemicalEquationBalancer();
+            this.balancer = new exports.ChemicalEquationBalancer();
         }
         /**
          * Balance equation with enhanced compound information
@@ -852,13 +1359,1101 @@
     }
 
     /**
+     * Cache Eviction Policies for CREB-JS
+     *
+     * Implements various cache eviction strategies including LRU, LFU, FIFO, TTL, and Random.
+     * Each policy provides different trade-offs between performance and memory efficiency.
+     */
+    /**
+     * Least Recently Used (LRU) eviction policy
+     * Evicts entries that haven't been accessed for the longest time
+     */
+    class LRUEvictionPolicy {
+        constructor() {
+            this.strategy = 'lru';
+        }
+        selectEvictionCandidates(entries, config, targetCount) {
+            const candidates = [];
+            for (const [key, entry] of entries.entries()) {
+                candidates.push({ key, lastAccessed: entry.lastAccessed });
+            }
+            // Sort by last accessed time (oldest first)
+            candidates.sort((a, b) => a.lastAccessed - b.lastAccessed);
+            return candidates.slice(0, targetCount).map(c => c.key);
+        }
+        onAccess(entry) {
+            entry.lastAccessed = Date.now();
+            entry.accessCount++;
+        }
+        onInsert(entry) {
+            const now = Date.now();
+            entry.lastAccessed = now;
+            entry.accessCount = 1;
+        }
+    }
+    /**
+     * Least Frequently Used (LFU) eviction policy
+     * Evicts entries with the lowest access frequency
+     */
+    class LFUEvictionPolicy {
+        constructor() {
+            this.strategy = 'lfu';
+        }
+        selectEvictionCandidates(entries, config, targetCount) {
+            const candidates = [];
+            for (const [key, entry] of entries.entries()) {
+                candidates.push({
+                    key,
+                    accessCount: entry.accessCount,
+                    lastAccessed: entry.lastAccessed
+                });
+            }
+            // Sort by access count (lowest first), then by last accessed for ties
+            candidates.sort((a, b) => {
+                if (a.accessCount !== b.accessCount) {
+                    return a.accessCount - b.accessCount;
+                }
+                return a.lastAccessed - b.lastAccessed;
+            });
+            return candidates.slice(0, targetCount).map(c => c.key);
+        }
+        onAccess(entry) {
+            entry.lastAccessed = Date.now();
+            entry.accessCount++;
+        }
+        onInsert(entry) {
+            const now = Date.now();
+            entry.lastAccessed = now;
+            entry.accessCount = 1;
+        }
+    }
+    /**
+     * First In, First Out (FIFO) eviction policy
+     * Evicts entries in the order they were inserted
+     */
+    class FIFOEvictionPolicy {
+        constructor() {
+            this.strategy = 'fifo';
+        }
+        selectEvictionCandidates(entries, config, targetCount) {
+            const candidates = [];
+            for (const [key, entry] of entries.entries()) {
+                candidates.push({ key, insertionOrder: entry.insertionOrder });
+            }
+            // Sort by insertion order (oldest first)
+            candidates.sort((a, b) => a.insertionOrder - b.insertionOrder);
+            return candidates.slice(0, targetCount).map(c => c.key);
+        }
+        onAccess(entry) {
+            entry.lastAccessed = Date.now();
+            entry.accessCount++;
+        }
+        onInsert(entry) {
+            const now = Date.now();
+            entry.lastAccessed = now;
+            entry.accessCount = 1;
+        }
+    }
+    /**
+     * Time To Live (TTL) eviction policy
+     * Evicts expired entries first, then falls back to LRU
+     */
+    class TTLEvictionPolicy {
+        constructor() {
+            this.strategy = 'ttl';
+        }
+        selectEvictionCandidates(entries, config, targetCount) {
+            const now = Date.now();
+            const expired = [];
+            const nonExpired = [];
+            for (const [key, entry] of entries.entries()) {
+                if (entry.ttl > 0 && now >= entry.expiresAt) {
+                    expired.push(key);
+                }
+                else {
+                    nonExpired.push({ key, lastAccessed: entry.lastAccessed });
+                }
+            }
+            // Return expired entries first
+            if (expired.length >= targetCount) {
+                return expired.slice(0, targetCount);
+            }
+            // If not enough expired entries, use LRU for the rest
+            const remaining = targetCount - expired.length;
+            nonExpired.sort((a, b) => a.lastAccessed - b.lastAccessed);
+            return [...expired, ...nonExpired.slice(0, remaining).map(c => c.key)];
+        }
+        onAccess(entry) {
+            entry.lastAccessed = Date.now();
+            entry.accessCount++;
+        }
+        onInsert(entry) {
+            const now = Date.now();
+            entry.lastAccessed = now;
+            entry.accessCount = 1;
+        }
+    }
+    /**
+     * Random eviction policy
+     * Evicts random entries (useful for testing and as fallback)
+     */
+    class RandomEvictionPolicy {
+        constructor() {
+            this.strategy = 'random';
+        }
+        selectEvictionCandidates(entries, config, targetCount) {
+            const keys = Array.from(entries.keys());
+            const candidates = [];
+            // Fisher-Yates shuffle to get random keys
+            for (let i = 0; i < targetCount && i < keys.length; i++) {
+                const randomIndex = Math.floor(Math.random() * (keys.length - i)) + i;
+                [keys[i], keys[randomIndex]] = [keys[randomIndex], keys[i]];
+                candidates.push(keys[i]);
+            }
+            return candidates;
+        }
+        onAccess(entry) {
+            entry.lastAccessed = Date.now();
+            entry.accessCount++;
+        }
+        onInsert(entry) {
+            const now = Date.now();
+            entry.lastAccessed = now;
+            entry.accessCount = 1;
+        }
+    }
+    /**
+     * Eviction policy factory
+     */
+    class EvictionPolicyFactory {
+        /**
+         * Get eviction policy instance
+         */
+        static getPolicy(strategy) {
+            const policy = this.policies.get(strategy);
+            if (!policy) {
+                throw new Error(`Unknown eviction strategy: ${strategy}`);
+            }
+            return policy;
+        }
+        /**
+         * Register custom eviction policy
+         */
+        static registerPolicy(policy) {
+            this.policies.set(policy.strategy, policy);
+        }
+        /**
+         * Get all available strategies
+         */
+        static getAvailableStrategies() {
+            return Array.from(this.policies.keys());
+        }
+    }
+    EvictionPolicyFactory.policies = new Map([
+        ['lru', new LRUEvictionPolicy()],
+        ['lfu', new LFUEvictionPolicy()],
+        ['fifo', new FIFOEvictionPolicy()],
+        ['ttl', new TTLEvictionPolicy()],
+        ['random', new RandomEvictionPolicy()]
+    ]);
+    /**
+     * Adaptive eviction policy that switches strategies based on access patterns
+     */
+    class AdaptiveEvictionPolicy {
+        constructor(fallbackStrategy = 'lru') {
+            this.fallbackStrategy = fallbackStrategy;
+            this.strategy = 'lru'; // Default fallback
+            this.performanceHistory = new Map();
+            this.evaluationWindow = 100; // Number of operations to evaluate
+            this.operationCount = 0;
+            this.currentPolicy = EvictionPolicyFactory.getPolicy(fallbackStrategy);
+            // Initialize performance tracking
+            for (const strategy of EvictionPolicyFactory.getAvailableStrategies()) {
+                this.performanceHistory.set(strategy, []);
+            }
+        }
+        selectEvictionCandidates(entries, config, targetCount) {
+            this.operationCount++;
+            // Periodically evaluate and potentially switch strategies
+            if (this.operationCount % this.evaluationWindow === 0) {
+                this.evaluateAndAdapt(entries, config);
+            }
+            return this.currentPolicy.selectEvictionCandidates(entries, config, targetCount);
+        }
+        onAccess(entry) {
+            this.currentPolicy.onAccess(entry);
+        }
+        onInsert(entry) {
+            this.currentPolicy.onInsert(entry);
+        }
+        /**
+         * Evaluate current performance and adapt strategy if needed
+         */
+        evaluateAndAdapt(entries, config) {
+            // Calculate access pattern metrics
+            const now = Date.now();
+            let totalAccesses = 0;
+            let recentAccesses = 0;
+            let accessVariance = 0;
+            let meanAccess = 0;
+            const accessCounts = [];
+            for (const entry of entries.values()) {
+                totalAccesses += entry.accessCount;
+                accessCounts.push(entry.accessCount);
+                // Count recent accesses (last hour)
+                if (now - entry.lastAccessed < 3600000) {
+                    recentAccesses++;
+                }
+            }
+            if (accessCounts.length > 0) {
+                meanAccess = totalAccesses / accessCounts.length;
+                accessVariance = accessCounts.reduce((sum, count) => sum + Math.pow(count - meanAccess, 2), 0) / accessCounts.length;
+            }
+            // Determine optimal strategy based on patterns
+            let optimalStrategy;
+            if (accessVariance > meanAccess * 2) {
+                // High variance suggests some items are much more popular -> LFU
+                optimalStrategy = 'lfu';
+            }
+            else if (recentAccesses / entries.size > 0.8) {
+                // Most items accessed recently -> LRU
+                optimalStrategy = 'lru';
+            }
+            else if (totalAccesses / entries.size < 2) {
+                // Low overall access -> FIFO
+                optimalStrategy = 'fifo';
+            }
+            else {
+                // Mixed pattern -> TTL
+                optimalStrategy = 'ttl';
+            }
+            // Switch strategy if different from current
+            if (optimalStrategy !== this.currentPolicy.strategy) {
+                this.currentPolicy = EvictionPolicyFactory.getPolicy(optimalStrategy);
+            }
+        }
+        /**
+         * Get current strategy being used
+         */
+        getCurrentStrategy() {
+            return this.currentPolicy.strategy;
+        }
+    }
+
+    /**
+     * Cache Metrics Collection and Analysis for CREB-JS
+     *
+     * Provides comprehensive metrics collection, analysis, and reporting for cache performance.
+     * Includes real-time monitoring, historical analysis, and performance recommendations.
+     */
+    /**
+     * Real-time cache metrics collector
+     */
+    class CacheMetricsCollector {
+        constructor() {
+            this.history = [];
+            this.maxHistorySize = 100;
+            this.eventCounts = new Map();
+            this.accessTimes = [];
+            this.maxAccessTimeSamples = 1000;
+            this.resetStats();
+        }
+        /**
+         * Reset all statistics
+         */
+        resetStats() {
+            this.stats = {
+                hits: 0,
+                misses: 0,
+                hitRate: 0,
+                size: 0,
+                memoryUsage: 0,
+                memoryUtilization: 0,
+                evictions: 0,
+                expirations: 0,
+                averageAccessTime: 0,
+                evictionBreakdown: {
+                    'lru': 0,
+                    'lfu': 0,
+                    'fifo': 0,
+                    'ttl': 0,
+                    'random': 0
+                },
+                lastUpdated: Date.now()
+            };
+            this.eventCounts.clear();
+            this.accessTimes = [];
+        }
+        /**
+         * Record a cache event
+         */
+        recordEvent(event) {
+            const currentCount = this.eventCounts.get(event.type) || 0;
+            this.eventCounts.set(event.type, currentCount + 1);
+            switch (event.type) {
+                case 'hit':
+                    this.stats.hits++;
+                    break;
+                case 'miss':
+                    this.stats.misses++;
+                    break;
+                case 'eviction':
+                    this.stats.evictions++;
+                    if (event.metadata?.strategy) {
+                        this.stats.evictionBreakdown[event.metadata.strategy]++;
+                    }
+                    break;
+                case 'expiration':
+                    this.stats.expirations++;
+                    break;
+            }
+            // Record access time if available
+            if (event.metadata?.latency !== undefined) {
+                this.accessTimes.push(event.metadata.latency);
+                if (this.accessTimes.length > this.maxAccessTimeSamples) {
+                    this.accessTimes.shift(); // Remove oldest sample
+                }
+            }
+            this.updateComputedStats();
+        }
+        /**
+         * Update cache size and memory usage
+         */
+        updateCacheInfo(size, memoryUsage, maxMemory) {
+            this.stats.size = size;
+            this.stats.memoryUsage = memoryUsage;
+            this.stats.memoryUtilization = maxMemory > 0 ? (memoryUsage / maxMemory) * 100 : 0;
+            this.stats.lastUpdated = Date.now();
+        }
+        /**
+         * Get current statistics
+         */
+        getStats() {
+            return { ...this.stats };
+        }
+        /**
+         * Get comprehensive metrics with historical data and trends
+         */
+        getMetrics() {
+            const current = this.getStats();
+            // Calculate trends
+            const trends = this.calculateTrends();
+            // Calculate peaks
+            const peaks = this.calculatePeaks();
+            return {
+                current,
+                history: [...this.history],
+                trends,
+                peaks
+            };
+        }
+        /**
+         * Take a snapshot of current stats for historical tracking
+         */
+        takeSnapshot() {
+            const snapshot = this.getStats();
+            this.history.push(snapshot);
+            if (this.history.length > this.maxHistorySize) {
+                this.history.shift(); // Remove oldest snapshot
+            }
+        }
+        /**
+         * Get event counts
+         */
+        getEventCounts() {
+            return new Map(this.eventCounts);
+        }
+        /**
+         * Get access time percentiles
+         */
+        getAccessTimePercentiles() {
+            if (this.accessTimes.length === 0) {
+                return { p50: 0, p90: 0, p95: 0, p99: 0 };
+            }
+            const sorted = [...this.accessTimes].sort((a, b) => a - b);
+            sorted.length;
+            return {
+                p50: this.getPercentile(sorted, 50),
+                p90: this.getPercentile(sorted, 90),
+                p95: this.getPercentile(sorted, 95),
+                p99: this.getPercentile(sorted, 99)
+            };
+        }
+        /**
+         * Update computed statistics
+         */
+        updateComputedStats() {
+            const total = this.stats.hits + this.stats.misses;
+            this.stats.hitRate = total > 0 ? (this.stats.hits / total) * 100 : 0;
+            if (this.accessTimes.length > 0) {
+                this.stats.averageAccessTime = this.accessTimes.reduce((sum, time) => sum + time, 0) / this.accessTimes.length;
+            }
+            this.stats.lastUpdated = Date.now();
+        }
+        /**
+         * Calculate performance trends
+         */
+        calculateTrends() {
+            if (this.history.length < 3) {
+                return {
+                    hitRateTrend: 'stable',
+                    memoryTrend: 'stable',
+                    latencyTrend: 'stable'
+                };
+            }
+            const recent = this.history.slice(-3);
+            // Hit rate trend
+            const hitRateChange = recent[2].hitRate - recent[0].hitRate;
+            const hitRateTrend = Math.abs(hitRateChange) < 1 ? 'stable' :
+                hitRateChange > 0 ? 'improving' : 'declining';
+            // Memory trend
+            const memoryChange = recent[2].memoryUtilization - recent[0].memoryUtilization;
+            const memoryTrend = Math.abs(memoryChange) < 5 ? 'stable' :
+                memoryChange > 0 ? 'increasing' : 'decreasing';
+            // Latency trend
+            const latencyChange = recent[2].averageAccessTime - recent[0].averageAccessTime;
+            const latencyTrend = Math.abs(latencyChange) < 0.1 ? 'stable' :
+                latencyChange < 0 ? 'improving' : 'degrading';
+            return {
+                hitRateTrend,
+                memoryTrend,
+                latencyTrend
+            };
+        }
+        /**
+         * Calculate peak performance metrics
+         */
+        calculatePeaks() {
+            if (this.history.length === 0) {
+                return {
+                    maxHitRate: this.stats.hitRate,
+                    maxMemoryUsage: this.stats.memoryUsage,
+                    minLatency: this.stats.averageAccessTime
+                };
+            }
+            const allStats = [...this.history, this.stats];
+            return {
+                maxHitRate: Math.max(...allStats.map(s => s.hitRate)),
+                maxMemoryUsage: Math.max(...allStats.map(s => s.memoryUsage)),
+                minLatency: Math.min(...allStats.map(s => s.averageAccessTime))
+            };
+        }
+        /**
+         * Get percentile value from sorted array
+         */
+        getPercentile(sorted, percentile) {
+            const index = Math.ceil((percentile / 100) * sorted.length) - 1;
+            return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
+        }
+    }
+    /**
+     * Cache performance analyzer
+     */
+    class CachePerformanceAnalyzer {
+        /**
+         * Analyze cache performance and provide recommendations
+         */
+        static analyze(metrics) {
+            const { current, trends, history } = metrics;
+            const issues = [];
+            const recommendations = [];
+            const insights = [];
+            let score = 100;
+            // Analyze hit rate
+            if (current.hitRate < 50) {
+                score -= 30;
+                issues.push('Low cache hit rate');
+                recommendations.push('Consider increasing cache size or optimizing access patterns');
+            }
+            else if (current.hitRate < 70) {
+                score -= 15;
+                issues.push('Moderate cache hit rate');
+                recommendations.push('Review cache eviction strategy');
+            }
+            // Analyze memory utilization
+            if (current.memoryUtilization > 90) {
+                score -= 20;
+                issues.push('High memory utilization');
+                recommendations.push('Increase memory limit or improve eviction policy');
+            }
+            else if (current.memoryUtilization < 30) {
+                insights.push('Low memory utilization - cache size could be reduced');
+            }
+            // Analyze access time
+            if (current.averageAccessTime > 5) {
+                score -= 15;
+                issues.push('High average access time');
+                recommendations.push('Check for lock contention or optimize data structures');
+            }
+            // Analyze trends
+            if (trends.hitRateTrend === 'declining') {
+                score -= 10;
+                issues.push('Declining hit rate trend');
+                recommendations.push('Monitor access patterns and consider adaptive caching');
+            }
+            if (trends.latencyTrend === 'degrading') {
+                score -= 10;
+                issues.push('Increasing access latency');
+                recommendations.push('Profile cache operations for performance bottlenecks');
+            }
+            // Analyze eviction distribution
+            const totalEvictions = Object.values(current.evictionBreakdown).reduce((sum, count) => sum + count, 0);
+            if (totalEvictions > 0) {
+                const dominantStrategy = Object.entries(current.evictionBreakdown)
+                    .reduce((max, [strategy, count]) => count > max.count ? { strategy, count } : max, { strategy: '', count: 0 });
+                if (dominantStrategy.count / totalEvictions > 0.8) {
+                    insights.push(`Cache primarily using ${dominantStrategy.strategy} eviction`);
+                }
+                else {
+                    insights.push('Cache using mixed eviction strategies - consider adaptive policy');
+                }
+            }
+            // Historical comparison
+            if (history.length > 0) {
+                const baseline = history[0];
+                const hitRateImprovement = current.hitRate - baseline.hitRate;
+                if (hitRateImprovement > 10) {
+                    insights.push('Significant hit rate improvement observed');
+                }
+                else if (hitRateImprovement < -10) {
+                    issues.push('Hit rate has declined significantly');
+                    recommendations.push('Review recent changes to access patterns or cache configuration');
+                }
+            }
+            return {
+                score: Math.max(0, score),
+                issues,
+                recommendations,
+                insights
+            };
+        }
+        /**
+         * Generate performance report
+         */
+        static generateReport(metrics) {
+            const analysis = this.analyze(metrics);
+            const { current } = metrics;
+            let report = '# Cache Performance Report\n\n';
+            report += `## Overall Score: ${analysis.score}/100\n\n`;
+            report += '## Current Statistics\n';
+            report += `- Hit Rate: ${current.hitRate.toFixed(2)}%\n`;
+            report += `- Cache Size: ${current.size} entries\n`;
+            report += `- Memory Usage: ${(current.memoryUsage / 1024 / 1024).toFixed(2)} MB (${current.memoryUtilization.toFixed(1)}%)\n`;
+            report += `- Average Access Time: ${current.averageAccessTime.toFixed(2)}ms\n`;
+            report += `- Evictions: ${current.evictions}\n`;
+            report += `- Expirations: ${current.expirations}\n\n`;
+            report += '## Trends\n';
+            report += `- Hit Rate: ${metrics.trends.hitRateTrend}\n`;
+            report += `- Memory Usage: ${metrics.trends.memoryTrend}\n`;
+            report += `- Latency: ${metrics.trends.latencyTrend}\n\n`;
+            if (analysis.issues.length > 0) {
+                report += '## Issues\n';
+                analysis.issues.forEach(issue => {
+                    report += `- ${issue}\n`;
+                });
+                report += '\n';
+            }
+            if (analysis.recommendations.length > 0) {
+                report += '## Recommendations\n';
+                analysis.recommendations.forEach(rec => {
+                    report += `- ${rec}\n`;
+                });
+                report += '\n';
+            }
+            if (analysis.insights.length > 0) {
+                report += '## Insights\n';
+                analysis.insights.forEach(insight => {
+                    report += `- ${insight}\n`;
+                });
+                report += '\n';
+            }
+            return report;
+        }
+    }
+
+    /**
+     * Advanced Cache Implementation for CREB-JS
+     *
+     * Production-ready cache with TTL, multiple eviction policies, metrics,
+     * memory management, and thread safety.
+     */
+    /**
+     * Default cache configuration
+     */
+    const DEFAULT_CONFIG = {
+        maxSize: 1000,
+        defaultTtl: 3600000, // 1 hour
+        evictionStrategy: 'lru',
+        fallbackStrategy: 'fifo',
+        maxMemoryBytes: 100 * 1024 * 1024, // 100MB
+        enableMetrics: true,
+        metricsInterval: 60000, // 1 minute
+        autoCleanup: true,
+        cleanupInterval: 300000, // 5 minutes
+        threadSafe: true
+    };
+    /**
+     * Advanced cache implementation with comprehensive features
+     */
+    exports.AdvancedCache = class AdvancedCache {
+        constructor(config = {}) {
+            this.entries = new Map();
+            this.listeners = new Map();
+            this.insertionCounter = 0;
+            this.mutex = new AsyncMutex();
+            this.config = { ...DEFAULT_CONFIG, ...config };
+            this.metrics = new CacheMetricsCollector();
+            // Start background tasks
+            if (this.config.autoCleanup) {
+                this.startCleanupTimer();
+            }
+            if (this.config.enableMetrics) {
+                this.startMetricsTimer();
+            }
+        }
+        /**
+         * Get value from cache
+         */
+        async get(key) {
+            const startTime = Date.now();
+            if (this.config.threadSafe) {
+                return this.mutex.runExclusive(() => this.getInternal(key, startTime));
+            }
+            else {
+                return this.getInternal(key, startTime);
+            }
+        }
+        /**
+         * Set value in cache
+         */
+        async set(key, value, ttl) {
+            const startTime = Date.now();
+            if (this.config.threadSafe) {
+                return this.mutex.runExclusive(() => this.setInternal(key, value, ttl, startTime));
+            }
+            else {
+                return this.setInternal(key, value, ttl, startTime);
+            }
+        }
+        /**
+         * Check if key exists in cache
+         */
+        async has(key) {
+            const entry = this.entries.get(key);
+            if (!entry)
+                return false;
+            // Check if expired
+            const now = Date.now();
+            if (entry.ttl > 0 && now >= entry.expiresAt) {
+                await this.deleteInternal(key);
+                return false;
+            }
+            return true;
+        }
+        /**
+         * Delete entry from cache
+         */
+        async delete(key) {
+            if (this.config.threadSafe) {
+                return this.mutex.runExclusive(() => this.deleteInternal(key));
+            }
+            else {
+                return this.deleteInternal(key);
+            }
+        }
+        /**
+         * Clear all entries
+         */
+        async clear() {
+            if (this.config.threadSafe) {
+                return this.mutex.runExclusive(() => this.clearInternal());
+            }
+            else {
+                return this.clearInternal();
+            }
+        }
+        /**
+         * Get current cache statistics
+         */
+        getStats() {
+            this.updateMetrics();
+            return this.metrics.getStats();
+        }
+        /**
+         * Get detailed metrics
+         */
+        getMetrics() {
+            this.metrics.takeSnapshot();
+            return this.metrics.getMetrics();
+        }
+        /**
+         * Force cleanup of expired entries
+         */
+        async cleanup() {
+            if (this.config.threadSafe) {
+                return this.mutex.runExclusive(() => this.cleanupInternal());
+            }
+            else {
+                return this.cleanupInternal();
+            }
+        }
+        /**
+         * Add event listener
+         */
+        addEventListener(type, listener) {
+            if (!this.listeners.has(type)) {
+                this.listeners.set(type, new Set());
+            }
+            this.listeners.get(type).add(listener);
+        }
+        /**
+         * Remove event listener
+         */
+        removeEventListener(type, listener) {
+            const typeListeners = this.listeners.get(type);
+            if (typeListeners) {
+                typeListeners.delete(listener);
+            }
+        }
+        /**
+         * Get all keys
+         */
+        keys() {
+            return Array.from(this.entries.keys());
+        }
+        /**
+         * Get cache size
+         */
+        size() {
+            return this.entries.size;
+        }
+        /**
+         * Get memory usage in bytes
+         */
+        memoryUsage() {
+            let total = 0;
+            for (const entry of this.entries.values()) {
+                total += entry.sizeBytes;
+            }
+            return total;
+        }
+        /**
+         * Check if cache is healthy
+         */
+        async healthCheck() {
+            const metrics = this.getMetrics();
+            const analysis = CachePerformanceAnalyzer.analyze(metrics);
+            return {
+                healthy: analysis.score >= 70,
+                issues: analysis.issues,
+                recommendations: analysis.recommendations
+            };
+        }
+        /**
+         * Shutdown cache and cleanup resources
+         */
+        shutdown() {
+            if (this.cleanupTimer) {
+                clearInterval(this.cleanupTimer);
+            }
+            if (this.metricsTimer) {
+                clearInterval(this.metricsTimer);
+            }
+        }
+        // Internal implementation methods
+        async getInternal(key, startTime) {
+            const entry = this.entries.get(key);
+            const latency = Date.now() - startTime;
+            if (!entry) {
+                this.emitEvent('miss', key, undefined, { latency });
+                return { success: true, hit: false, latency };
+            }
+            // Check if expired
+            const now = Date.now();
+            if (entry.ttl > 0 && now >= entry.expiresAt) {
+                await this.deleteInternal(key);
+                this.emitEvent('miss', key, undefined, { latency, expired: true });
+                return { success: true, hit: false, latency, metadata: { expired: true } };
+            }
+            // Update access metadata
+            const policy = EvictionPolicyFactory.getPolicy(this.config.evictionStrategy);
+            policy.onAccess(entry);
+            this.emitEvent('hit', key, entry.value, { latency });
+            return { success: true, value: entry.value, hit: true, latency };
+        }
+        async setInternal(key, value, ttl, startTime) {
+            const now = Date.now();
+            const entryTtl = ttl ?? this.config.defaultTtl;
+            const latency = startTime ? now - startTime : 0;
+            // Calculate size estimate
+            const sizeBytes = this.estimateSize(value);
+            // Check memory constraints before adding
+            const currentMemory = this.memoryUsage();
+            if (this.config.maxMemoryBytes > 0 && currentMemory + sizeBytes > this.config.maxMemoryBytes) {
+                await this.evictForMemory(sizeBytes);
+            }
+            // Check size constraints and evict if necessary
+            if (this.entries.size >= this.config.maxSize) {
+                await this.evictEntries(1);
+            }
+            // Create new entry
+            const entry = {
+                value,
+                createdAt: now,
+                lastAccessed: now,
+                accessCount: 1,
+                ttl: entryTtl,
+                expiresAt: entryTtl > 0 ? now + entryTtl : 0,
+                sizeBytes,
+                insertionOrder: this.insertionCounter++
+            };
+            // Update access metadata
+            const policy = EvictionPolicyFactory.getPolicy(this.config.evictionStrategy);
+            policy.onInsert(entry);
+            // Store entry
+            this.entries.set(key, entry);
+            this.emitEvent('set', key, value, { latency });
+            return { success: true, hit: false, latency };
+        }
+        async deleteInternal(key) {
+            const entry = this.entries.get(key);
+            if (!entry)
+                return false;
+            this.entries.delete(key);
+            this.emitEvent('delete', key, entry.value);
+            return true;
+        }
+        async clearInternal() {
+            this.entries.clear();
+            this.insertionCounter = 0;
+            this.emitEvent('clear');
+        }
+        async cleanupInternal() {
+            const now = Date.now();
+            const expiredKeys = [];
+            for (const [key, entry] of this.entries.entries()) {
+                if (entry.ttl > 0 && now >= entry.expiresAt) {
+                    expiredKeys.push(key);
+                }
+            }
+            for (const key of expiredKeys) {
+                this.entries.delete(key);
+                this.emitEvent('expiration', key);
+            }
+            return expiredKeys.length;
+        }
+        async evictEntries(count) {
+            const policy = EvictionPolicyFactory.getPolicy(this.config.evictionStrategy);
+            const candidates = policy.selectEvictionCandidates(this.entries, this.config, count);
+            for (const key of candidates) {
+                const entry = this.entries.get(key);
+                if (entry) {
+                    this.entries.delete(key);
+                    this.emitEvent('eviction', key, entry.value, {
+                        strategy: this.config.evictionStrategy
+                    });
+                }
+            }
+        }
+        async evictForMemory(requiredBytes) {
+            const currentMemory = this.memoryUsage();
+            const targetMemory = this.config.maxMemoryBytes - requiredBytes;
+            if (currentMemory <= targetMemory)
+                return;
+            const bytesToEvict = currentMemory - targetMemory;
+            let evictedBytes = 0;
+            const policy = EvictionPolicyFactory.getPolicy(this.config.evictionStrategy);
+            while (evictedBytes < bytesToEvict && this.entries.size > 0) {
+                const candidates = policy.selectEvictionCandidates(this.entries, this.config, 1);
+                if (candidates.length === 0)
+                    break;
+                const key = candidates[0];
+                const entry = this.entries.get(key);
+                if (entry) {
+                    evictedBytes += entry.sizeBytes;
+                    this.entries.delete(key);
+                    this.emitEvent('eviction', key, entry.value, {
+                        strategy: this.config.evictionStrategy,
+                        reason: 'memory-pressure',
+                        memoryBefore: currentMemory,
+                        memoryAfter: currentMemory - evictedBytes
+                    });
+                }
+            }
+            if (evictedBytes < bytesToEvict) {
+                this.emitEvent('memory-pressure', undefined, undefined, {
+                    reason: 'Unable to free sufficient memory'
+                });
+            }
+        }
+        estimateSize(value) {
+            // Simple size estimation - could be improved with more sophisticated analysis
+            const str = JSON.stringify(value);
+            return str.length * 2; // Rough estimate for UTF-16 encoding
+        }
+        emitEvent(type, key, value, metadata) {
+            const event = {
+                type,
+                key,
+                value,
+                timestamp: Date.now(),
+                metadata
+            };
+            // Record in metrics
+            this.metrics.recordEvent(event);
+            // Notify listeners
+            const typeListeners = this.listeners.get(type);
+            if (typeListeners) {
+                for (const listener of typeListeners) {
+                    try {
+                        listener(event);
+                    }
+                    catch (error) {
+                        console.warn('Cache event listener error:', error);
+                    }
+                }
+            }
+        }
+        updateMetrics() {
+            const size = this.entries.size;
+            const memory = this.memoryUsage();
+            this.metrics.updateCacheInfo(size, memory, this.config.maxMemoryBytes);
+        }
+        startCleanupTimer() {
+            this.cleanupTimer = setInterval(async () => {
+                try {
+                    await this.cleanup();
+                }
+                catch (error) {
+                    console.warn('Cache cleanup error:', error);
+                }
+            }, this.config.cleanupInterval);
+        }
+        startMetricsTimer() {
+            this.metricsTimer = setInterval(() => {
+                this.metrics.takeSnapshot();
+                this.emitEvent('stats-update');
+            }, this.config.metricsInterval);
+        }
+    };
+    exports.AdvancedCache = __decorate([
+        Injectable(),
+        __metadata("design:paramtypes", [Object])
+    ], exports.AdvancedCache);
+    /**
+     * Simple async mutex for thread safety
+     */
+    class AsyncMutex {
+        constructor() {
+            this.locked = false;
+            this.queue = [];
+        }
+        async runExclusive(fn) {
+            return new Promise((resolve, reject) => {
+                const run = async () => {
+                    this.locked = true;
+                    try {
+                        const result = await fn();
+                        resolve(result);
+                    }
+                    catch (error) {
+                        reject(error);
+                    }
+                    finally {
+                        this.locked = false;
+                        const next = this.queue.shift();
+                        if (next) {
+                            next();
+                        }
+                    }
+                };
+                if (this.locked) {
+                    this.queue.push(run);
+                }
+                else {
+                    run();
+                }
+            });
+        }
+    }
+    /**
+     * Cache factory for creating configured cache instances
+     */
+    class CacheFactory {
+        static create(configOrPreset) {
+            if (typeof configOrPreset === 'string') {
+                const presetConfig = this.presets[configOrPreset];
+                if (!presetConfig) {
+                    throw new Error(`Unknown cache preset: ${configOrPreset}`);
+                }
+                return new exports.AdvancedCache(presetConfig);
+            }
+            else {
+                return new exports.AdvancedCache(configOrPreset);
+            }
+        }
+        /**
+         * Register custom preset
+         */
+        static registerPreset(name, config) {
+            this.presets[name] = config;
+        }
+        /**
+         * Get available presets
+         */
+        static getPresets() {
+            return Object.keys(this.presets);
+        }
+    }
+    CacheFactory.presets = {
+        'small': {
+            maxSize: 100,
+            maxMemoryBytes: 10 * 1024 * 1024, // 10MB
+            defaultTtl: 1800000, // 30 minutes
+            evictionStrategy: 'lru'
+        },
+        'medium': {
+            maxSize: 1000,
+            maxMemoryBytes: 50 * 1024 * 1024, // 50MB
+            defaultTtl: 3600000, // 1 hour
+            evictionStrategy: 'lru'
+        },
+        'large': {
+            maxSize: 10000,
+            maxMemoryBytes: 200 * 1024 * 1024, // 200MB
+            defaultTtl: 7200000, // 2 hours
+            evictionStrategy: 'lfu'
+        },
+        'memory-optimized': {
+            maxSize: 500,
+            maxMemoryBytes: 25 * 1024 * 1024, // 25MB
+            defaultTtl: 1800000, // 30 minutes
+            evictionStrategy: 'lfu',
+            autoCleanup: true,
+            cleanupInterval: 60000 // 1 minute
+        },
+        'performance-optimized': {
+            maxSize: 5000,
+            maxMemoryBytes: 100 * 1024 * 1024, // 100MB
+            defaultTtl: 3600000, // 1 hour
+            evictionStrategy: 'lru',
+            threadSafe: false, // Better performance but not thread-safe
+            enableMetrics: false // Better performance
+        }
+    };
+
+    /**
      * Enhanced Chemical Equation Balancer with PubChem integration
      * Provides compound validation, molecular weight verification, and enriched data
      */
-    class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
+    exports.EnhancedChemicalEquationBalancer = class EnhancedChemicalEquationBalancer extends exports.ChemicalEquationBalancer {
         constructor() {
             super(...arguments);
-            this.compoundCache = new Map();
+            this.compoundCache = new exports.AdvancedCache({
+                maxSize: 1000,
+                defaultTtl: 7200000, // 2 hours
+                evictionStrategy: 'lru'
+            });
         }
         /**
          * Balance equation with safety and hazard information
@@ -1125,7 +2720,7 @@
                             }
                         }
                         if (!found) {
-                            throw new Error(`Could not resolve compound name: "${name}". Try using the chemical formula instead.`);
+                            throw new ComputationError(`Could not resolve compound name: "${name}". Try using the chemical formula instead.`, { compoundName: name, operation: 'compound_resolution' });
                         }
                     }
                 }
@@ -1174,7 +2769,7 @@
                 return enhanced;
             }
             catch (error) {
-                throw new Error(`Failed to balance equation by name: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                throw new ComputationError(`Failed to balance equation by name: ${error instanceof Error ? error.message : 'Unknown error'}`, { equation: commonNameEquation, operation: 'balance_by_name' });
             }
         }
         /**
@@ -1226,8 +2821,9 @@
          */
         async getCompoundInfo(compoundName) {
             // Check cache first
-            if (this.compoundCache.has(compoundName)) {
-                return this.compoundCache.get(compoundName);
+            const cached = await this.compoundCache.get(compoundName);
+            if (cached.hit && cached.value) {
+                return cached.value;
             }
             const result = {
                 name: compoundName,
@@ -1238,7 +2834,7 @@
                 const pubchemModule = await this.loadPubChemModule();
                 if (!pubchemModule) {
                     result.error = 'PubChem module not available. Install creb-pubchem-js for enhanced functionality.';
-                    this.compoundCache.set(compoundName, result);
+                    await this.compoundCache.set(compoundName, result);
                     return result;
                 }
                 // Try to find compound by name
@@ -1290,7 +2886,7 @@
                 result.error = `Search failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
             }
             // Cache the result
-            this.compoundCache.set(compoundName, result);
+            await this.compoundCache.set(compoundName, result);
             return result;
         }
         /**
@@ -1337,7 +2933,7 @@
             // Split by = or -> or →
             const parts = cleanEquation.split(/\s*(?:=|->|→)\s*/);
             if (parts.length !== 2) {
-                throw new Error('Invalid equation format. Expected format: "reactants = products"');
+                throw new ValidationError('Invalid equation format. Expected format: "reactants = products"', { equation: cleanEquation, operation: 'parse_equation' });
             }
             const [reactantsPart, productsPart] = parts;
             // Parse reactants and products (split by + and clean up)
@@ -1350,7 +2946,7 @@
                 .filter(name => name.length > 0)
                 .map(name => this.cleanCompoundName(name));
             if (reactantNames.length === 0 || productNames.length === 0) {
-                throw new Error('Invalid equation: must have at least one reactant and one product');
+                throw new ValidationError('Invalid equation: must have at least one reactant and one product', { reactantCount: reactantNames.length, productCount: productNames.length, operation: 'parse_equation' });
             }
             return { reactantNames, productNames };
         }
@@ -1479,7 +3075,7 @@
                     reactantMass += coefficient * compound.molecularWeight;
                 }
                 else {
-                    throw new Error(`Missing molecular weight for reactant: ${species}`);
+                    throw new ComputationError(`Missing molecular weight for reactant: ${species}`, { species, coefficient, operation: 'mass_balance_validation' });
                 }
             }
             // Calculate product mass
@@ -1491,7 +3087,7 @@
                     productMass += coefficient * compound.molecularWeight;
                 }
                 else {
-                    throw new Error(`Missing molecular weight for product: ${species}`);
+                    throw new ComputationError(`Missing molecular weight for product: ${species}`, { species, coefficient, operation: 'mass_balance_validation' });
                 }
             }
             const discrepancy = Math.abs(reactantMass - productMass);
@@ -1541,33 +3137,37 @@
         /**
          * Clear the compound cache
          */
-        clearCache() {
-            this.compoundCache.clear();
+        async clearCache() {
+            await this.compoundCache.clear();
         }
         /**
          * Get cached compound info without making new requests
          */
-        getCachedCompoundInfo(compoundName) {
-            return this.compoundCache.get(compoundName);
+        async getCachedCompoundInfo(compoundName) {
+            const result = await this.compoundCache.get(compoundName);
+            return result.hit ? result.value : undefined;
         }
-    }
+    };
+    exports.EnhancedChemicalEquationBalancer = __decorate([
+        Injectable()
+    ], exports.EnhancedChemicalEquationBalancer);
 
     /**
      * Enhanced Stoichiometry calculator with PubChem integration
      * Provides accurate molecular weights, compound validation, and enriched calculations
      */
-    class EnhancedStoichiometry extends Stoichiometry {
+    class EnhancedStoichiometry extends exports.Stoichiometry {
         constructor(equation) {
             super(equation);
             this.compoundDataCache = {};
-            this.enhancedBalancer = new EnhancedChemicalEquationBalancer();
+            this.enhancedBalancer = new exports.EnhancedChemicalEquationBalancer();
         }
         /**
          * Initialize with compound validation and enrichment
          */
         async initializeWithValidation(equation) {
             // Initialize the stoichiometry with the equation
-            this.initializedStoich = new Stoichiometry(equation);
+            this.initializedStoich = new exports.Stoichiometry(equation);
             // Balance the equation with PubChem data
             const enhancedBalance = await this.enhancedBalancer.balanceWithPubChemData(equation);
             // Store compound data for later use
@@ -1801,7 +3401,7 @@
      * Core thermodynamics calculator for CREB-JS
      * Implements standard thermodynamic calculations for chemical reactions
      */
-    class ThermodynamicsCalculator {
+    exports.ThermodynamicsCalculator = class ThermodynamicsCalculator {
         constructor() {
             this.R = 8.314; // Gas constant J/(mol·K)
             this.standardTemperature = 298.15; // K
@@ -2066,7 +3666,10 @@
             };
             return this.calculateThermodynamics(equation, conditions);
         }
-    }
+    };
+    exports.ThermodynamicsCalculator = __decorate([
+        Injectable()
+    ], exports.ThermodynamicsCalculator);
 
     /**
      * Thermodynamics-Integrated Chemical Equation Balancer
@@ -2119,8 +3722,8 @@
      */
     class ThermodynamicsEquationBalancer {
         constructor() {
-            this.balancer = new ChemicalEquationBalancer();
-            this.thermoCalculator = new ThermodynamicsCalculator();
+            this.balancer = new exports.ChemicalEquationBalancer();
+            this.thermoCalculator = new exports.ThermodynamicsCalculator();
         }
         /**
          * Balance equation with comprehensive thermodynamic analysis
@@ -4056,12 +5659,16 @@
      * Enhanced Chemical Database Manager
      * Provides comprehensive data integration and management capabilities
      */
-    class ChemicalDatabaseManager {
+    exports.ChemicalDatabaseManager = class ChemicalDatabaseManager {
         constructor() {
             this.compounds = new Map();
             this.sources = new Map();
             this.validationRules = [];
-            this.cache = new Map();
+            this.cache = new exports.AdvancedCache({
+                maxSize: 1000,
+                defaultTtl: 1800000, // 30 minutes
+                enableMetrics: true
+            });
             this.initializeDefaultSources();
             this.initializeValidationRules();
             this.loadDefaultCompounds();
@@ -4673,16 +6280,24 @@
                 lastUpdate
             };
         }
-    }
+    };
+    exports.ChemicalDatabaseManager = __decorate([
+        Injectable(),
+        __metadata("design:paramtypes", [])
+    ], exports.ChemicalDatabaseManager);
 
     /**
      * NIST WebBook Integration for Enhanced Data
      * Provides real-time access to NIST thermodynamic database
      */
-    class NISTWebBookIntegration {
+    exports.NISTWebBookIntegration = class NISTWebBookIntegration {
         constructor(apiKey) {
             this.baseURL = 'https://webbook.nist.gov/cgi/cbook.cgi';
-            this.cache = new Map();
+            this.cache = new exports.AdvancedCache({
+                maxSize: 1000,
+                defaultTtl: 86400000, // 24 hours
+                enableMetrics: true
+            });
             this.cacheTimeout = 86400000; // 24 hours in ms
             this.apiKey = apiKey;
         }
@@ -4693,15 +6308,15 @@
             try {
                 // Check cache first
                 const cacheKey = `${type}:${identifier}`;
-                const cached = this.cache.get(cacheKey);
-                if (cached && (Date.now() - cached.timestamp) < this.cacheTimeout) {
-                    return this.convertNISTToCompound(cached.data);
+                const cached = await this.cache.get(cacheKey);
+                if (cached.hit && cached.value && (Date.now() - cached.value.timestamp) < this.cacheTimeout) {
+                    return this.convertNISTToCompound(cached.value.data);
                 }
                 // Make API request
                 const response = await this.makeNISTRequest(identifier, type);
                 if (response) {
                     // Cache the response
-                    this.cache.set(cacheKey, {
+                    await this.cache.set(cacheKey, {
                         data: response,
                         timestamp: Date.now()
                     });
@@ -4961,23 +6576,18 @@
          * Get cache statistics
          */
         getCacheStats() {
-            let oldestTimestamp = Infinity;
-            let newestTimestamp = 0;
-            for (const entry of this.cache.values()) {
-                if (entry.timestamp < oldestTimestamp) {
-                    oldestTimestamp = entry.timestamp;
-                }
-                if (entry.timestamp > newestTimestamp) {
-                    newestTimestamp = entry.timestamp;
-                }
-            }
+            this.cache.getMetrics();
             return {
-                size: this.cache.size,
-                oldestEntry: oldestTimestamp === Infinity ? null : new Date(oldestTimestamp),
-                newestEntry: newestTimestamp === 0 ? null : new Date(newestTimestamp)
+                size: this.cache.size(),
+                oldestEntry: null, // AdvancedCache doesn't expose entry timestamps directly
+                newestEntry: null // Would need to track separately if needed
             };
         }
-    }
+    };
+    exports.NISTWebBookIntegration = __decorate([
+        Injectable(),
+        __metadata("design:paramtypes", [String])
+    ], exports.NISTWebBookIntegration);
 
     /**
      * Advanced Data Validation Service
@@ -5513,6 +7123,720 @@
     }
 
     /**
+     * SQLite Storage Provider for CREB-JS
+     * Provides persistent local database management with SQLite
+     */
+    /**
+     * SQLite-backed storage provider for chemical compounds
+     */
+    let SQLiteStorageProvider = class SQLiteStorageProvider {
+        constructor(config = {}) {
+            this.db = null;
+            this.statements = new Map();
+            this.config = {
+                databasePath: config.databasePath || './creb-compounds.db',
+                inMemory: config.inMemory || false,
+                enableWAL: config.enableWAL || true,
+                cacheSize: config.cacheSize || 10000,
+                timeout: config.timeout || 5000
+            };
+        }
+        /**
+         * Initialize SQLite database and create tables
+         */
+        async initialize() {
+            try {
+                // Try to import and use better-sqlite3 for Node.js
+                try {
+                    const Database = (await import('better-sqlite3')).default;
+                    const dbPath = this.config.databasePath || ':memory:';
+                    this.db = new Database(dbPath);
+                }
+                catch (nodeError) {
+                    // If we're in a browser environment or better-sqlite3 isn't available,
+                    // gracefully fall back or provide a warning
+                    console.warn('SQLite storage not available in this environment. Better-sqlite3 not found.');
+                    throw new SystemError('SQLite storage requires better-sqlite3 package. Install with: npm install better-sqlite3', { databasePath: this.config.databasePath, error: nodeError }, { subsystem: 'data', resource: 'sqlite-database' });
+                }
+                if (this.db) {
+                    // Configure database
+                    this.db.exec(`PRAGMA journal_mode = ${this.config.enableWAL ? 'WAL' : 'DELETE'}`);
+                    this.db.exec(`PRAGMA cache_size = ${this.config.cacheSize}`);
+                    this.db.exec(`PRAGMA temp_store = memory`);
+                    this.db.exec(`PRAGMA mmap_size = 268435456`); // 256MB
+                    // Create tables
+                    await this.createTables();
+                    // Prepare statements
+                    await this.prepareStatements();
+                }
+            }
+            catch (error) {
+                console.error('Failed to initialize SQLite database:', error);
+                throw error;
+            }
+        }
+        /**
+         * Create database tables
+         */
+        async createTables() {
+            if (!this.db) {
+                throw new SystemError('Database not initialized', { operation: 'createTables' }, { subsystem: 'data', resource: 'sqlite-database' });
+            }
+            const schema = `
+      -- Main compounds table
+      CREATE TABLE IF NOT EXISTS compounds (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        formula TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        common_name TEXT,
+        cas_number TEXT,
+        smiles TEXT,
+        inchi TEXT,
+        molecular_weight REAL,
+        confidence REAL DEFAULT 1.0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Thermodynamic properties
+      CREATE TABLE IF NOT EXISTS thermodynamic_properties (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        compound_id INTEGER REFERENCES compounds(id) ON DELETE CASCADE,
+        delta_hf REAL,
+        delta_gf REAL,
+        entropy REAL,
+        heat_capacity REAL,
+        temp_range_min REAL,
+        temp_range_max REAL,
+        melting_point REAL,
+        boiling_point REAL,
+        critical_temp REAL,
+        critical_pressure REAL,
+        properties_json TEXT -- JSON blob for additional properties
+      );
+
+      -- Physical properties
+      CREATE TABLE IF NOT EXISTS physical_properties (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        compound_id INTEGER REFERENCES compounds(id) ON DELETE CASCADE,
+        density REAL,
+        viscosity REAL,
+        thermal_conductivity REAL,
+        refractive_index REAL,
+        dielectric_constant REAL,
+        surface_tension REAL,
+        properties_json TEXT -- JSON blob for additional properties
+      );
+
+      -- Safety properties
+      CREATE TABLE IF NOT EXISTS safety_properties (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        compound_id INTEGER REFERENCES compounds(id) ON DELETE CASCADE,
+        flash_point REAL,
+        autoignition_temp REAL,
+        explosive_limits_lower REAL,
+        explosive_limits_upper REAL,
+        toxicity_oral_ld50 REAL,
+        toxicity_dermal_ld50 REAL,
+        toxicity_inhalation_lc50 REAL,
+        hazard_statements TEXT, -- JSON array
+        precautionary_statements TEXT, -- JSON array
+        properties_json TEXT -- JSON blob for additional properties
+      );
+
+      -- Data sources tracking
+      CREATE TABLE IF NOT EXISTS compound_sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        compound_id INTEGER REFERENCES compounds(id) ON DELETE CASCADE,
+        source_name TEXT NOT NULL,
+        source_url TEXT,
+        reliability REAL DEFAULT 1.0,
+        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Vapor pressure data points
+      CREATE TABLE IF NOT EXISTS vapor_pressure_data (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        compound_id INTEGER REFERENCES compounds(id) ON DELETE CASCADE,
+        temperature REAL NOT NULL,
+        pressure REAL NOT NULL
+      );
+
+      -- Search and caching
+      CREATE TABLE IF NOT EXISTS search_cache (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        query_hash TEXT UNIQUE,
+        query_type TEXT,
+        results_json TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        expires_at DATETIME
+      );
+
+      -- Database metadata
+      CREATE TABLE IF NOT EXISTS database_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+            this.db.exec(schema);
+        }
+        /**
+         * Create indexes for performance
+         */
+        async createIndexes() {
+            if (!this.db)
+                throw new Error('Database not initialized');
+            const indexes = `
+      CREATE INDEX IF NOT EXISTS idx_compounds_formula ON compounds(formula);
+      CREATE INDEX IF NOT EXISTS idx_compounds_name ON compounds(name);
+      CREATE INDEX IF NOT EXISTS idx_compounds_cas ON compounds(cas_number);
+      CREATE INDEX IF NOT EXISTS idx_compounds_molecular_weight ON compounds(molecular_weight);
+      CREATE INDEX IF NOT EXISTS idx_compounds_confidence ON compounds(confidence);
+      CREATE INDEX IF NOT EXISTS idx_compounds_updated ON compounds(updated_at);
+      
+      CREATE INDEX IF NOT EXISTS idx_thermo_compound ON thermodynamic_properties(compound_id);
+      CREATE INDEX IF NOT EXISTS idx_physical_compound ON physical_properties(compound_id);
+      CREATE INDEX IF NOT EXISTS idx_safety_compound ON safety_properties(compound_id);
+      CREATE INDEX IF NOT EXISTS idx_sources_compound ON compound_sources(compound_id);
+      CREATE INDEX IF NOT EXISTS idx_vapor_compound ON vapor_pressure_data(compound_id);
+      
+      CREATE INDEX IF NOT EXISTS idx_search_cache_hash ON search_cache(query_hash);
+      CREATE INDEX IF NOT EXISTS idx_search_cache_expires ON search_cache(expires_at);
+      
+      -- Full-text search indexes
+      CREATE VIRTUAL TABLE IF NOT EXISTS compounds_fts USING fts5(
+        formula, name, common_name, cas_number,
+        content='compounds',
+        content_rowid='id'
+      );
+      
+      -- Triggers to maintain FTS index
+      CREATE TRIGGER IF NOT EXISTS compounds_fts_insert AFTER INSERT ON compounds
+      BEGIN
+        INSERT INTO compounds_fts(rowid, formula, name, common_name, cas_number) 
+        VALUES (new.id, new.formula, new.name, new.common_name, new.cas_number);
+      END;
+      
+      CREATE TRIGGER IF NOT EXISTS compounds_fts_delete AFTER DELETE ON compounds
+      BEGIN
+        DELETE FROM compounds_fts WHERE rowid = old.id;
+      END;
+      
+      CREATE TRIGGER IF NOT EXISTS compounds_fts_update AFTER UPDATE ON compounds
+      BEGIN
+        DELETE FROM compounds_fts WHERE rowid = old.id;
+        INSERT INTO compounds_fts(rowid, formula, name, common_name, cas_number) 
+        VALUES (new.id, new.formula, new.name, new.common_name, new.cas_number);
+      END;
+    `;
+            this.db.exec(indexes);
+        }
+        /**
+         * Prepare commonly used SQL statements
+         */
+        async prepareStatements() {
+            if (!this.db)
+                throw new Error('Database not initialized');
+            const statements = {
+                insertCompound: `
+        INSERT INTO compounds (
+          formula, name, common_name, cas_number, smiles, inchi, 
+          molecular_weight, confidence, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `,
+                updateCompound: `
+        UPDATE compounds SET 
+          name = ?, common_name = ?, cas_number = ?, smiles = ?, inchi = ?,
+          molecular_weight = ?, confidence = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE formula = ?
+      `,
+                selectCompound: `
+        SELECT * FROM compounds WHERE formula = ?
+      `,
+                selectCompoundWithProperties: `
+        SELECT 
+          c.*,
+          tp.delta_hf, tp.delta_gf, tp.entropy, tp.heat_capacity,
+          tp.temp_range_min, tp.temp_range_max, tp.melting_point, tp.boiling_point,
+          tp.critical_temp, tp.critical_pressure, tp.properties_json as thermo_json,
+          pp.density, pp.viscosity, pp.thermal_conductivity, pp.refractive_index,
+          pp.dielectric_constant, pp.surface_tension, pp.properties_json as physical_json,
+          sp.flash_point, sp.autoignition_temp, sp.explosive_limits_lower, sp.explosive_limits_upper,
+          sp.toxicity_oral_ld50, sp.toxicity_dermal_ld50, sp.toxicity_inhalation_lc50,
+          sp.hazard_statements, sp.precautionary_statements, sp.properties_json as safety_json
+        FROM compounds c
+        LEFT JOIN thermodynamic_properties tp ON c.id = tp.compound_id
+        LEFT JOIN physical_properties pp ON c.id = pp.compound_id
+        LEFT JOIN safety_properties sp ON c.id = sp.compound_id
+        WHERE c.formula = ?
+      `,
+                insertThermodynamicProperties: `
+        INSERT OR REPLACE INTO thermodynamic_properties (
+          compound_id, delta_hf, delta_gf, entropy, heat_capacity,
+          temp_range_min, temp_range_max, melting_point, boiling_point,
+          critical_temp, critical_pressure, properties_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+                insertPhysicalProperties: `
+        INSERT OR REPLACE INTO physical_properties (
+          compound_id, density, viscosity, thermal_conductivity, refractive_index,
+          dielectric_constant, surface_tension, properties_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+                insertSafetyProperties: `
+        INSERT OR REPLACE INTO safety_properties (
+          compound_id, flash_point, autoignition_temp, explosive_limits_lower, explosive_limits_upper,
+          toxicity_oral_ld50, toxicity_dermal_ld50, toxicity_inhalation_lc50,
+          hazard_statements, precautionary_statements, properties_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+                insertSource: `
+        INSERT OR REPLACE INTO compound_sources (
+          compound_id, source_name, source_url, reliability, last_updated
+        ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `,
+                searchCompounds: `
+        SELECT c.* FROM compounds c
+        WHERE c.formula LIKE ? OR c.name LIKE ? OR c.common_name LIKE ?
+        ORDER BY c.confidence DESC, c.updated_at DESC
+        LIMIT ?
+      `,
+                fullTextSearch: `
+        SELECT c.* FROM compounds c
+        JOIN compounds_fts fts ON c.id = fts.rowid
+        WHERE compounds_fts MATCH ?
+        ORDER BY rank, c.confidence DESC
+        LIMIT ?
+      `,
+                deleteCompound: `
+        DELETE FROM compounds WHERE formula = ?
+      `,
+                getStatistics: `
+        SELECT 
+          COUNT(*) as total_compounds,
+          AVG(confidence) as avg_confidence,
+          MIN(updated_at) as oldest_update,
+          MAX(updated_at) as newest_update
+        FROM compounds
+      `
+            };
+            for (const [name, sql] of Object.entries(statements)) {
+                this.statements.set(name, this.db.prepare(sql));
+            }
+        }
+        /**
+         * Add or update a compound in the database
+         */
+        async addCompound(compound) {
+            if (!this.db)
+                throw new Error('Database not initialized');
+            const transaction = this.db.transaction(() => {
+                try {
+                    // Insert or update main compound record
+                    const existingStmt = this.statements.get('selectCompound');
+                    const existing = existingStmt.get(compound.formula);
+                    let compoundId;
+                    if (existing) {
+                        const updateStmt = this.statements.get('updateCompound');
+                        updateStmt.run(compound.name, compound.commonName || null, compound.casNumber || null, compound.smiles || null, compound.inchi || null, compound.molecularWeight, compound.confidence, compound.formula);
+                        compoundId = existing.id;
+                    }
+                    else {
+                        const insertStmt = this.statements.get('insertCompound');
+                        const result = insertStmt.run(compound.formula, compound.name, compound.commonName || null, compound.casNumber || null, compound.smiles || null, compound.inchi || null, compound.molecularWeight, compound.confidence);
+                        compoundId = result.lastInsertRowid;
+                    }
+                    // Insert thermodynamic properties
+                    if (compound.thermodynamicProperties) {
+                        const props = compound.thermodynamicProperties;
+                        const thermoStmt = this.statements.get('insertThermodynamicProperties');
+                        thermoStmt.run(compoundId, props.deltaHf || null, props.deltaGf || null, props.entropy || null, props.heatCapacity || null, props.temperatureRange?.[0] || null, props.temperatureRange?.[1] || null, props.meltingPoint || null, props.boilingPoint || null, props.criticalTemperature || null, props.criticalPressure || null, JSON.stringify(props));
+                    }
+                    // Insert physical properties
+                    if (compound.physicalProperties) {
+                        const props = compound.physicalProperties;
+                        const physicalStmt = this.statements.get('insertPhysicalProperties');
+                        physicalStmt.run(compoundId, props.density || null, props.viscosity || null, props.thermalConductivity || null, props.refractiveIndex || null, props.dielectricConstant || null, props.surfaceTension || null, JSON.stringify(props));
+                    }
+                    // Insert safety properties
+                    if (compound.safetyData) {
+                        const props = compound.safetyData;
+                        const safetyStmt = this.statements.get('insertSafetyProperties');
+                        safetyStmt.run(compoundId, props.flashPoint || null, props.autoignitionTemperature || null, props.explosiveLimits?.lower || null, props.explosiveLimits?.upper || null, props.toxicity?.ld50 || null, null, // dermal LD50 not in current interface
+                        props.toxicity?.lc50 || null, JSON.stringify(props.hazardStatements || []), JSON.stringify(props.precautionaryStatements || []), JSON.stringify(props));
+                    }
+                    // Insert sources
+                    if (compound.sources?.length) {
+                        const sourceStmt = this.statements.get('insertSource');
+                        compound.sources.forEach(source => {
+                            sourceStmt.run(compoundId, source, null, 1.0);
+                        });
+                    }
+                    return true;
+                }
+                catch (error) {
+                    console.error('Error adding compound to SQLite:', error);
+                    throw error;
+                }
+            });
+            transaction();
+            return true;
+        }
+        /**
+         * Get a compound by formula
+         */
+        async getCompound(formula) {
+            if (!this.db)
+                throw new Error('Database not initialized');
+            try {
+                const stmt = this.statements.get('selectCompoundWithProperties');
+                if (!stmt) {
+                    console.error('Database statement not prepared');
+                    return null;
+                }
+                const row = stmt.get(formula);
+                if (!row)
+                    return null;
+                return this.rowToCompound(row);
+            }
+            catch (error) {
+                console.error('Error getting compound from SQLite:', error);
+                return null;
+            }
+        }
+        /**
+         * Search compounds with query
+         */
+        async searchCompounds(query) {
+            if (!this.db)
+                throw new Error('Database not initialized');
+            try {
+                let stmt;
+                let params;
+                if (query.searchTerm) {
+                    // Use full-text search if available, otherwise fall back to LIKE
+                    if (query.searchTerm.includes(' ') || query.useFullTextSearch) {
+                        stmt = this.statements.get('fullTextSearch');
+                        params = [query.searchTerm, query.limit || 50];
+                    }
+                    else {
+                        stmt = this.statements.get('searchCompounds');
+                        const term = `%${query.searchTerm}%`;
+                        params = [term, term, term, query.limit || 50];
+                    }
+                }
+                else {
+                    // Get all compounds with optional filters
+                    const sql = this.buildFilteredQuery(query);
+                    stmt = this.db.prepare(sql);
+                    params = this.buildQueryParams(query);
+                }
+                const rows = stmt.all(...params);
+                return rows.map(row => this.rowToCompound(row));
+            }
+            catch (error) {
+                console.error('Error searching compounds in SQLite:', error);
+                return [];
+            }
+        }
+        /**
+         * Remove a compound
+         */
+        async removeCompound(formula) {
+            if (!this.db)
+                throw new Error('Database not initialized');
+            try {
+                const stmt = this.statements.get('deleteCompound');
+                if (!stmt) {
+                    console.error('Database statement not prepared');
+                    return false;
+                }
+                const result = stmt.run(formula);
+                return result.changes > 0;
+            }
+            catch (error) {
+                console.error('Error removing compound from SQLite:', error);
+                return false;
+            }
+        }
+        /**
+         * Get all compounds
+         */
+        async getAllCompounds() {
+            return this.searchCompounds({ limit: 10000 });
+        }
+        /**
+         * Import data from various sources
+         */
+        async importData(data, format) {
+            if (!this.db)
+                throw new Error('Database not initialized');
+            const result = {
+                success: true,
+                imported: 0,
+                failed: 0,
+                errors: [],
+                warnings: []
+            };
+            const transaction = this.db.transaction(() => {
+                for (const item of data) {
+                    try {
+                        // Convert data to CompoundDatabase format
+                        const compound = this.normalizeImportData(item, format);
+                        this.addCompound(compound);
+                        result.imported++;
+                    }
+                    catch (error) {
+                        result.errors.push({
+                            compound: item.formula || 'unknown',
+                            error: String(error)
+                        });
+                        result.failed++;
+                    }
+                }
+            });
+            try {
+                transaction();
+                console.log(`SQLite import completed: ${result.imported} imported, ${result.failed} failed`);
+            }
+            catch (error) {
+                result.success = false;
+                result.errors.push({
+                    compound: 'transaction',
+                    error: `Transaction failed: ${error}`
+                });
+            }
+            return result;
+        }
+        /**
+         * Get database statistics
+         */
+        async getStatistics() {
+            if (!this.db)
+                throw new Error('Database not initialized');
+            try {
+                const stmt = this.statements.get('getStatistics');
+                if (!stmt) {
+                    console.error('Database statement not prepared');
+                    return {};
+                }
+                const stats = stmt.get();
+                if (!stats) {
+                    return {
+                        totalCompounds: 0,
+                        averageConfidence: 0,
+                        oldestUpdate: new Date(),
+                        newestUpdate: new Date(),
+                        sourceCounts: {}
+                    };
+                }
+                // Get source distribution
+                const sourcesStmt = this.db.prepare(`
+        SELECT source_name, COUNT(*) as count
+        FROM compound_sources cs
+        JOIN compounds c ON cs.compound_id = c.id
+        GROUP BY source_name
+      `);
+                const sources = sourcesStmt.all();
+                return {
+                    totalCompounds: stats.total_compounds,
+                    averageConfidence: stats.avg_confidence,
+                    oldestUpdate: new Date(stats.oldest_update),
+                    newestUpdate: new Date(stats.newest_update),
+                    sourceCounts: Object.fromEntries(sources.map(s => [s.source_name, s.count]))
+                };
+            }
+            catch (error) {
+                console.error('Error getting SQLite statistics:', error);
+                return {};
+            }
+        }
+        /**
+         * Close the database connection
+         */
+        async close() {
+            if (this.db) {
+                // Clean up prepared statements
+                this.statements.forEach(stmt => stmt.finalize());
+                this.statements.clear();
+                // Close database
+                this.db.close();
+                this.db = null;
+                console.log('SQLite database connection closed');
+            }
+        }
+        /**
+         * Vacuum and optimize database
+         */
+        async optimize() {
+            if (!this.db)
+                throw new Error('Database not initialized');
+            try {
+                this.db.exec('VACUUM');
+                this.db.exec('ANALYZE');
+                console.log('SQLite database optimized');
+            }
+            catch (error) {
+                console.error('Error optimizing SQLite database:', error);
+            }
+        }
+        // Helper methods
+        rowToCompound(row) {
+            const compound = {
+                formula: row.formula,
+                name: row.name,
+                iupacName: row.iupac_name,
+                commonName: row.common_name,
+                casNumber: row.cas_number,
+                smiles: row.smiles,
+                inchi: row.inchi,
+                molecularWeight: row.molecular_weight,
+                confidence: row.confidence,
+                sources: [], // Will be populated separately if needed
+                lastUpdated: new Date(row.updated_at),
+                thermodynamicProperties: {
+                    deltaHf: 0,
+                    entropy: 0,
+                    heatCapacity: 0,
+                    temperatureRange: [298, 373]
+                },
+                physicalProperties: {}
+            };
+            // Add thermodynamic properties if present
+            if (row.delta_hf !== null) {
+                compound.thermodynamicProperties = {
+                    deltaHf: row.delta_hf,
+                    deltaGf: row.delta_gf,
+                    entropy: row.entropy,
+                    heatCapacity: row.heat_capacity,
+                    temperatureRange: row.temp_range_min !== null ?
+                        [row.temp_range_min, row.temp_range_max] :
+                        [298, 373],
+                    meltingPoint: row.melting_point,
+                    boilingPoint: row.boiling_point,
+                    criticalTemperature: row.critical_temp,
+                    criticalPressure: row.critical_pressure
+                };
+                // Parse additional properties from JSON
+                if (row.thermo_json) {
+                    try {
+                        const additional = JSON.parse(row.thermo_json);
+                        Object.assign(compound.thermodynamicProperties, additional);
+                    }
+                    catch (e) {
+                        console.warn('Failed to parse thermodynamic JSON:', e);
+                    }
+                }
+            }
+            // Add physical properties if present
+            if (row.density !== null) {
+                compound.physicalProperties = {
+                    density: row.density,
+                    viscosity: row.viscosity,
+                    thermalConductivity: row.thermal_conductivity,
+                    refractiveIndex: row.refractive_index,
+                    dielectricConstant: row.dielectric_constant,
+                    surfaceTension: row.surface_tension
+                };
+                // Parse additional properties from JSON
+                if (row.physical_json) {
+                    try {
+                        const additional = JSON.parse(row.physical_json);
+                        Object.assign(compound.physicalProperties, additional);
+                    }
+                    catch (e) {
+                        console.warn('Failed to parse physical JSON:', e);
+                    }
+                }
+            }
+            // Add safety properties if present
+            if (row.flash_point !== null) {
+                compound.safetyData = {
+                    flashPoint: row.flash_point,
+                    autoignitionTemperature: row.autoignition_temp,
+                    explosiveLimits: {
+                        lower: row.explosive_limits_lower,
+                        upper: row.explosive_limits_upper
+                    },
+                    toxicity: {
+                        ld50: row.toxicity_oral_ld50,
+                        lc50: row.toxicity_inhalation_lc50
+                    },
+                    hazardSymbols: [],
+                    hazardStatements: row.hazard_statements ? JSON.parse(row.hazard_statements) : [],
+                    precautionaryStatements: row.precautionary_statements ? JSON.parse(row.precautionary_statements) : []
+                };
+                // Parse additional properties from JSON
+                if (row.safety_json) {
+                    try {
+                        const additional = JSON.parse(row.safety_json);
+                        Object.assign(compound.safetyData, additional);
+                    }
+                    catch (e) {
+                        console.warn('Failed to parse safety JSON:', e);
+                    }
+                }
+            }
+            return compound;
+        }
+        buildFilteredQuery(query) {
+            let sql = 'SELECT * FROM compounds WHERE 1=1';
+            if (query.minConfidence !== undefined) {
+                sql += ' AND confidence >= ?';
+            }
+            if (query.sources?.length) {
+                sql += ` AND id IN (
+        SELECT compound_id FROM compound_sources 
+        WHERE source_name IN (${query.sources.map(() => '?').join(',')})
+      )`;
+            }
+            sql += ' ORDER BY confidence DESC, updated_at DESC';
+            if (query.limit) {
+                sql += ' LIMIT ?';
+            }
+            return sql;
+        }
+        buildQueryParams(query) {
+            const params = [];
+            if (query.minConfidence !== undefined) {
+                params.push(query.minConfidence);
+            }
+            if (query.sources?.length) {
+                params.push(...query.sources);
+            }
+            if (query.limit) {
+                params.push(query.limit);
+            }
+            return params;
+        }
+        normalizeImportData(item, format) {
+            // Convert imported data to standard CompoundDatabase format
+            // This would need to be customized based on your data sources
+            return {
+                formula: item.formula || item.Formula,
+                name: item.name || item.Name,
+                molecularWeight: parseFloat(item.molecularWeight || item.MW || '0'),
+                confidence: parseFloat(item.confidence || '0.8'),
+                sources: ['import'],
+                lastUpdated: new Date(),
+                thermodynamicProperties: {
+                    deltaHf: parseFloat(item.deltaHf || '0'),
+                    entropy: parseFloat(item.entropy || '0'),
+                    heatCapacity: parseFloat(item.heatCapacity || '0'),
+                    temperatureRange: [298, 373]
+                },
+                physicalProperties: {}
+                // Add other properties as needed
+            };
+        }
+    };
+    SQLiteStorageProvider = __decorate([
+        Injectable(),
+        __metadata("design:paramtypes", [Object])
+    ], SQLiteStorageProvider);
+
+    /**
      * CREB-JS Dependency Injection Container
      *
      * A lightweight, type-safe IoC container for managing dependencies
@@ -5794,469 +8118,847 @@
     }
 
     /**
-     * Injectable decorator and related types for dependency injection
+     * Configuration Schema Definitions
      *
-     * Provides decorators and metadata for automatic dependency injection
-     * in the CREB-JS container system.
+     * This file contains validation schemas for all configuration types.
+     * Schemas are used for runtime validation and documentation generation.
+     */
+    /**
+     * Cache configuration schema
+     */
+    const cacheConfigSchema = {
+        maxSize: {
+            type: 'number',
+            required: true,
+            min: 1,
+            max: 100000,
+            default: 1000,
+            description: 'Maximum number of items to store in cache'
+        },
+        ttl: {
+            type: 'number',
+            required: true,
+            min: 1000,
+            max: 86400000, // 24 hours
+            default: 300000, // 5 minutes
+            description: 'Time to live for cache entries in milliseconds'
+        },
+        strategy: {
+            type: 'string',
+            required: true,
+            enum: ['lru', 'lfu', 'fifo'],
+            default: 'lru',
+            description: 'Cache eviction strategy'
+        }
+    };
+    /**
+     * Performance configuration schema
+     */
+    const performanceConfigSchema = {
+        enableWasm: {
+            type: 'boolean',
+            required: true,
+            default: false,
+            description: 'Enable WebAssembly acceleration for calculations'
+        },
+        workerThreads: {
+            type: 'number',
+            required: true,
+            min: 1,
+            max: 16,
+            default: 4,
+            description: 'Number of worker threads for parallel processing'
+        },
+        batchSize: {
+            type: 'number',
+            required: true,
+            min: 1,
+            max: 10000,
+            default: 100,
+            description: 'Batch size for bulk operations'
+        }
+    };
+    /**
+     * Data configuration schema
+     */
+    const dataConfigSchema = {
+        providers: {
+            type: 'array',
+            required: true,
+            items: {
+                type: 'string',
+                enum: ['sqlite', 'nist', 'pubchem', 'local']
+            },
+            default: ['sqlite', 'local'],
+            description: 'List of data providers to use'
+        },
+        syncInterval: {
+            type: 'number',
+            required: true,
+            min: 60000, // 1 minute
+            max: 86400000, // 24 hours
+            default: 3600000, // 1 hour
+            description: 'Data synchronization interval in milliseconds'
+        },
+        offlineMode: {
+            type: 'boolean',
+            required: true,
+            default: false,
+            description: 'Enable offline mode (no network requests)'
+        }
+    };
+    /**
+     * Logging configuration schema
+     */
+    const loggingConfigSchema = {
+        level: {
+            type: 'string',
+            required: true,
+            enum: ['debug', 'info', 'warn', 'error'],
+            default: 'info',
+            description: 'Minimum log level to output'
+        },
+        format: {
+            type: 'string',
+            required: true,
+            enum: ['json', 'text'],
+            default: 'text',
+            description: 'Log output format'
+        },
+        destinations: {
+            type: 'array',
+            required: true,
+            items: {
+                type: 'string',
+                enum: ['console', 'file', 'remote']
+            },
+            default: ['console'],
+            description: 'Log output destinations'
+        }
+    };
+    /**
+     * Main CREB configuration schema
+     */
+    const crebConfigSchema = {
+        cache: {
+            type: 'object',
+            required: true,
+            properties: cacheConfigSchema,
+            description: 'Cache configuration settings'
+        },
+        performance: {
+            type: 'object',
+            required: true,
+            properties: performanceConfigSchema,
+            description: 'Performance optimization settings'
+        },
+        data: {
+            type: 'object',
+            required: true,
+            properties: dataConfigSchema,
+            description: 'Data provider configuration'
+        },
+        logging: {
+            type: 'object',
+            required: true,
+            properties: loggingConfigSchema,
+            description: 'Logging configuration'
+        }
+    };
+    /**
+     * Default configuration values
+     */
+    const defaultConfig = {
+        cache: {
+            maxSize: 1000,
+            ttl: 300000, // 5 minutes
+            strategy: 'lru'
+        },
+        performance: {
+            enableWasm: false,
+            workerThreads: 4,
+            batchSize: 100
+        },
+        data: {
+            providers: ['sqlite', 'local'],
+            syncInterval: 3600000, // 1 hour
+            offlineMode: false
+        },
+        logging: {
+            level: 'info',
+            format: 'text',
+            destinations: ['console']
+        }
+    };
+    /**
+     * Validate a configuration object against schema
+     */
+    function validateConfig(config, schema, path = '') {
+        const errors = [];
+        const warnings = [];
+        if (typeof config !== 'object' || config === null) {
+            errors.push({
+                path,
+                message: 'Configuration must be an object',
+                value: config,
+                expectedType: 'object'
+            });
+            return { isValid: false, errors, warnings };
+        }
+        const configObj = config;
+        // Check required properties
+        for (const [key, property] of Object.entries(schema)) {
+            const currentPath = path ? `${path}.${key}` : key;
+            const value = configObj[key];
+            if (property.required && value === undefined) {
+                errors.push({
+                    path: currentPath,
+                    message: `Required property '${key}' is missing`,
+                    value: undefined,
+                    expectedType: property.type
+                });
+                continue;
+            }
+            if (value === undefined)
+                continue;
+            // Type validation
+            const typeValid = validateType(value, property, currentPath, errors);
+            if (!typeValid)
+                continue;
+            // Range validation for numbers
+            if (property.type === 'number' && typeof value === 'number') {
+                if (property.min !== undefined && value < property.min) {
+                    errors.push({
+                        path: currentPath,
+                        message: `Value ${value} is below minimum ${property.min}`,
+                        value
+                    });
+                }
+                if (property.max !== undefined && value > property.max) {
+                    errors.push({
+                        path: currentPath,
+                        message: `Value ${value} is above maximum ${property.max}`,
+                        value
+                    });
+                }
+            }
+            // Enum validation
+            if (property.enum && !property.enum.includes(value)) {
+                errors.push({
+                    path: currentPath,
+                    message: `Value '${value}' is not one of allowed values: ${property.enum.join(', ')}`,
+                    value,
+                    expectedType: `enum: ${property.enum.join(' | ')}`
+                });
+            }
+            // Array validation
+            if (property.type === 'array' && Array.isArray(value) && property.items) {
+                value.forEach((item, index) => {
+                    const itemPath = `${currentPath}[${index}]`;
+                    validateType(item, property.items, itemPath, errors);
+                    if (property.items.enum && !property.items.enum.includes(item)) {
+                        errors.push({
+                            path: itemPath,
+                            message: `Array item '${item}' is not one of allowed values: ${property.items.enum.join(', ')}`,
+                            value: item
+                        });
+                    }
+                });
+            }
+            // Object validation (recursive)
+            if (property.type === 'object' && property.properties) {
+                const nestedResult = validateConfig(value, property.properties, currentPath);
+                errors.push(...nestedResult.errors);
+                warnings.push(...nestedResult.warnings);
+            }
+        }
+        return {
+            isValid: errors.length === 0,
+            errors,
+            warnings
+        };
+    }
+    /**
+     * Validate value type
+     */
+    function validateType(value, property, path, errors, warnings) {
+        const actualType = Array.isArray(value) ? 'array' : typeof value;
+        if (actualType !== property.type) {
+            errors.push({
+                path,
+                message: `Expected ${property.type}, got ${actualType}`,
+                value,
+                expectedType: property.type
+            });
+            return false;
+        }
+        return true;
+    }
+    /**
+     * Generate documentation from schema
+     */
+    function generateSchemaDocumentation(schema, title) {
+        let doc = `# ${title}\n\n`;
+        for (const [key, property] of Object.entries(schema)) {
+            doc += `## ${key}\n\n`;
+            doc += `**Type:** ${property.type}\n`;
+            doc += `**Required:** ${property.required ? 'Yes' : 'No'}\n`;
+            if (property.default !== undefined) {
+                doc += `**Default:** \`${JSON.stringify(property.default)}\`\n`;
+            }
+            if (property.description) {
+                doc += `**Description:** ${property.description}\n`;
+            }
+            if (property.enum) {
+                doc += `**Allowed Values:** ${property.enum.map(v => `\`${v}\``).join(', ')}\n`;
+            }
+            if (property.min !== undefined || property.max !== undefined) {
+                doc += `**Range:** `;
+                if (property.min !== undefined)
+                    doc += `min: ${property.min}`;
+                if (property.min !== undefined && property.max !== undefined)
+                    doc += ', ';
+                if (property.max !== undefined)
+                    doc += `max: ${property.max}`;
+                doc += '\n';
+            }
+            doc += '\n';
+        }
+        return doc;
+    }
+
+    /**
+     * Configuration Manager for CREB-JS
+     *
+     * Provides centralized, type-safe configuration management with support for:
+     * - Environment variable overrides
+     * - Runtime configuration updates
+     * - Configuration validation
+     * - Hot-reload capability
+     * - Schema-based documentation generation
+     */
+    /**
+     * Configuration Manager class
+     * Provides type-safe configuration management with validation and hot-reload
+     */
+    exports.ConfigManager = class ConfigManager extends events.EventEmitter {
+        constructor(initialConfig) {
+            super();
+            this.watchers = [];
+            this.configHistory = [];
+            this.environmentMapping = this.createDefaultEnvironmentMapping();
+            this.hotReloadConfig = {
+                enabled: false,
+                watchFiles: [],
+                debounceMs: 1000,
+                excludePaths: ['logging.level'] // Exclude critical settings from hot-reload
+            };
+            // Initialize with default config
+            this.config = { ...defaultConfig };
+            this.metadata = {
+                version: '1.0.0',
+                lastModified: new Date(),
+                source: {
+                    type: 'default',
+                    priority: 1,
+                    description: 'Default configuration'
+                },
+                checksum: this.calculateChecksum(this.config)
+            };
+            // Apply initial config if provided
+            if (initialConfig) {
+                this.updateConfig(initialConfig);
+            }
+            // Load from environment variables
+            this.loadFromEnvironment();
+        }
+        /**
+         * Get the current configuration
+         */
+        getConfig() {
+            return this.deepFreeze({ ...this.config });
+        }
+        /**
+         * Get a specific configuration value by path
+         */
+        get(path) {
+            const keys = path.split('.');
+            let value = this.config;
+            for (const key of keys) {
+                if (value && typeof value === 'object' && key in value) {
+                    value = value[key];
+                }
+                else {
+                    throw new ValidationError(`Configuration path '${path}' not found`, { path, keys, currentKey: key }, { field: 'configPath', value: path, constraint: 'path must exist in configuration' });
+                }
+            }
+            return value;
+        }
+        /**
+         * Set a specific configuration value by path
+         */
+        set(path, value) {
+            const keys = path.split('.');
+            const oldValue = this.get(path);
+            // Create a deep copy of config for modification
+            const newConfig = JSON.parse(JSON.stringify(this.config));
+            let current = newConfig;
+            for (let i = 0; i < keys.length - 1; i++) {
+                current = current[keys[i]];
+            }
+            current[keys[keys.length - 1]] = value;
+            // Validate the change
+            const validationResult = this.validateConfiguration(newConfig);
+            if (!validationResult.isValid) {
+                throw new ValidationError(`Configuration validation failed: ${validationResult.errors.map(e => e.message).join(', ')}`, { path, value, errors: validationResult.errors }, { field: 'configValue', value: value, constraint: 'must pass validation schema' });
+            }
+            // Apply the change
+            this.config = newConfig;
+            this.updateMetadata('runtime');
+            // Emit change event
+            const changeEvent = {
+                path,
+                oldValue,
+                newValue: value,
+                timestamp: new Date()
+            };
+            this.emit('configChanged', changeEvent);
+            this.emit(`configChanged:${path}`, changeEvent);
+        }
+        /**
+         * Update configuration with partial changes
+         */
+        updateConfig(partialConfig) {
+            const mergedConfig = this.mergeConfigs(this.config, partialConfig);
+            const validationResult = this.validateConfiguration(mergedConfig);
+            if (validationResult.isValid) {
+                const oldConfig = { ...this.config };
+                this.config = mergedConfig;
+                this.updateMetadata('runtime');
+                this.saveToHistory();
+                // Emit change events for each changed property
+                this.emitChangeEvents(oldConfig, this.config);
+            }
+            return validationResult;
+        }
+        /**
+         * Load configuration from file
+         */
+        async loadFromFile(filePath) {
+            try {
+                const fileContent = await fs__namespace.promises.readFile(filePath, 'utf8');
+                const fileConfig = JSON.parse(fileContent);
+                const result = this.updateConfig(fileConfig);
+                if (result.isValid) {
+                    this.updateMetadata('file');
+                    // Set up hot-reload if enabled
+                    if (this.hotReloadConfig.enabled) {
+                        this.watchConfigFile(filePath);
+                    }
+                }
+                return result;
+            }
+            catch (error) {
+                const configError = new SystemError(`Failed to load config file: ${error instanceof Error ? error.message : 'Unknown error'}`, { filePath, operation: 'loadFromFile' }, { subsystem: 'configuration', resource: 'file-system' });
+                return {
+                    isValid: false,
+                    errors: [{
+                            path: '',
+                            message: configError.message,
+                            value: filePath
+                        }],
+                    warnings: []
+                };
+            }
+        }
+        /**
+         * Save configuration to file
+         */
+        async saveToFile(filePath) {
+            const configWithMetadata = {
+                ...this.config,
+                _metadata: this.metadata
+            };
+            await fs__namespace.promises.writeFile(filePath, JSON.stringify(configWithMetadata, null, 2), 'utf8');
+        }
+        /**
+         * Load configuration from environment variables
+         */
+        loadFromEnvironment() {
+            const envConfig = {};
+            for (const [configPath, envVar] of Object.entries(this.environmentMapping)) {
+                const envValue = process.env[envVar];
+                if (envValue !== undefined) {
+                    this.setNestedValue(envConfig, configPath, this.parseEnvironmentValue(envValue));
+                }
+            }
+            if (Object.keys(envConfig).length > 0) {
+                this.updateConfig(envConfig);
+                this.updateMetadata('environment');
+            }
+        }
+        /**
+         * Validate current configuration
+         */
+        validateConfiguration(config = this.config) {
+            return validateConfig(config, crebConfigSchema);
+        }
+        /**
+         * Enable hot-reload for configuration files
+         */
+        enableHotReload(options = {}) {
+            this.hotReloadConfig = { ...this.hotReloadConfig, ...options, enabled: true };
+        }
+        /**
+         * Disable hot-reload
+         */
+        disableHotReload() {
+            this.hotReloadConfig.enabled = false;
+            this.watchers.forEach(watcher => watcher.close());
+            this.watchers = [];
+        }
+        /**
+         * Get configuration metadata
+         */
+        getMetadata() {
+            return Object.freeze({ ...this.metadata });
+        }
+        /**
+         * Get configuration history
+         */
+        getHistory() {
+            return this.configHistory.map(entry => ({
+                config: this.deepFreeze({ ...entry.config }),
+                timestamp: entry.timestamp
+            }));
+        }
+        /**
+         * Reset configuration to defaults
+         */
+        resetToDefaults() {
+            const oldConfig = { ...this.config };
+            this.config = { ...defaultConfig };
+            this.updateMetadata('default');
+            this.emitChangeEvents(oldConfig, this.config);
+        }
+        /**
+         * Generate documentation for current configuration schema
+         */
+        generateDocumentation() {
+            return generateSchemaDocumentation(crebConfigSchema, 'CREB Configuration');
+        }
+        /**
+         * Get configuration as JSON string
+         */
+        toJSON() {
+            return JSON.stringify(this.config, null, 2);
+        }
+        /**
+         * Get configuration summary for debugging
+         */
+        getSummary() {
+            const validation = this.validateConfiguration();
+            return `
+CREB Configuration Summary
+=========================
+Version: ${this.metadata.version}
+Last Modified: ${this.metadata.lastModified.toISOString()}
+Source: ${this.metadata.source.type}
+Valid: ${validation.isValid}
+Errors: ${validation.errors.length}
+Warnings: ${validation.warnings.length}
+Hot Reload: ${this.hotReloadConfig.enabled ? 'Enabled' : 'Disabled'}
+
+Current Configuration:
+${this.toJSON()}
+    `.trim();
+        }
+        /**
+         * Dispose of resources
+         */
+        dispose() {
+            this.disableHotReload();
+            this.removeAllListeners();
+        }
+        // Private methods
+        createDefaultEnvironmentMapping() {
+            return {
+                'cache.maxSize': 'CREB_CACHE_MAX_SIZE',
+                'cache.ttl': 'CREB_CACHE_TTL',
+                'cache.strategy': 'CREB_CACHE_STRATEGY',
+                'performance.enableWasm': 'CREB_ENABLE_WASM',
+                'performance.workerThreads': 'CREB_WORKER_THREADS',
+                'performance.batchSize': 'CREB_BATCH_SIZE',
+                'data.providers': 'CREB_DATA_PROVIDERS',
+                'data.syncInterval': 'CREB_SYNC_INTERVAL',
+                'data.offlineMode': 'CREB_OFFLINE_MODE',
+                'logging.level': 'CREB_LOG_LEVEL',
+                'logging.format': 'CREB_LOG_FORMAT',
+                'logging.destinations': 'CREB_LOG_DESTINATIONS'
+            };
+        }
+        parseEnvironmentValue(value) {
+            // Try to parse as boolean
+            if (value.toLowerCase() === 'true')
+                return true;
+            if (value.toLowerCase() === 'false')
+                return false;
+            // Try to parse as number
+            const numValue = Number(value);
+            if (!isNaN(numValue))
+                return numValue;
+            // Try to parse as JSON array
+            if (value.startsWith('[') && value.endsWith(']')) {
+                try {
+                    return JSON.parse(value);
+                }
+                catch {
+                    // Fall back to comma-separated values
+                    return value.slice(1, -1).split(',').map(v => v.trim());
+                }
+            }
+            // Return as string
+            return value;
+        }
+        setNestedValue(obj, path, value) {
+            const keys = path.split('.');
+            let current = obj;
+            for (let i = 0; i < keys.length - 1; i++) {
+                if (!(keys[i] in current)) {
+                    current[keys[i]] = {};
+                }
+                current = current[keys[i]];
+            }
+            current[keys[keys.length - 1]] = value;
+        }
+        mergeConfigs(base, partial) {
+            const result = { ...base };
+            for (const [key, value] of Object.entries(partial)) {
+                if (value !== undefined) {
+                    if (typeof value === 'object' && !Array.isArray(value)) {
+                        result[key] = {
+                            ...base[key],
+                            ...value
+                        };
+                    }
+                    else {
+                        result[key] = value;
+                    }
+                }
+            }
+            return result;
+        }
+        updateMetadata(sourceType) {
+            this.metadata = {
+                ...this.metadata,
+                lastModified: new Date(),
+                source: {
+                    type: sourceType,
+                    priority: sourceType === 'environment' ? 3 : sourceType === 'file' ? 2 : 1,
+                    description: `Configuration loaded from ${sourceType}`
+                },
+                checksum: this.calculateChecksum(this.config)
+            };
+        }
+        calculateChecksum(config) {
+            const str = JSON.stringify(config);
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Convert to 32-bit integer
+            }
+            return hash.toString(16);
+        }
+        saveToHistory() {
+            this.configHistory.push({
+                config: { ...this.config },
+                timestamp: new Date()
+            });
+            // Keep only last 10 entries
+            if (this.configHistory.length > 10) {
+                this.configHistory.shift();
+            }
+        }
+        emitChangeEvents(oldConfig, newConfig) {
+            const changes = this.findConfigChanges(oldConfig, newConfig);
+            for (const change of changes) {
+                this.emit('configChanged', change);
+                this.emit(`configChanged:${change.path}`, change);
+            }
+        }
+        findConfigChanges(oldConfig, newConfig, prefix = '') {
+            const changes = [];
+            for (const [key, newValue] of Object.entries(newConfig)) {
+                const path = prefix ? `${prefix}.${key}` : key;
+                const oldValue = oldConfig[key];
+                if (typeof newValue === 'object' && !Array.isArray(newValue) && newValue !== null) {
+                    changes.push(...this.findConfigChanges(oldValue || {}, newValue, path));
+                }
+                else if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
+                    changes.push({
+                        path,
+                        oldValue,
+                        newValue,
+                        timestamp: new Date()
+                    });
+                }
+            }
+            return changes;
+        }
+        watchConfigFile(filePath) {
+            const watcher = fs__namespace.watch(filePath, { persistent: false }, (eventType) => {
+                if (eventType === 'change') {
+                    setTimeout(() => {
+                        this.loadFromFile(filePath).catch(error => {
+                            this.emit('error', new Error(`Hot-reload failed: ${error.message}`));
+                        });
+                    }, this.hotReloadConfig.debounceMs);
+                }
+            });
+            this.watchers.push(watcher);
+        }
+        /**
+         * Deep freeze an object to make it truly immutable
+         */
+        deepFreeze(obj) {
+            // Get property names
+            Object.getOwnPropertyNames(obj).forEach(prop => {
+                const value = obj[prop];
+                // Freeze properties before freezing self
+                if (value && typeof value === 'object') {
+                    this.deepFreeze(value);
+                }
+            });
+            return Object.freeze(obj);
+        }
+    };
+    exports.ConfigManager = __decorate([
+        Singleton(),
+        __metadata("design:paramtypes", [Object])
+    ], exports.ConfigManager);
+    /**
+     * Singleton configuration manager instance
+     */
+    const configManager = new exports.ConfigManager();
+    /**
+     * Convenience function to get configuration value
+     */
+    function getConfig(path) {
+        return configManager.get(path);
+    }
+    /**
+     * Convenience function to set configuration value
+     */
+    function setConfig(path, value) {
+        configManager.set(path, value);
+    }
+    /**
+     * Convenience function to get full configuration
+     */
+    function getFullConfig() {
+        return configManager.getConfig();
+    }
+
+    /**
+     * CREB-JS Dependency Injection Setup
+     *
+     * Central configuration for all dependency injection services in CREB-JS.
+     * This module sets up and configures the main DI container with all services.
      *
      * @author Loganathane Virassamy
      * @version 1.6.0
      */
+    // Service Tokens
+    const IConfigManagerToken = createToken('IConfigManager');
+    const IBalancerToken = createToken('IBalancer');
+    const IEnhancedBalancerToken = createToken('IEnhancedBalancer');
+    const IStoichiometryToken = createToken('IStoichiometry');
+    const IThermodynamicsCalculatorToken = createToken('IThermodynamicsCalculator');
+    const IStorageProviderToken = createToken('IStorageProvider');
+    const ICacheToken = createToken('ICache');
+    const IWorkerPoolToken = createToken('IWorkerPool');
+    const ITaskQueueToken = createToken('ITaskQueue');
     /**
-     * Service lifetime enumeration
+     * Configure and setup the main CREB DI container
      */
-    var ServiceLifetime;
-    (function (ServiceLifetime) {
-        ServiceLifetime["Singleton"] = "singleton";
-        ServiceLifetime["Transient"] = "transient";
-    })(ServiceLifetime || (ServiceLifetime = {}));
-    /**
-     * Metadata key for injectable services
-     */
-    const INJECTABLE_METADATA_KEY = Symbol.for('injectable');
-    /**
-     * Metadata key for constructor parameters
-     */
-    const PARAM_TYPES_METADATA_KEY = 'design:paramtypes';
-    /**
-     * Injectable class decorator
-     *
-     * Marks a class as injectable and provides metadata for dependency injection.
-     *
-     * @param options Optional configuration for the injectable service
-     */
-    function Injectable(options = {}) {
-        return function (constructor) {
-            // Get constructor parameter types from TypeScript compiler
-            const paramTypes = Reflect.getMetadata(PARAM_TYPES_METADATA_KEY, constructor) || [];
-            // Create injectable metadata
-            const metadata = {
-                dependencies: paramTypes,
-                lifetime: options.lifetime || ServiceLifetime.Transient,
-                token: options.token,
-            };
-            // Store metadata on the constructor
-            Reflect.defineMetadata(INJECTABLE_METADATA_KEY, metadata, constructor);
-            return constructor;
-        };
+    function setupCREBContainer() {
+        const container = new Container({
+            enableCircularDependencyDetection: true,
+            enablePerformanceTracking: true,
+            maxResolutionDepth: 50,
+        });
+        // Register Core Services as Singletons
+        container.registerClass(exports.ConfigManager, [], exports.ServiceLifetime.Singleton, IConfigManagerToken);
+        container.registerClass(exports.AdvancedCache, [], exports.ServiceLifetime.Singleton, ICacheToken);
+        container.registerClass(SQLiteStorageProvider, [], exports.ServiceLifetime.Singleton, IStorageProviderToken);
+        container.registerClass(exports.ThermodynamicsCalculator, [], exports.ServiceLifetime.Singleton, IThermodynamicsCalculatorToken);
+        // Register Worker Thread Services (commented out due to ESM compatibility issues)
+        // container.registerClass(
+        //   TaskQueue,
+        //   [],
+        //   ServiceLifetime.Singleton,
+        //   ITaskQueueToken
+        // );
+        // container.registerClass(
+        //   WorkerPool,
+        //   [],
+        //   ServiceLifetime.Singleton,
+        //   IWorkerPoolToken
+        // );
+        // Register Calculation Services as Transient (stateless)
+        container.registerClass(exports.ChemicalEquationBalancer, [], exports.ServiceLifetime.Transient, IBalancerToken);
+        container.registerClass(exports.EnhancedChemicalEquationBalancer, [], exports.ServiceLifetime.Transient, IEnhancedBalancerToken);
+        container.registerClass(exports.Stoichiometry, [], exports.ServiceLifetime.Transient, IStoichiometryToken);
+        return container;
     }
     /**
-     * Inject decorator for constructor parameters
-     *
-     * Explicitly specifies the token to inject for a constructor parameter.
-     * Useful when TypeScript reflection doesn't provide enough information.
-     *
-     * @param token The service token to inject
+     * Initialize the global CREB container with default services
      */
-    function Inject(token) {
-        return function (target, propertyKey, parameterIndex) {
-            const existingMetadata = Reflect.getMetadata(INJECTABLE_METADATA_KEY, target) || {};
-            const dependencies = existingMetadata.dependencies || [];
-            // Ensure dependencies array is large enough
-            while (dependencies.length <= parameterIndex) {
-                dependencies.push(undefined);
-            }
-            // Set the specific dependency
-            dependencies[parameterIndex] = token;
-            // Update metadata
-            const updatedMetadata = {
-                ...existingMetadata,
-                dependencies,
-            };
-            Reflect.defineMetadata(INJECTABLE_METADATA_KEY, updatedMetadata, target);
-        };
-    }
-    /**
-     * Optional decorator for constructor parameters
-     *
-     * Marks a dependency as optional, allowing injection to succeed
-     * even if the service is not registered.
-     *
-     * @param defaultValue Optional default value to use if service is not found
-     */
-    function Optional(defaultValue) {
-        return function (target, propertyKey, parameterIndex) {
-            const existingMetadata = Reflect.getMetadata(INJECTABLE_METADATA_KEY, target) || {};
-            const optionalDependencies = existingMetadata.optionalDependencies || new Set();
-            optionalDependencies.add(parameterIndex);
-            const updatedMetadata = {
-                ...existingMetadata,
-                optionalDependencies,
-                defaultValues: {
-                    ...existingMetadata.defaultValues,
-                    [parameterIndex]: defaultValue,
-                },
-            };
-            Reflect.defineMetadata(INJECTABLE_METADATA_KEY, updatedMetadata, target);
-        };
-    }
-    /**
-     * Get injectable metadata from a constructor
-     */
-    function getInjectableMetadata(constructor) {
-        return Reflect.getMetadata(INJECTABLE_METADATA_KEY, constructor);
-    }
-    /**
-     * Check if a constructor is marked as injectable
-     */
-    function isInjectable(constructor) {
-        return Reflect.hasMetadata(INJECTABLE_METADATA_KEY, constructor);
-    }
-    /**
-     * Helper function to extract dependency tokens from a constructor
-     */
-    function getDependencyTokens(constructor) {
-        const metadata = getInjectableMetadata(constructor);
-        if (!metadata) {
-            return [];
-        }
-        return metadata.dependencies || [];
-    }
-    /**
-     * Factory for creating injectable class decorators with specific lifetimes
-     */
-    const Singleton = (options = {}) => Injectable({ ...options, lifetime: ServiceLifetime.Singleton });
-    const Transient = (options = {}) => Injectable({ ...options, lifetime: ServiceLifetime.Transient });
-
-    /**
-     * Enhanced Error Handling for CREB-JS
-     * Provides structured error types with context, stack traces, and error classification
-     */
-    exports.ErrorCategory = void 0;
-    (function (ErrorCategory) {
-        ErrorCategory["VALIDATION"] = "VALIDATION";
-        ErrorCategory["NETWORK"] = "NETWORK";
-        ErrorCategory["COMPUTATION"] = "COMPUTATION";
-        ErrorCategory["DATA"] = "DATA";
-        ErrorCategory["SYSTEM"] = "SYSTEM";
-        ErrorCategory["EXTERNAL_API"] = "EXTERNAL_API";
-        ErrorCategory["TIMEOUT"] = "TIMEOUT";
-        ErrorCategory["RATE_LIMIT"] = "RATE_LIMIT";
-        ErrorCategory["AUTHENTICATION"] = "AUTHENTICATION";
-        ErrorCategory["PERMISSION"] = "PERMISSION";
-    })(exports.ErrorCategory || (exports.ErrorCategory = {}));
-    exports.ErrorSeverity = void 0;
-    (function (ErrorSeverity) {
-        ErrorSeverity["LOW"] = "LOW";
-        ErrorSeverity["MEDIUM"] = "MEDIUM";
-        ErrorSeverity["HIGH"] = "HIGH";
-        ErrorSeverity["CRITICAL"] = "CRITICAL";
-    })(exports.ErrorSeverity || (exports.ErrorSeverity = {}));
-    /**
-     * Base CREB Error class with enhanced context and metadata
-     */
-    class CREBError extends Error {
-        constructor(message, category, severity = exports.ErrorSeverity.MEDIUM, context = {}, options = {}) {
-            super(message);
-            this.name = 'CREBError';
-            // Ensure proper prototype chain for instanceof checks
-            Object.setPrototypeOf(this, CREBError.prototype);
-            this.metadata = {
-                category,
-                severity,
-                retryable: options.retryable ?? this.isRetryableByDefault(category),
-                errorCode: options.errorCode ?? this.generateErrorCode(category),
-                correlationId: options.correlationId ?? this.generateCorrelationId(),
-                context: {
-                    ...context,
-                    timestamp: new Date(),
-                    version: '1.5.0' // TODO: Get from package.json
-                },
-                timestamp: new Date(),
-                stackTrace: this.stack,
-                innerError: options.innerError,
-                sugggestedAction: options.suggestedAction
-            };
-            // Capture stack trace for V8 engines
-            if (Error.captureStackTrace) {
-                Error.captureStackTrace(this, CREBError);
-            }
-        }
-        /**
-         * Serialize error for logging and telemetry
-         */
-        toJSON() {
-            return {
-                name: this.name,
-                message: this.message,
-                metadata: {
-                    ...this.metadata,
-                    innerError: this.metadata.innerError?.message
+    function initializeCREBDI() {
+        const container$1 = setupCREBContainer();
+        // Copy registrations to global container
+        for (const token of container$1.getRegisteredTokens()) {
+            if (!container.isRegistered(token)) {
+                // Re-register in global container
+                const registration = container$1.services.get(token);
+                if (registration) {
+                    container.register(token, registration.factory, registration.lifetime, registration.dependencies);
                 }
-            };
-        }
-        /**
-         * Create a sanitized version for client-side consumption
-         */
-        toClientSafe() {
-            return {
-                message: this.message,
-                category: this.metadata.category,
-                severity: this.metadata.severity,
-                errorCode: this.metadata.errorCode,
-                correlationId: this.metadata.correlationId,
-                retryable: this.metadata.retryable,
-                suggestedAction: this.metadata.sugggestedAction
-            };
-        }
-        /**
-         * Check if error is retryable based on category and context
-         */
-        isRetryable() {
-            return this.metadata.retryable;
-        }
-        /**
-         * Get human-readable error description
-         */
-        getDescription() {
-            const parts = [
-                `[${this.metadata.category}:${this.metadata.severity}]`,
-                this.message
-            ];
-            if (this.metadata.sugggestedAction) {
-                parts.push(`Suggestion: ${this.metadata.sugggestedAction}`);
-            }
-            return parts.join(' ');
-        }
-        isRetryableByDefault(category) {
-            const retryableCategories = [
-                exports.ErrorCategory.NETWORK,
-                exports.ErrorCategory.TIMEOUT,
-                exports.ErrorCategory.RATE_LIMIT,
-                exports.ErrorCategory.EXTERNAL_API
-            ];
-            return retryableCategories.includes(category);
-        }
-        generateErrorCode(category) {
-            const timestamp = Date.now().toString(36);
-            const random = Math.random().toString(36).substring(2, 8);
-            return `${category}_${timestamp}_${random}`.toUpperCase();
-        }
-        generateCorrelationId() {
-            return `creb_${Date.now()}_${Math.random().toString(36).substring(2, 12)}`;
-        }
-    }
-    /**
-     * Validation Error - for input validation failures
-     */
-    class ValidationError extends CREBError {
-        constructor(message, context = {}, options = {}) {
-            super(message, exports.ErrorCategory.VALIDATION, exports.ErrorSeverity.MEDIUM, {
-                ...context,
-                field: options.field,
-                value: options.value,
-                constraint: options.constraint
-            }, {
-                retryable: false,
-                suggestedAction: 'Please check the input parameters and try again'
-            });
-            this.name = 'ValidationError';
-        }
-    }
-    /**
-     * Network Error - for network-related failures
-     */
-    class NetworkError extends CREBError {
-        constructor(message, context = {}, options = {}) {
-            super(message, exports.ErrorCategory.NETWORK, exports.ErrorSeverity.HIGH, {
-                ...context,
-                statusCode: options.statusCode,
-                url: options.url,
-                method: options.method,
-                timeout: options.timeout
-            }, {
-                retryable: true,
-                suggestedAction: 'Check network connectivity and try again'
-            });
-            this.name = 'NetworkError';
-        }
-    }
-    /**
-     * External API Error - for third-party API failures
-     */
-    class ExternalAPIError extends CREBError {
-        constructor(message, apiName, context = {}, options = {}) {
-            const severity = options.rateLimited ? exports.ErrorSeverity.MEDIUM : exports.ErrorSeverity.HIGH;
-            const category = options.rateLimited ? exports.ErrorCategory.RATE_LIMIT : exports.ErrorCategory.EXTERNAL_API;
-            super(message, category, severity, {
-                ...context,
-                apiName,
-                statusCode: options.statusCode,
-                responseBody: options.responseBody,
-                endpoint: options.endpoint
-            }, {
-                retryable: options.rateLimited || (!!options.statusCode && options.statusCode >= 500),
-                suggestedAction: options.rateLimited
-                    ? 'Rate limit exceeded. Please wait before retrying'
-                    : 'External service unavailable. Please try again later'
-            });
-            this.name = 'ExternalAPIError';
-        }
-    }
-    /**
-     * Computation Error - for calculation failures
-     */
-    class ComputationError extends CREBError {
-        constructor(message, context = {}, options = {}) {
-            super(message, exports.ErrorCategory.COMPUTATION, exports.ErrorSeverity.MEDIUM, {
-                ...context,
-                algorithm: options.algorithm,
-                input: options.input,
-                expectedRange: options.expectedRange
-            }, {
-                retryable: false,
-                suggestedAction: 'Please verify input parameters and calculation constraints'
-            });
-            this.name = 'ComputationError';
-        }
-    }
-    /**
-     * System Error - for internal system failures
-     */
-    class SystemError extends CREBError {
-        constructor(message, context = {}, options = {}) {
-            super(message, exports.ErrorCategory.SYSTEM, exports.ErrorSeverity.CRITICAL, {
-                ...context,
-                subsystem: options.subsystem,
-                resource: options.resource
-            }, {
-                retryable: false,
-                suggestedAction: 'Internal system error. Please contact support'
-            });
-            this.name = 'SystemError';
-        }
-    }
-    /**
-     * Error aggregation utility for collecting and analyzing multiple errors
-     */
-    class ErrorAggregator {
-        constructor(maxErrors = 100) {
-            this.errors = [];
-            this.maxErrors = maxErrors;
-        }
-        /**
-         * Add an error to the aggregator
-         */
-        addError(error) {
-            this.errors.push(error);
-            // Keep only the most recent errors
-            if (this.errors.length > this.maxErrors) {
-                this.errors.shift();
             }
         }
-        /**
-         * Get errors by category
-         */
-        getErrorsByCategory(category) {
-            return this.errors.filter(error => error.metadata.category === category);
-        }
-        /**
-         * Get errors by severity
-         */
-        getErrorsBySeverity(severity) {
-            return this.errors.filter(error => error.metadata.severity === severity);
-        }
-        /**
-         * Get error statistics
-         */
-        getStatistics() {
-            const byCategory = {};
-            const bySeverity = {};
-            let retryableCount = 0;
-            // Initialize counters
-            Object.values(exports.ErrorCategory).forEach(cat => byCategory[cat] = 0);
-            Object.values(exports.ErrorSeverity).forEach(sev => bySeverity[sev] = 0);
-            // Count errors
-            this.errors.forEach(error => {
-                byCategory[error.metadata.category]++;
-                bySeverity[error.metadata.severity]++;
-                if (error.isRetryable()) {
-                    retryableCount++;
-                }
-            });
-            return {
-                total: this.errors.length,
-                byCategory,
-                bySeverity,
-                retryableCount,
-                recentErrors: this.errors.slice(-10) // Last 10 errors
-            };
-        }
-        /**
-         * Clear all collected errors
-         */
-        clear() {
-            this.errors = [];
-        }
-        /**
-         * Get all errors as JSON for logging
-         */
-        toJSON() {
-            return this.errors.map(error => error.toJSON());
-        }
     }
     /**
-     * Utility functions for error handling
+     * Get a service from the global container with type safety
      */
-    class ErrorUtils {
-        /**
-         * Wrap a function with error handling and transformation
-         */
-        static withErrorHandling(fn, errorTransformer) {
-            return (...args) => {
-                try {
-                    return fn(...args);
-                }
-                catch (error) {
-                    throw errorTransformer ? errorTransformer(error) : ErrorUtils.transformUnknownError(error);
-                }
-            };
-        }
-        /**
-         * Wrap an async function with error handling and transformation
-         */
-        static withAsyncErrorHandling(fn, errorTransformer) {
-            return async (...args) => {
-                try {
-                    return await fn(...args);
-                }
-                catch (error) {
-                    throw errorTransformer ? errorTransformer(error) : ErrorUtils.transformUnknownError(error);
-                }
-            };
-        }
-        /**
-         * Transform unknown errors into CREBError instances
-         */
-        static transformUnknownError(error) {
-            if (error instanceof CREBError) {
-                return error;
-            }
-            if (error instanceof Error) {
-                return new SystemError(error.message, { originalError: error.name }, { subsystem: 'unknown' });
-            }
-            return new SystemError(typeof error === 'string' ? error : 'Unknown error occurred', { originalError: error });
-        }
-        /**
-         * Check if an error indicates a transient failure
-         */
-        static isTransientError(error) {
-            if (error instanceof CREBError) {
-                return error.isRetryable();
-            }
-            // Common patterns for transient errors
-            const transientPatterns = [
-                /timeout/i,
-                /connection/i,
-                /network/i,
-                /503/,
-                /502/,
-                /504/,
-                /rate limit/i
-            ];
-            const message = error?.message || String(error);
-            return transientPatterns.some(pattern => pattern.test(message));
-        }
+    function getService(token) {
+        return container.resolve(token);
+    }
+    /**
+     * Create a child container for testing or isolation
+     */
+    function createChildContainer() {
+        return container.createChild();
+    }
+    /**
+     * Helper functions for common services
+     */
+    const CREBServices = {
+        getConfigManager: () => getService(IConfigManagerToken),
+        getBalancer: () => getService(IBalancerToken),
+        getEnhancedBalancer: () => getService(IEnhancedBalancerToken),
+        getStoichiometry: () => getService(IStoichiometryToken),
+        getThermodynamicsCalculator: () => getService(IThermodynamicsCalculatorToken),
+        getStorageProvider: () => getService(IStorageProviderToken),
+        getCache: () => getService(ICacheToken),
+        // getWorkerPool: () => getService(IWorkerPoolToken),      // Commented out due to ESM issues
+        // getTaskQueue: () => getService(ITaskQueueToken),        // Commented out due to ESM issues
+    };
+    /**
+     * Initialize DI on module load for production usage
+     */
+    if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'test') {
+        initializeCREBDI();
     }
 
     /**
@@ -7321,19 +10023,23 @@
      */
     class GracefulDegradationService {
         constructor() {
+            this.localCache = new exports.AdvancedCache({
+                maxSize: 500,
+                defaultTtl: 1800000, // 30 minutes
+                enableMetrics: true
+            });
             this.nistIntegration = new EnhancedNISTIntegration();
             this.pubchemIntegration = new EnhancedPubChemIntegration();
-            this.localCache = new Map();
         }
         /**
          * Get thermodynamic data with graceful degradation
          */
         async getThermodynamicDataWithFallback(compoundName) {
             // Try cache first
-            const cachedData = this.localCache.get(compoundName);
-            if (cachedData) {
+            const cachedResult = await this.localCache.get(compoundName);
+            if (cachedResult.hit && cachedResult.value) {
                 return {
-                    data: cachedData,
+                    data: cachedResult.value,
                     source: 'cache',
                     confidence: 0.9
                 };
@@ -7341,7 +10047,7 @@
             // Try NIST (primary source)
             try {
                 const nistData = await this.nistIntegration.getThermodynamicData(compoundName);
-                this.localCache.set(compoundName, nistData);
+                await this.localCache.set(compoundName, nistData);
                 return {
                     data: nistData,
                     source: 'nist',
@@ -7355,7 +10061,7 @@
             try {
                 const pubchemData = await this.pubchemIntegration.searchCompounds(compoundName);
                 const estimatedThermoData = this.estimateThermodynamicData(pubchemData[0]);
-                this.localCache.set(compoundName, estimatedThermoData);
+                await this.localCache.set(compoundName, estimatedThermoData);
                 return {
                     data: estimatedThermoData,
                     source: 'pubchem',
@@ -7435,744 +10141,6 @@
     }
 
     /**
-     * Configuration Schema Definitions
-     *
-     * This file contains validation schemas for all configuration types.
-     * Schemas are used for runtime validation and documentation generation.
-     */
-    /**
-     * Cache configuration schema
-     */
-    const cacheConfigSchema = {
-        maxSize: {
-            type: 'number',
-            required: true,
-            min: 1,
-            max: 100000,
-            default: 1000,
-            description: 'Maximum number of items to store in cache'
-        },
-        ttl: {
-            type: 'number',
-            required: true,
-            min: 1000,
-            max: 86400000, // 24 hours
-            default: 300000, // 5 minutes
-            description: 'Time to live for cache entries in milliseconds'
-        },
-        strategy: {
-            type: 'string',
-            required: true,
-            enum: ['lru', 'lfu', 'fifo'],
-            default: 'lru',
-            description: 'Cache eviction strategy'
-        }
-    };
-    /**
-     * Performance configuration schema
-     */
-    const performanceConfigSchema = {
-        enableWasm: {
-            type: 'boolean',
-            required: true,
-            default: false,
-            description: 'Enable WebAssembly acceleration for calculations'
-        },
-        workerThreads: {
-            type: 'number',
-            required: true,
-            min: 1,
-            max: 16,
-            default: 4,
-            description: 'Number of worker threads for parallel processing'
-        },
-        batchSize: {
-            type: 'number',
-            required: true,
-            min: 1,
-            max: 10000,
-            default: 100,
-            description: 'Batch size for bulk operations'
-        }
-    };
-    /**
-     * Data configuration schema
-     */
-    const dataConfigSchema = {
-        providers: {
-            type: 'array',
-            required: true,
-            items: {
-                type: 'string',
-                enum: ['sqlite', 'nist', 'pubchem', 'local']
-            },
-            default: ['sqlite', 'local'],
-            description: 'List of data providers to use'
-        },
-        syncInterval: {
-            type: 'number',
-            required: true,
-            min: 60000, // 1 minute
-            max: 86400000, // 24 hours
-            default: 3600000, // 1 hour
-            description: 'Data synchronization interval in milliseconds'
-        },
-        offlineMode: {
-            type: 'boolean',
-            required: true,
-            default: false,
-            description: 'Enable offline mode (no network requests)'
-        }
-    };
-    /**
-     * Logging configuration schema
-     */
-    const loggingConfigSchema = {
-        level: {
-            type: 'string',
-            required: true,
-            enum: ['debug', 'info', 'warn', 'error'],
-            default: 'info',
-            description: 'Minimum log level to output'
-        },
-        format: {
-            type: 'string',
-            required: true,
-            enum: ['json', 'text'],
-            default: 'text',
-            description: 'Log output format'
-        },
-        destinations: {
-            type: 'array',
-            required: true,
-            items: {
-                type: 'string',
-                enum: ['console', 'file', 'remote']
-            },
-            default: ['console'],
-            description: 'Log output destinations'
-        }
-    };
-    /**
-     * Main CREB configuration schema
-     */
-    const crebConfigSchema = {
-        cache: {
-            type: 'object',
-            required: true,
-            properties: cacheConfigSchema,
-            description: 'Cache configuration settings'
-        },
-        performance: {
-            type: 'object',
-            required: true,
-            properties: performanceConfigSchema,
-            description: 'Performance optimization settings'
-        },
-        data: {
-            type: 'object',
-            required: true,
-            properties: dataConfigSchema,
-            description: 'Data provider configuration'
-        },
-        logging: {
-            type: 'object',
-            required: true,
-            properties: loggingConfigSchema,
-            description: 'Logging configuration'
-        }
-    };
-    /**
-     * Default configuration values
-     */
-    const defaultConfig = {
-        cache: {
-            maxSize: 1000,
-            ttl: 300000, // 5 minutes
-            strategy: 'lru'
-        },
-        performance: {
-            enableWasm: false,
-            workerThreads: 4,
-            batchSize: 100
-        },
-        data: {
-            providers: ['sqlite', 'local'],
-            syncInterval: 3600000, // 1 hour
-            offlineMode: false
-        },
-        logging: {
-            level: 'info',
-            format: 'text',
-            destinations: ['console']
-        }
-    };
-    /**
-     * Validate a configuration object against schema
-     */
-    function validateConfig(config, schema, path = '') {
-        const errors = [];
-        const warnings = [];
-        if (typeof config !== 'object' || config === null) {
-            errors.push({
-                path,
-                message: 'Configuration must be an object',
-                value: config,
-                expectedType: 'object'
-            });
-            return { isValid: false, errors, warnings };
-        }
-        const configObj = config;
-        // Check required properties
-        for (const [key, property] of Object.entries(schema)) {
-            const currentPath = path ? `${path}.${key}` : key;
-            const value = configObj[key];
-            if (property.required && value === undefined) {
-                errors.push({
-                    path: currentPath,
-                    message: `Required property '${key}' is missing`,
-                    value: undefined,
-                    expectedType: property.type
-                });
-                continue;
-            }
-            if (value === undefined)
-                continue;
-            // Type validation
-            const typeValid = validateType(value, property, currentPath, errors);
-            if (!typeValid)
-                continue;
-            // Range validation for numbers
-            if (property.type === 'number' && typeof value === 'number') {
-                if (property.min !== undefined && value < property.min) {
-                    errors.push({
-                        path: currentPath,
-                        message: `Value ${value} is below minimum ${property.min}`,
-                        value
-                    });
-                }
-                if (property.max !== undefined && value > property.max) {
-                    errors.push({
-                        path: currentPath,
-                        message: `Value ${value} is above maximum ${property.max}`,
-                        value
-                    });
-                }
-            }
-            // Enum validation
-            if (property.enum && !property.enum.includes(value)) {
-                errors.push({
-                    path: currentPath,
-                    message: `Value '${value}' is not one of allowed values: ${property.enum.join(', ')}`,
-                    value,
-                    expectedType: `enum: ${property.enum.join(' | ')}`
-                });
-            }
-            // Array validation
-            if (property.type === 'array' && Array.isArray(value) && property.items) {
-                value.forEach((item, index) => {
-                    const itemPath = `${currentPath}[${index}]`;
-                    validateType(item, property.items, itemPath, errors);
-                    if (property.items.enum && !property.items.enum.includes(item)) {
-                        errors.push({
-                            path: itemPath,
-                            message: `Array item '${item}' is not one of allowed values: ${property.items.enum.join(', ')}`,
-                            value: item
-                        });
-                    }
-                });
-            }
-            // Object validation (recursive)
-            if (property.type === 'object' && property.properties) {
-                const nestedResult = validateConfig(value, property.properties, currentPath);
-                errors.push(...nestedResult.errors);
-                warnings.push(...nestedResult.warnings);
-            }
-        }
-        return {
-            isValid: errors.length === 0,
-            errors,
-            warnings
-        };
-    }
-    /**
-     * Validate value type
-     */
-    function validateType(value, property, path, errors, warnings) {
-        const actualType = Array.isArray(value) ? 'array' : typeof value;
-        if (actualType !== property.type) {
-            errors.push({
-                path,
-                message: `Expected ${property.type}, got ${actualType}`,
-                value,
-                expectedType: property.type
-            });
-            return false;
-        }
-        return true;
-    }
-    /**
-     * Generate documentation from schema
-     */
-    function generateSchemaDocumentation(schema, title) {
-        let doc = `# ${title}\n\n`;
-        for (const [key, property] of Object.entries(schema)) {
-            doc += `## ${key}\n\n`;
-            doc += `**Type:** ${property.type}\n`;
-            doc += `**Required:** ${property.required ? 'Yes' : 'No'}\n`;
-            if (property.default !== undefined) {
-                doc += `**Default:** \`${JSON.stringify(property.default)}\`\n`;
-            }
-            if (property.description) {
-                doc += `**Description:** ${property.description}\n`;
-            }
-            if (property.enum) {
-                doc += `**Allowed Values:** ${property.enum.map(v => `\`${v}\``).join(', ')}\n`;
-            }
-            if (property.min !== undefined || property.max !== undefined) {
-                doc += `**Range:** `;
-                if (property.min !== undefined)
-                    doc += `min: ${property.min}`;
-                if (property.min !== undefined && property.max !== undefined)
-                    doc += ', ';
-                if (property.max !== undefined)
-                    doc += `max: ${property.max}`;
-                doc += '\n';
-            }
-            doc += '\n';
-        }
-        return doc;
-    }
-
-    /**
-     * Configuration Manager for CREB-JS
-     *
-     * Provides centralized, type-safe configuration management with support for:
-     * - Environment variable overrides
-     * - Runtime configuration updates
-     * - Configuration validation
-     * - Hot-reload capability
-     * - Schema-based documentation generation
-     */
-    /**
-     * Configuration Manager class
-     * Provides type-safe configuration management with validation and hot-reload
-     */
-    class ConfigManager extends events.EventEmitter {
-        constructor(initialConfig) {
-            super();
-            this.watchers = [];
-            this.configHistory = [];
-            this.environmentMapping = this.createDefaultEnvironmentMapping();
-            this.hotReloadConfig = {
-                enabled: false,
-                watchFiles: [],
-                debounceMs: 1000,
-                excludePaths: ['logging.level'] // Exclude critical settings from hot-reload
-            };
-            // Initialize with default config
-            this.config = { ...defaultConfig };
-            this.metadata = {
-                version: '1.0.0',
-                lastModified: new Date(),
-                source: {
-                    type: 'default',
-                    priority: 1,
-                    description: 'Default configuration'
-                },
-                checksum: this.calculateChecksum(this.config)
-            };
-            // Apply initial config if provided
-            if (initialConfig) {
-                this.updateConfig(initialConfig);
-            }
-            // Load from environment variables
-            this.loadFromEnvironment();
-        }
-        /**
-         * Get the current configuration
-         */
-        getConfig() {
-            return this.deepFreeze({ ...this.config });
-        }
-        /**
-         * Get a specific configuration value by path
-         */
-        get(path) {
-            const keys = path.split('.');
-            let value = this.config;
-            for (const key of keys) {
-                if (value && typeof value === 'object' && key in value) {
-                    value = value[key];
-                }
-                else {
-                    throw new Error(`Configuration path '${path}' not found`);
-                }
-            }
-            return value;
-        }
-        /**
-         * Set a specific configuration value by path
-         */
-        set(path, value) {
-            const keys = path.split('.');
-            const oldValue = this.get(path);
-            // Create a deep copy of config for modification
-            const newConfig = JSON.parse(JSON.stringify(this.config));
-            let current = newConfig;
-            for (let i = 0; i < keys.length - 1; i++) {
-                current = current[keys[i]];
-            }
-            current[keys[keys.length - 1]] = value;
-            // Validate the change
-            const validationResult = this.validateConfiguration(newConfig);
-            if (!validationResult.isValid) {
-                throw new Error(`Configuration validation failed: ${validationResult.errors.map(e => e.message).join(', ')}`);
-            }
-            // Apply the change
-            this.config = newConfig;
-            this.updateMetadata('runtime');
-            // Emit change event
-            const changeEvent = {
-                path,
-                oldValue,
-                newValue: value,
-                timestamp: new Date()
-            };
-            this.emit('configChanged', changeEvent);
-            this.emit(`configChanged:${path}`, changeEvent);
-        }
-        /**
-         * Update configuration with partial changes
-         */
-        updateConfig(partialConfig) {
-            const mergedConfig = this.mergeConfigs(this.config, partialConfig);
-            const validationResult = this.validateConfiguration(mergedConfig);
-            if (validationResult.isValid) {
-                const oldConfig = { ...this.config };
-                this.config = mergedConfig;
-                this.updateMetadata('runtime');
-                this.saveToHistory();
-                // Emit change events for each changed property
-                this.emitChangeEvents(oldConfig, this.config);
-            }
-            return validationResult;
-        }
-        /**
-         * Load configuration from file
-         */
-        async loadFromFile(filePath) {
-            try {
-                const fileContent = await fs__namespace.promises.readFile(filePath, 'utf8');
-                const fileConfig = JSON.parse(fileContent);
-                const result = this.updateConfig(fileConfig);
-                if (result.isValid) {
-                    this.updateMetadata('file');
-                    // Set up hot-reload if enabled
-                    if (this.hotReloadConfig.enabled) {
-                        this.watchConfigFile(filePath);
-                    }
-                }
-                return result;
-            }
-            catch (error) {
-                return {
-                    isValid: false,
-                    errors: [{
-                            path: '',
-                            message: `Failed to load config file: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                            value: filePath
-                        }],
-                    warnings: []
-                };
-            }
-        }
-        /**
-         * Save configuration to file
-         */
-        async saveToFile(filePath) {
-            const configWithMetadata = {
-                ...this.config,
-                _metadata: this.metadata
-            };
-            await fs__namespace.promises.writeFile(filePath, JSON.stringify(configWithMetadata, null, 2), 'utf8');
-        }
-        /**
-         * Load configuration from environment variables
-         */
-        loadFromEnvironment() {
-            const envConfig = {};
-            for (const [configPath, envVar] of Object.entries(this.environmentMapping)) {
-                const envValue = process.env[envVar];
-                if (envValue !== undefined) {
-                    this.setNestedValue(envConfig, configPath, this.parseEnvironmentValue(envValue));
-                }
-            }
-            if (Object.keys(envConfig).length > 0) {
-                this.updateConfig(envConfig);
-                this.updateMetadata('environment');
-            }
-        }
-        /**
-         * Validate current configuration
-         */
-        validateConfiguration(config = this.config) {
-            return validateConfig(config, crebConfigSchema);
-        }
-        /**
-         * Enable hot-reload for configuration files
-         */
-        enableHotReload(options = {}) {
-            this.hotReloadConfig = { ...this.hotReloadConfig, ...options, enabled: true };
-        }
-        /**
-         * Disable hot-reload
-         */
-        disableHotReload() {
-            this.hotReloadConfig.enabled = false;
-            this.watchers.forEach(watcher => watcher.close());
-            this.watchers = [];
-        }
-        /**
-         * Get configuration metadata
-         */
-        getMetadata() {
-            return Object.freeze({ ...this.metadata });
-        }
-        /**
-         * Get configuration history
-         */
-        getHistory() {
-            return this.configHistory.map(entry => ({
-                config: this.deepFreeze({ ...entry.config }),
-                timestamp: entry.timestamp
-            }));
-        }
-        /**
-         * Reset configuration to defaults
-         */
-        resetToDefaults() {
-            const oldConfig = { ...this.config };
-            this.config = { ...defaultConfig };
-            this.updateMetadata('default');
-            this.emitChangeEvents(oldConfig, this.config);
-        }
-        /**
-         * Generate documentation for current configuration schema
-         */
-        generateDocumentation() {
-            return generateSchemaDocumentation(crebConfigSchema, 'CREB Configuration');
-        }
-        /**
-         * Get configuration as JSON string
-         */
-        toJSON() {
-            return JSON.stringify(this.config, null, 2);
-        }
-        /**
-         * Get configuration summary for debugging
-         */
-        getSummary() {
-            const validation = this.validateConfiguration();
-            return `
-CREB Configuration Summary
-=========================
-Version: ${this.metadata.version}
-Last Modified: ${this.metadata.lastModified.toISOString()}
-Source: ${this.metadata.source.type}
-Valid: ${validation.isValid}
-Errors: ${validation.errors.length}
-Warnings: ${validation.warnings.length}
-Hot Reload: ${this.hotReloadConfig.enabled ? 'Enabled' : 'Disabled'}
-
-Current Configuration:
-${this.toJSON()}
-    `.trim();
-        }
-        /**
-         * Dispose of resources
-         */
-        dispose() {
-            this.disableHotReload();
-            this.removeAllListeners();
-        }
-        // Private methods
-        createDefaultEnvironmentMapping() {
-            return {
-                'cache.maxSize': 'CREB_CACHE_MAX_SIZE',
-                'cache.ttl': 'CREB_CACHE_TTL',
-                'cache.strategy': 'CREB_CACHE_STRATEGY',
-                'performance.enableWasm': 'CREB_ENABLE_WASM',
-                'performance.workerThreads': 'CREB_WORKER_THREADS',
-                'performance.batchSize': 'CREB_BATCH_SIZE',
-                'data.providers': 'CREB_DATA_PROVIDERS',
-                'data.syncInterval': 'CREB_SYNC_INTERVAL',
-                'data.offlineMode': 'CREB_OFFLINE_MODE',
-                'logging.level': 'CREB_LOG_LEVEL',
-                'logging.format': 'CREB_LOG_FORMAT',
-                'logging.destinations': 'CREB_LOG_DESTINATIONS'
-            };
-        }
-        parseEnvironmentValue(value) {
-            // Try to parse as boolean
-            if (value.toLowerCase() === 'true')
-                return true;
-            if (value.toLowerCase() === 'false')
-                return false;
-            // Try to parse as number
-            const numValue = Number(value);
-            if (!isNaN(numValue))
-                return numValue;
-            // Try to parse as JSON array
-            if (value.startsWith('[') && value.endsWith(']')) {
-                try {
-                    return JSON.parse(value);
-                }
-                catch {
-                    // Fall back to comma-separated values
-                    return value.slice(1, -1).split(',').map(v => v.trim());
-                }
-            }
-            // Return as string
-            return value;
-        }
-        setNestedValue(obj, path, value) {
-            const keys = path.split('.');
-            let current = obj;
-            for (let i = 0; i < keys.length - 1; i++) {
-                if (!(keys[i] in current)) {
-                    current[keys[i]] = {};
-                }
-                current = current[keys[i]];
-            }
-            current[keys[keys.length - 1]] = value;
-        }
-        mergeConfigs(base, partial) {
-            const result = { ...base };
-            for (const [key, value] of Object.entries(partial)) {
-                if (value !== undefined) {
-                    if (typeof value === 'object' && !Array.isArray(value)) {
-                        result[key] = {
-                            ...base[key],
-                            ...value
-                        };
-                    }
-                    else {
-                        result[key] = value;
-                    }
-                }
-            }
-            return result;
-        }
-        updateMetadata(sourceType) {
-            this.metadata = {
-                ...this.metadata,
-                lastModified: new Date(),
-                source: {
-                    type: sourceType,
-                    priority: sourceType === 'environment' ? 3 : sourceType === 'file' ? 2 : 1,
-                    description: `Configuration loaded from ${sourceType}`
-                },
-                checksum: this.calculateChecksum(this.config)
-            };
-        }
-        calculateChecksum(config) {
-            const str = JSON.stringify(config);
-            let hash = 0;
-            for (let i = 0; i < str.length; i++) {
-                const char = str.charCodeAt(i);
-                hash = ((hash << 5) - hash) + char;
-                hash = hash & hash; // Convert to 32-bit integer
-            }
-            return hash.toString(16);
-        }
-        saveToHistory() {
-            this.configHistory.push({
-                config: { ...this.config },
-                timestamp: new Date()
-            });
-            // Keep only last 10 entries
-            if (this.configHistory.length > 10) {
-                this.configHistory.shift();
-            }
-        }
-        emitChangeEvents(oldConfig, newConfig) {
-            const changes = this.findConfigChanges(oldConfig, newConfig);
-            for (const change of changes) {
-                this.emit('configChanged', change);
-                this.emit(`configChanged:${change.path}`, change);
-            }
-        }
-        findConfigChanges(oldConfig, newConfig, prefix = '') {
-            const changes = [];
-            for (const [key, newValue] of Object.entries(newConfig)) {
-                const path = prefix ? `${prefix}.${key}` : key;
-                const oldValue = oldConfig[key];
-                if (typeof newValue === 'object' && !Array.isArray(newValue) && newValue !== null) {
-                    changes.push(...this.findConfigChanges(oldValue || {}, newValue, path));
-                }
-                else if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
-                    changes.push({
-                        path,
-                        oldValue,
-                        newValue,
-                        timestamp: new Date()
-                    });
-                }
-            }
-            return changes;
-        }
-        watchConfigFile(filePath) {
-            const watcher = fs__namespace.watch(filePath, { persistent: false }, (eventType) => {
-                if (eventType === 'change') {
-                    setTimeout(() => {
-                        this.loadFromFile(filePath).catch(error => {
-                            this.emit('error', new Error(`Hot-reload failed: ${error.message}`));
-                        });
-                    }, this.hotReloadConfig.debounceMs);
-                }
-            });
-            this.watchers.push(watcher);
-        }
-        /**
-         * Deep freeze an object to make it truly immutable
-         */
-        deepFreeze(obj) {
-            // Get property names
-            Object.getOwnPropertyNames(obj).forEach(prop => {
-                const value = obj[prop];
-                // Freeze properties before freezing self
-                if (value && typeof value === 'object') {
-                    this.deepFreeze(value);
-                }
-            });
-            return Object.freeze(obj);
-        }
-    }
-    /**
-     * Singleton configuration manager instance
-     */
-    const configManager = new ConfigManager();
-    /**
-     * Convenience function to get configuration value
-     */
-    function getConfig(path) {
-        return configManager.get(path);
-    }
-    /**
-     * Convenience function to set configuration value
-     */
-    function setConfig(path, value) {
-        configManager.set(path, value);
-    }
-    /**
-     * Convenience function to get full configuration
-     */
-    function getFullConfig() {
-        return configManager.getConfig();
-    }
-
-    /**
      * Configuration Types for CREB-JS
      *
      * Defines all configuration interfaces and types used throughout the application.
@@ -8189,1086 +10157,6 @@ ${this.toJSON()}
             'data' in obj &&
             'logging' in obj);
     }
-
-    /**
-     * Cache Eviction Policies for CREB-JS
-     *
-     * Implements various cache eviction strategies including LRU, LFU, FIFO, TTL, and Random.
-     * Each policy provides different trade-offs between performance and memory efficiency.
-     */
-    /**
-     * Least Recently Used (LRU) eviction policy
-     * Evicts entries that haven't been accessed for the longest time
-     */
-    class LRUEvictionPolicy {
-        constructor() {
-            this.strategy = 'lru';
-        }
-        selectEvictionCandidates(entries, config, targetCount) {
-            const candidates = [];
-            for (const [key, entry] of entries.entries()) {
-                candidates.push({ key, lastAccessed: entry.lastAccessed });
-            }
-            // Sort by last accessed time (oldest first)
-            candidates.sort((a, b) => a.lastAccessed - b.lastAccessed);
-            return candidates.slice(0, targetCount).map(c => c.key);
-        }
-        onAccess(entry) {
-            entry.lastAccessed = Date.now();
-            entry.accessCount++;
-        }
-        onInsert(entry) {
-            const now = Date.now();
-            entry.lastAccessed = now;
-            entry.accessCount = 1;
-        }
-    }
-    /**
-     * Least Frequently Used (LFU) eviction policy
-     * Evicts entries with the lowest access frequency
-     */
-    class LFUEvictionPolicy {
-        constructor() {
-            this.strategy = 'lfu';
-        }
-        selectEvictionCandidates(entries, config, targetCount) {
-            const candidates = [];
-            for (const [key, entry] of entries.entries()) {
-                candidates.push({
-                    key,
-                    accessCount: entry.accessCount,
-                    lastAccessed: entry.lastAccessed
-                });
-            }
-            // Sort by access count (lowest first), then by last accessed for ties
-            candidates.sort((a, b) => {
-                if (a.accessCount !== b.accessCount) {
-                    return a.accessCount - b.accessCount;
-                }
-                return a.lastAccessed - b.lastAccessed;
-            });
-            return candidates.slice(0, targetCount).map(c => c.key);
-        }
-        onAccess(entry) {
-            entry.lastAccessed = Date.now();
-            entry.accessCount++;
-        }
-        onInsert(entry) {
-            const now = Date.now();
-            entry.lastAccessed = now;
-            entry.accessCount = 1;
-        }
-    }
-    /**
-     * First In, First Out (FIFO) eviction policy
-     * Evicts entries in the order they were inserted
-     */
-    class FIFOEvictionPolicy {
-        constructor() {
-            this.strategy = 'fifo';
-        }
-        selectEvictionCandidates(entries, config, targetCount) {
-            const candidates = [];
-            for (const [key, entry] of entries.entries()) {
-                candidates.push({ key, insertionOrder: entry.insertionOrder });
-            }
-            // Sort by insertion order (oldest first)
-            candidates.sort((a, b) => a.insertionOrder - b.insertionOrder);
-            return candidates.slice(0, targetCount).map(c => c.key);
-        }
-        onAccess(entry) {
-            entry.lastAccessed = Date.now();
-            entry.accessCount++;
-        }
-        onInsert(entry) {
-            const now = Date.now();
-            entry.lastAccessed = now;
-            entry.accessCount = 1;
-        }
-    }
-    /**
-     * Time To Live (TTL) eviction policy
-     * Evicts expired entries first, then falls back to LRU
-     */
-    class TTLEvictionPolicy {
-        constructor() {
-            this.strategy = 'ttl';
-        }
-        selectEvictionCandidates(entries, config, targetCount) {
-            const now = Date.now();
-            const expired = [];
-            const nonExpired = [];
-            for (const [key, entry] of entries.entries()) {
-                if (entry.ttl > 0 && now >= entry.expiresAt) {
-                    expired.push(key);
-                }
-                else {
-                    nonExpired.push({ key, lastAccessed: entry.lastAccessed });
-                }
-            }
-            // Return expired entries first
-            if (expired.length >= targetCount) {
-                return expired.slice(0, targetCount);
-            }
-            // If not enough expired entries, use LRU for the rest
-            const remaining = targetCount - expired.length;
-            nonExpired.sort((a, b) => a.lastAccessed - b.lastAccessed);
-            return [...expired, ...nonExpired.slice(0, remaining).map(c => c.key)];
-        }
-        onAccess(entry) {
-            entry.lastAccessed = Date.now();
-            entry.accessCount++;
-        }
-        onInsert(entry) {
-            const now = Date.now();
-            entry.lastAccessed = now;
-            entry.accessCount = 1;
-        }
-    }
-    /**
-     * Random eviction policy
-     * Evicts random entries (useful for testing and as fallback)
-     */
-    class RandomEvictionPolicy {
-        constructor() {
-            this.strategy = 'random';
-        }
-        selectEvictionCandidates(entries, config, targetCount) {
-            const keys = Array.from(entries.keys());
-            const candidates = [];
-            // Fisher-Yates shuffle to get random keys
-            for (let i = 0; i < targetCount && i < keys.length; i++) {
-                const randomIndex = Math.floor(Math.random() * (keys.length - i)) + i;
-                [keys[i], keys[randomIndex]] = [keys[randomIndex], keys[i]];
-                candidates.push(keys[i]);
-            }
-            return candidates;
-        }
-        onAccess(entry) {
-            entry.lastAccessed = Date.now();
-            entry.accessCount++;
-        }
-        onInsert(entry) {
-            const now = Date.now();
-            entry.lastAccessed = now;
-            entry.accessCount = 1;
-        }
-    }
-    /**
-     * Eviction policy factory
-     */
-    class EvictionPolicyFactory {
-        /**
-         * Get eviction policy instance
-         */
-        static getPolicy(strategy) {
-            const policy = this.policies.get(strategy);
-            if (!policy) {
-                throw new Error(`Unknown eviction strategy: ${strategy}`);
-            }
-            return policy;
-        }
-        /**
-         * Register custom eviction policy
-         */
-        static registerPolicy(policy) {
-            this.policies.set(policy.strategy, policy);
-        }
-        /**
-         * Get all available strategies
-         */
-        static getAvailableStrategies() {
-            return Array.from(this.policies.keys());
-        }
-    }
-    EvictionPolicyFactory.policies = new Map([
-        ['lru', new LRUEvictionPolicy()],
-        ['lfu', new LFUEvictionPolicy()],
-        ['fifo', new FIFOEvictionPolicy()],
-        ['ttl', new TTLEvictionPolicy()],
-        ['random', new RandomEvictionPolicy()]
-    ]);
-    /**
-     * Adaptive eviction policy that switches strategies based on access patterns
-     */
-    class AdaptiveEvictionPolicy {
-        constructor(fallbackStrategy = 'lru') {
-            this.fallbackStrategy = fallbackStrategy;
-            this.strategy = 'lru'; // Default fallback
-            this.performanceHistory = new Map();
-            this.evaluationWindow = 100; // Number of operations to evaluate
-            this.operationCount = 0;
-            this.currentPolicy = EvictionPolicyFactory.getPolicy(fallbackStrategy);
-            // Initialize performance tracking
-            for (const strategy of EvictionPolicyFactory.getAvailableStrategies()) {
-                this.performanceHistory.set(strategy, []);
-            }
-        }
-        selectEvictionCandidates(entries, config, targetCount) {
-            this.operationCount++;
-            // Periodically evaluate and potentially switch strategies
-            if (this.operationCount % this.evaluationWindow === 0) {
-                this.evaluateAndAdapt(entries, config);
-            }
-            return this.currentPolicy.selectEvictionCandidates(entries, config, targetCount);
-        }
-        onAccess(entry) {
-            this.currentPolicy.onAccess(entry);
-        }
-        onInsert(entry) {
-            this.currentPolicy.onInsert(entry);
-        }
-        /**
-         * Evaluate current performance and adapt strategy if needed
-         */
-        evaluateAndAdapt(entries, config) {
-            // Calculate access pattern metrics
-            const now = Date.now();
-            let totalAccesses = 0;
-            let recentAccesses = 0;
-            let accessVariance = 0;
-            let meanAccess = 0;
-            const accessCounts = [];
-            for (const entry of entries.values()) {
-                totalAccesses += entry.accessCount;
-                accessCounts.push(entry.accessCount);
-                // Count recent accesses (last hour)
-                if (now - entry.lastAccessed < 3600000) {
-                    recentAccesses++;
-                }
-            }
-            if (accessCounts.length > 0) {
-                meanAccess = totalAccesses / accessCounts.length;
-                accessVariance = accessCounts.reduce((sum, count) => sum + Math.pow(count - meanAccess, 2), 0) / accessCounts.length;
-            }
-            // Determine optimal strategy based on patterns
-            let optimalStrategy;
-            if (accessVariance > meanAccess * 2) {
-                // High variance suggests some items are much more popular -> LFU
-                optimalStrategy = 'lfu';
-            }
-            else if (recentAccesses / entries.size > 0.8) {
-                // Most items accessed recently -> LRU
-                optimalStrategy = 'lru';
-            }
-            else if (totalAccesses / entries.size < 2) {
-                // Low overall access -> FIFO
-                optimalStrategy = 'fifo';
-            }
-            else {
-                // Mixed pattern -> TTL
-                optimalStrategy = 'ttl';
-            }
-            // Switch strategy if different from current
-            if (optimalStrategy !== this.currentPolicy.strategy) {
-                this.currentPolicy = EvictionPolicyFactory.getPolicy(optimalStrategy);
-            }
-        }
-        /**
-         * Get current strategy being used
-         */
-        getCurrentStrategy() {
-            return this.currentPolicy.strategy;
-        }
-    }
-
-    /**
-     * Cache Metrics Collection and Analysis for CREB-JS
-     *
-     * Provides comprehensive metrics collection, analysis, and reporting for cache performance.
-     * Includes real-time monitoring, historical analysis, and performance recommendations.
-     */
-    /**
-     * Real-time cache metrics collector
-     */
-    class CacheMetricsCollector {
-        constructor() {
-            this.history = [];
-            this.maxHistorySize = 100;
-            this.eventCounts = new Map();
-            this.accessTimes = [];
-            this.maxAccessTimeSamples = 1000;
-            this.resetStats();
-        }
-        /**
-         * Reset all statistics
-         */
-        resetStats() {
-            this.stats = {
-                hits: 0,
-                misses: 0,
-                hitRate: 0,
-                size: 0,
-                memoryUsage: 0,
-                memoryUtilization: 0,
-                evictions: 0,
-                expirations: 0,
-                averageAccessTime: 0,
-                evictionBreakdown: {
-                    'lru': 0,
-                    'lfu': 0,
-                    'fifo': 0,
-                    'ttl': 0,
-                    'random': 0
-                },
-                lastUpdated: Date.now()
-            };
-            this.eventCounts.clear();
-            this.accessTimes = [];
-        }
-        /**
-         * Record a cache event
-         */
-        recordEvent(event) {
-            const currentCount = this.eventCounts.get(event.type) || 0;
-            this.eventCounts.set(event.type, currentCount + 1);
-            switch (event.type) {
-                case 'hit':
-                    this.stats.hits++;
-                    break;
-                case 'miss':
-                    this.stats.misses++;
-                    break;
-                case 'eviction':
-                    this.stats.evictions++;
-                    if (event.metadata?.strategy) {
-                        this.stats.evictionBreakdown[event.metadata.strategy]++;
-                    }
-                    break;
-                case 'expiration':
-                    this.stats.expirations++;
-                    break;
-            }
-            // Record access time if available
-            if (event.metadata?.latency !== undefined) {
-                this.accessTimes.push(event.metadata.latency);
-                if (this.accessTimes.length > this.maxAccessTimeSamples) {
-                    this.accessTimes.shift(); // Remove oldest sample
-                }
-            }
-            this.updateComputedStats();
-        }
-        /**
-         * Update cache size and memory usage
-         */
-        updateCacheInfo(size, memoryUsage, maxMemory) {
-            this.stats.size = size;
-            this.stats.memoryUsage = memoryUsage;
-            this.stats.memoryUtilization = maxMemory > 0 ? (memoryUsage / maxMemory) * 100 : 0;
-            this.stats.lastUpdated = Date.now();
-        }
-        /**
-         * Get current statistics
-         */
-        getStats() {
-            return { ...this.stats };
-        }
-        /**
-         * Get comprehensive metrics with historical data and trends
-         */
-        getMetrics() {
-            const current = this.getStats();
-            // Calculate trends
-            const trends = this.calculateTrends();
-            // Calculate peaks
-            const peaks = this.calculatePeaks();
-            return {
-                current,
-                history: [...this.history],
-                trends,
-                peaks
-            };
-        }
-        /**
-         * Take a snapshot of current stats for historical tracking
-         */
-        takeSnapshot() {
-            const snapshot = this.getStats();
-            this.history.push(snapshot);
-            if (this.history.length > this.maxHistorySize) {
-                this.history.shift(); // Remove oldest snapshot
-            }
-        }
-        /**
-         * Get event counts
-         */
-        getEventCounts() {
-            return new Map(this.eventCounts);
-        }
-        /**
-         * Get access time percentiles
-         */
-        getAccessTimePercentiles() {
-            if (this.accessTimes.length === 0) {
-                return { p50: 0, p90: 0, p95: 0, p99: 0 };
-            }
-            const sorted = [...this.accessTimes].sort((a, b) => a - b);
-            sorted.length;
-            return {
-                p50: this.getPercentile(sorted, 50),
-                p90: this.getPercentile(sorted, 90),
-                p95: this.getPercentile(sorted, 95),
-                p99: this.getPercentile(sorted, 99)
-            };
-        }
-        /**
-         * Update computed statistics
-         */
-        updateComputedStats() {
-            const total = this.stats.hits + this.stats.misses;
-            this.stats.hitRate = total > 0 ? (this.stats.hits / total) * 100 : 0;
-            if (this.accessTimes.length > 0) {
-                this.stats.averageAccessTime = this.accessTimes.reduce((sum, time) => sum + time, 0) / this.accessTimes.length;
-            }
-            this.stats.lastUpdated = Date.now();
-        }
-        /**
-         * Calculate performance trends
-         */
-        calculateTrends() {
-            if (this.history.length < 3) {
-                return {
-                    hitRateTrend: 'stable',
-                    memoryTrend: 'stable',
-                    latencyTrend: 'stable'
-                };
-            }
-            const recent = this.history.slice(-3);
-            // Hit rate trend
-            const hitRateChange = recent[2].hitRate - recent[0].hitRate;
-            const hitRateTrend = Math.abs(hitRateChange) < 1 ? 'stable' :
-                hitRateChange > 0 ? 'improving' : 'declining';
-            // Memory trend
-            const memoryChange = recent[2].memoryUtilization - recent[0].memoryUtilization;
-            const memoryTrend = Math.abs(memoryChange) < 5 ? 'stable' :
-                memoryChange > 0 ? 'increasing' : 'decreasing';
-            // Latency trend
-            const latencyChange = recent[2].averageAccessTime - recent[0].averageAccessTime;
-            const latencyTrend = Math.abs(latencyChange) < 0.1 ? 'stable' :
-                latencyChange < 0 ? 'improving' : 'degrading';
-            return {
-                hitRateTrend,
-                memoryTrend,
-                latencyTrend
-            };
-        }
-        /**
-         * Calculate peak performance metrics
-         */
-        calculatePeaks() {
-            if (this.history.length === 0) {
-                return {
-                    maxHitRate: this.stats.hitRate,
-                    maxMemoryUsage: this.stats.memoryUsage,
-                    minLatency: this.stats.averageAccessTime
-                };
-            }
-            const allStats = [...this.history, this.stats];
-            return {
-                maxHitRate: Math.max(...allStats.map(s => s.hitRate)),
-                maxMemoryUsage: Math.max(...allStats.map(s => s.memoryUsage)),
-                minLatency: Math.min(...allStats.map(s => s.averageAccessTime))
-            };
-        }
-        /**
-         * Get percentile value from sorted array
-         */
-        getPercentile(sorted, percentile) {
-            const index = Math.ceil((percentile / 100) * sorted.length) - 1;
-            return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
-        }
-    }
-    /**
-     * Cache performance analyzer
-     */
-    class CachePerformanceAnalyzer {
-        /**
-         * Analyze cache performance and provide recommendations
-         */
-        static analyze(metrics) {
-            const { current, trends, history } = metrics;
-            const issues = [];
-            const recommendations = [];
-            const insights = [];
-            let score = 100;
-            // Analyze hit rate
-            if (current.hitRate < 50) {
-                score -= 30;
-                issues.push('Low cache hit rate');
-                recommendations.push('Consider increasing cache size or optimizing access patterns');
-            }
-            else if (current.hitRate < 70) {
-                score -= 15;
-                issues.push('Moderate cache hit rate');
-                recommendations.push('Review cache eviction strategy');
-            }
-            // Analyze memory utilization
-            if (current.memoryUtilization > 90) {
-                score -= 20;
-                issues.push('High memory utilization');
-                recommendations.push('Increase memory limit or improve eviction policy');
-            }
-            else if (current.memoryUtilization < 30) {
-                insights.push('Low memory utilization - cache size could be reduced');
-            }
-            // Analyze access time
-            if (current.averageAccessTime > 5) {
-                score -= 15;
-                issues.push('High average access time');
-                recommendations.push('Check for lock contention or optimize data structures');
-            }
-            // Analyze trends
-            if (trends.hitRateTrend === 'declining') {
-                score -= 10;
-                issues.push('Declining hit rate trend');
-                recommendations.push('Monitor access patterns and consider adaptive caching');
-            }
-            if (trends.latencyTrend === 'degrading') {
-                score -= 10;
-                issues.push('Increasing access latency');
-                recommendations.push('Profile cache operations for performance bottlenecks');
-            }
-            // Analyze eviction distribution
-            const totalEvictions = Object.values(current.evictionBreakdown).reduce((sum, count) => sum + count, 0);
-            if (totalEvictions > 0) {
-                const dominantStrategy = Object.entries(current.evictionBreakdown)
-                    .reduce((max, [strategy, count]) => count > max.count ? { strategy, count } : max, { strategy: '', count: 0 });
-                if (dominantStrategy.count / totalEvictions > 0.8) {
-                    insights.push(`Cache primarily using ${dominantStrategy.strategy} eviction`);
-                }
-                else {
-                    insights.push('Cache using mixed eviction strategies - consider adaptive policy');
-                }
-            }
-            // Historical comparison
-            if (history.length > 0) {
-                const baseline = history[0];
-                const hitRateImprovement = current.hitRate - baseline.hitRate;
-                if (hitRateImprovement > 10) {
-                    insights.push('Significant hit rate improvement observed');
-                }
-                else if (hitRateImprovement < -10) {
-                    issues.push('Hit rate has declined significantly');
-                    recommendations.push('Review recent changes to access patterns or cache configuration');
-                }
-            }
-            return {
-                score: Math.max(0, score),
-                issues,
-                recommendations,
-                insights
-            };
-        }
-        /**
-         * Generate performance report
-         */
-        static generateReport(metrics) {
-            const analysis = this.analyze(metrics);
-            const { current } = metrics;
-            let report = '# Cache Performance Report\n\n';
-            report += `## Overall Score: ${analysis.score}/100\n\n`;
-            report += '## Current Statistics\n';
-            report += `- Hit Rate: ${current.hitRate.toFixed(2)}%\n`;
-            report += `- Cache Size: ${current.size} entries\n`;
-            report += `- Memory Usage: ${(current.memoryUsage / 1024 / 1024).toFixed(2)} MB (${current.memoryUtilization.toFixed(1)}%)\n`;
-            report += `- Average Access Time: ${current.averageAccessTime.toFixed(2)}ms\n`;
-            report += `- Evictions: ${current.evictions}\n`;
-            report += `- Expirations: ${current.expirations}\n\n`;
-            report += '## Trends\n';
-            report += `- Hit Rate: ${metrics.trends.hitRateTrend}\n`;
-            report += `- Memory Usage: ${metrics.trends.memoryTrend}\n`;
-            report += `- Latency: ${metrics.trends.latencyTrend}\n\n`;
-            if (analysis.issues.length > 0) {
-                report += '## Issues\n';
-                analysis.issues.forEach(issue => {
-                    report += `- ${issue}\n`;
-                });
-                report += '\n';
-            }
-            if (analysis.recommendations.length > 0) {
-                report += '## Recommendations\n';
-                analysis.recommendations.forEach(rec => {
-                    report += `- ${rec}\n`;
-                });
-                report += '\n';
-            }
-            if (analysis.insights.length > 0) {
-                report += '## Insights\n';
-                analysis.insights.forEach(insight => {
-                    report += `- ${insight}\n`;
-                });
-                report += '\n';
-            }
-            return report;
-        }
-    }
-
-    /**
-     * Advanced Cache Implementation for CREB-JS
-     *
-     * Production-ready cache with TTL, multiple eviction policies, metrics,
-     * memory management, and thread safety.
-     */
-    /**
-     * Default cache configuration
-     */
-    const DEFAULT_CONFIG = {
-        maxSize: 1000,
-        defaultTtl: 3600000, // 1 hour
-        evictionStrategy: 'lru',
-        fallbackStrategy: 'fifo',
-        maxMemoryBytes: 100 * 1024 * 1024, // 100MB
-        enableMetrics: true,
-        metricsInterval: 60000, // 1 minute
-        autoCleanup: true,
-        cleanupInterval: 300000, // 5 minutes
-        threadSafe: true
-    };
-    /**
-     * Advanced cache implementation with comprehensive features
-     */
-    class AdvancedCache {
-        constructor(config = {}) {
-            this.entries = new Map();
-            this.listeners = new Map();
-            this.insertionCounter = 0;
-            this.mutex = new AsyncMutex();
-            this.config = { ...DEFAULT_CONFIG, ...config };
-            this.metrics = new CacheMetricsCollector();
-            // Start background tasks
-            if (this.config.autoCleanup) {
-                this.startCleanupTimer();
-            }
-            if (this.config.enableMetrics) {
-                this.startMetricsTimer();
-            }
-        }
-        /**
-         * Get value from cache
-         */
-        async get(key) {
-            const startTime = Date.now();
-            if (this.config.threadSafe) {
-                return this.mutex.runExclusive(() => this.getInternal(key, startTime));
-            }
-            else {
-                return this.getInternal(key, startTime);
-            }
-        }
-        /**
-         * Set value in cache
-         */
-        async set(key, value, ttl) {
-            const startTime = Date.now();
-            if (this.config.threadSafe) {
-                return this.mutex.runExclusive(() => this.setInternal(key, value, ttl, startTime));
-            }
-            else {
-                return this.setInternal(key, value, ttl, startTime);
-            }
-        }
-        /**
-         * Check if key exists in cache
-         */
-        async has(key) {
-            const entry = this.entries.get(key);
-            if (!entry)
-                return false;
-            // Check if expired
-            const now = Date.now();
-            if (entry.ttl > 0 && now >= entry.expiresAt) {
-                await this.deleteInternal(key);
-                return false;
-            }
-            return true;
-        }
-        /**
-         * Delete entry from cache
-         */
-        async delete(key) {
-            if (this.config.threadSafe) {
-                return this.mutex.runExclusive(() => this.deleteInternal(key));
-            }
-            else {
-                return this.deleteInternal(key);
-            }
-        }
-        /**
-         * Clear all entries
-         */
-        async clear() {
-            if (this.config.threadSafe) {
-                return this.mutex.runExclusive(() => this.clearInternal());
-            }
-            else {
-                return this.clearInternal();
-            }
-        }
-        /**
-         * Get current cache statistics
-         */
-        getStats() {
-            this.updateMetrics();
-            return this.metrics.getStats();
-        }
-        /**
-         * Get detailed metrics
-         */
-        getMetrics() {
-            this.metrics.takeSnapshot();
-            return this.metrics.getMetrics();
-        }
-        /**
-         * Force cleanup of expired entries
-         */
-        async cleanup() {
-            if (this.config.threadSafe) {
-                return this.mutex.runExclusive(() => this.cleanupInternal());
-            }
-            else {
-                return this.cleanupInternal();
-            }
-        }
-        /**
-         * Add event listener
-         */
-        addEventListener(type, listener) {
-            if (!this.listeners.has(type)) {
-                this.listeners.set(type, new Set());
-            }
-            this.listeners.get(type).add(listener);
-        }
-        /**
-         * Remove event listener
-         */
-        removeEventListener(type, listener) {
-            const typeListeners = this.listeners.get(type);
-            if (typeListeners) {
-                typeListeners.delete(listener);
-            }
-        }
-        /**
-         * Get all keys
-         */
-        keys() {
-            return Array.from(this.entries.keys());
-        }
-        /**
-         * Get cache size
-         */
-        size() {
-            return this.entries.size;
-        }
-        /**
-         * Get memory usage in bytes
-         */
-        memoryUsage() {
-            let total = 0;
-            for (const entry of this.entries.values()) {
-                total += entry.sizeBytes;
-            }
-            return total;
-        }
-        /**
-         * Check if cache is healthy
-         */
-        async healthCheck() {
-            const metrics = this.getMetrics();
-            const analysis = CachePerformanceAnalyzer.analyze(metrics);
-            return {
-                healthy: analysis.score >= 70,
-                issues: analysis.issues,
-                recommendations: analysis.recommendations
-            };
-        }
-        /**
-         * Shutdown cache and cleanup resources
-         */
-        shutdown() {
-            if (this.cleanupTimer) {
-                clearInterval(this.cleanupTimer);
-            }
-            if (this.metricsTimer) {
-                clearInterval(this.metricsTimer);
-            }
-        }
-        // Internal implementation methods
-        async getInternal(key, startTime) {
-            const entry = this.entries.get(key);
-            const latency = Date.now() - startTime;
-            if (!entry) {
-                this.emitEvent('miss', key, undefined, { latency });
-                return { success: true, hit: false, latency };
-            }
-            // Check if expired
-            const now = Date.now();
-            if (entry.ttl > 0 && now >= entry.expiresAt) {
-                await this.deleteInternal(key);
-                this.emitEvent('miss', key, undefined, { latency, expired: true });
-                return { success: true, hit: false, latency, metadata: { expired: true } };
-            }
-            // Update access metadata
-            const policy = EvictionPolicyFactory.getPolicy(this.config.evictionStrategy);
-            policy.onAccess(entry);
-            this.emitEvent('hit', key, entry.value, { latency });
-            return { success: true, value: entry.value, hit: true, latency };
-        }
-        async setInternal(key, value, ttl, startTime) {
-            const now = Date.now();
-            const entryTtl = ttl ?? this.config.defaultTtl;
-            const latency = startTime ? now - startTime : 0;
-            // Calculate size estimate
-            const sizeBytes = this.estimateSize(value);
-            // Check memory constraints before adding
-            const currentMemory = this.memoryUsage();
-            if (this.config.maxMemoryBytes > 0 && currentMemory + sizeBytes > this.config.maxMemoryBytes) {
-                await this.evictForMemory(sizeBytes);
-            }
-            // Check size constraints and evict if necessary
-            if (this.entries.size >= this.config.maxSize) {
-                await this.evictEntries(1);
-            }
-            // Create new entry
-            const entry = {
-                value,
-                createdAt: now,
-                lastAccessed: now,
-                accessCount: 1,
-                ttl: entryTtl,
-                expiresAt: entryTtl > 0 ? now + entryTtl : 0,
-                sizeBytes,
-                insertionOrder: this.insertionCounter++
-            };
-            // Update access metadata
-            const policy = EvictionPolicyFactory.getPolicy(this.config.evictionStrategy);
-            policy.onInsert(entry);
-            // Store entry
-            this.entries.set(key, entry);
-            this.emitEvent('set', key, value, { latency });
-            return { success: true, hit: false, latency };
-        }
-        async deleteInternal(key) {
-            const entry = this.entries.get(key);
-            if (!entry)
-                return false;
-            this.entries.delete(key);
-            this.emitEvent('delete', key, entry.value);
-            return true;
-        }
-        async clearInternal() {
-            this.entries.clear();
-            this.insertionCounter = 0;
-            this.emitEvent('clear');
-        }
-        async cleanupInternal() {
-            const now = Date.now();
-            const expiredKeys = [];
-            for (const [key, entry] of this.entries.entries()) {
-                if (entry.ttl > 0 && now >= entry.expiresAt) {
-                    expiredKeys.push(key);
-                }
-            }
-            for (const key of expiredKeys) {
-                this.entries.delete(key);
-                this.emitEvent('expiration', key);
-            }
-            return expiredKeys.length;
-        }
-        async evictEntries(count) {
-            const policy = EvictionPolicyFactory.getPolicy(this.config.evictionStrategy);
-            const candidates = policy.selectEvictionCandidates(this.entries, this.config, count);
-            for (const key of candidates) {
-                const entry = this.entries.get(key);
-                if (entry) {
-                    this.entries.delete(key);
-                    this.emitEvent('eviction', key, entry.value, {
-                        strategy: this.config.evictionStrategy
-                    });
-                }
-            }
-        }
-        async evictForMemory(requiredBytes) {
-            const currentMemory = this.memoryUsage();
-            const targetMemory = this.config.maxMemoryBytes - requiredBytes;
-            if (currentMemory <= targetMemory)
-                return;
-            const bytesToEvict = currentMemory - targetMemory;
-            let evictedBytes = 0;
-            const policy = EvictionPolicyFactory.getPolicy(this.config.evictionStrategy);
-            while (evictedBytes < bytesToEvict && this.entries.size > 0) {
-                const candidates = policy.selectEvictionCandidates(this.entries, this.config, 1);
-                if (candidates.length === 0)
-                    break;
-                const key = candidates[0];
-                const entry = this.entries.get(key);
-                if (entry) {
-                    evictedBytes += entry.sizeBytes;
-                    this.entries.delete(key);
-                    this.emitEvent('eviction', key, entry.value, {
-                        strategy: this.config.evictionStrategy,
-                        reason: 'memory-pressure',
-                        memoryBefore: currentMemory,
-                        memoryAfter: currentMemory - evictedBytes
-                    });
-                }
-            }
-            if (evictedBytes < bytesToEvict) {
-                this.emitEvent('memory-pressure', undefined, undefined, {
-                    reason: 'Unable to free sufficient memory'
-                });
-            }
-        }
-        estimateSize(value) {
-            // Simple size estimation - could be improved with more sophisticated analysis
-            const str = JSON.stringify(value);
-            return str.length * 2; // Rough estimate for UTF-16 encoding
-        }
-        emitEvent(type, key, value, metadata) {
-            const event = {
-                type,
-                key,
-                value,
-                timestamp: Date.now(),
-                metadata
-            };
-            // Record in metrics
-            this.metrics.recordEvent(event);
-            // Notify listeners
-            const typeListeners = this.listeners.get(type);
-            if (typeListeners) {
-                for (const listener of typeListeners) {
-                    try {
-                        listener(event);
-                    }
-                    catch (error) {
-                        console.warn('Cache event listener error:', error);
-                    }
-                }
-            }
-        }
-        updateMetrics() {
-            const size = this.entries.size;
-            const memory = this.memoryUsage();
-            this.metrics.updateCacheInfo(size, memory, this.config.maxMemoryBytes);
-        }
-        startCleanupTimer() {
-            this.cleanupTimer = setInterval(async () => {
-                try {
-                    await this.cleanup();
-                }
-                catch (error) {
-                    console.warn('Cache cleanup error:', error);
-                }
-            }, this.config.cleanupInterval);
-        }
-        startMetricsTimer() {
-            this.metricsTimer = setInterval(() => {
-                this.metrics.takeSnapshot();
-                this.emitEvent('stats-update');
-            }, this.config.metricsInterval);
-        }
-    }
-    /**
-     * Simple async mutex for thread safety
-     */
-    class AsyncMutex {
-        constructor() {
-            this.locked = false;
-            this.queue = [];
-        }
-        async runExclusive(fn) {
-            return new Promise((resolve, reject) => {
-                const run = async () => {
-                    this.locked = true;
-                    try {
-                        const result = await fn();
-                        resolve(result);
-                    }
-                    catch (error) {
-                        reject(error);
-                    }
-                    finally {
-                        this.locked = false;
-                        const next = this.queue.shift();
-                        if (next) {
-                            next();
-                        }
-                    }
-                };
-                if (this.locked) {
-                    this.queue.push(run);
-                }
-                else {
-                    run();
-                }
-            });
-        }
-    }
-    /**
-     * Cache factory for creating configured cache instances
-     */
-    class CacheFactory {
-        static create(configOrPreset) {
-            if (typeof configOrPreset === 'string') {
-                const presetConfig = this.presets[configOrPreset];
-                if (!presetConfig) {
-                    throw new Error(`Unknown cache preset: ${configOrPreset}`);
-                }
-                return new AdvancedCache(presetConfig);
-            }
-            else {
-                return new AdvancedCache(configOrPreset);
-            }
-        }
-        /**
-         * Register custom preset
-         */
-        static registerPreset(name, config) {
-            this.presets[name] = config;
-        }
-        /**
-         * Get available presets
-         */
-        static getPresets() {
-            return Object.keys(this.presets);
-        }
-    }
-    CacheFactory.presets = {
-        'small': {
-            maxSize: 100,
-            maxMemoryBytes: 10 * 1024 * 1024, // 10MB
-            defaultTtl: 1800000, // 30 minutes
-            evictionStrategy: 'lru'
-        },
-        'medium': {
-            maxSize: 1000,
-            maxMemoryBytes: 50 * 1024 * 1024, // 50MB
-            defaultTtl: 3600000, // 1 hour
-            evictionStrategy: 'lru'
-        },
-        'large': {
-            maxSize: 10000,
-            maxMemoryBytes: 200 * 1024 * 1024, // 200MB
-            defaultTtl: 7200000, // 2 hours
-            evictionStrategy: 'lfu'
-        },
-        'memory-optimized': {
-            maxSize: 500,
-            maxMemoryBytes: 25 * 1024 * 1024, // 25MB
-            defaultTtl: 1800000, // 30 minutes
-            evictionStrategy: 'lfu',
-            autoCleanup: true,
-            cleanupInterval: 60000 // 1 minute
-        },
-        'performance-optimized': {
-            maxSize: 5000,
-            maxMemoryBytes: 100 * 1024 * 1024, // 100MB
-            defaultTtl: 3600000, // 1 hour
-            evictionStrategy: 'lru',
-            threadSafe: false, // Better performance but not thread-safe
-            enableMetrics: false // Better performance
-        }
-    };
 
     /**
      * Advanced Cache Integration Example for CREB-JS
@@ -9711,30 +10599,1542 @@ ${this.generateRecommendations(stats, metrics)}
         }, 1000);
     }
 
+    /**
+     * @fileoverview Type definitions for CREB Worker Thread System
+     * @version 1.7.0
+     * @author CREB Development Team
+     *
+     * This module provides comprehensive type definitions for the worker thread system,
+     * enabling efficient offloading of CPU-intensive chemistry calculations.
+     */
+    // ========================================
+    // Core Types and Enums
+    // ========================================
+    /**
+     * Priority levels for task queue management
+     */
+    var TaskPriority;
+    (function (TaskPriority) {
+        TaskPriority[TaskPriority["LOW"] = 0] = "LOW";
+        TaskPriority[TaskPriority["NORMAL"] = 1] = "NORMAL";
+        TaskPriority[TaskPriority["HIGH"] = 2] = "HIGH";
+        TaskPriority[TaskPriority["CRITICAL"] = 3] = "CRITICAL";
+    })(TaskPriority || (TaskPriority = {}));
+    /**
+     * Task status tracking
+     */
+    var TaskStatus;
+    (function (TaskStatus) {
+        TaskStatus["PENDING"] = "pending";
+        TaskStatus["QUEUED"] = "queued";
+        TaskStatus["RUNNING"] = "running";
+        TaskStatus["COMPLETED"] = "completed";
+        TaskStatus["FAILED"] = "failed";
+        TaskStatus["CANCELLED"] = "cancelled";
+        TaskStatus["TIMEOUT"] = "timeout";
+    })(TaskStatus || (TaskStatus = {}));
+    /**
+     * Worker status tracking
+     */
+    var WorkerStatus;
+    (function (WorkerStatus) {
+        WorkerStatus["IDLE"] = "idle";
+        WorkerStatus["BUSY"] = "busy";
+        WorkerStatus["ERROR"] = "error";
+        WorkerStatus["TERMINATED"] = "terminated";
+        WorkerStatus["STARTING"] = "starting";
+    })(WorkerStatus || (WorkerStatus = {}));
+    /**
+     * Chemistry calculation types
+     */
+    var CalculationType;
+    (function (CalculationType) {
+        CalculationType["EQUATION_BALANCING"] = "equation_balancing";
+        CalculationType["THERMODYNAMICS"] = "thermodynamics";
+        CalculationType["STOICHIOMETRY"] = "stoichiometry";
+        CalculationType["BATCH_ANALYSIS"] = "batch_analysis";
+        CalculationType["MATRIX_SOLVING"] = "matrix_solving";
+        CalculationType["COMPOUND_ANALYSIS"] = "compound_analysis";
+    })(CalculationType || (CalculationType = {}));
+    // ========================================
+    // Communication Protocols
+    // ========================================
+    /**
+     * Message types for worker communication
+     */
+    var MessageType;
+    (function (MessageType) {
+        MessageType["TASK_ASSIGNMENT"] = "task_assignment";
+        MessageType["TASK_RESULT"] = "task_result";
+        MessageType["TASK_ERROR"] = "task_error";
+        MessageType["TASK_PROGRESS"] = "task_progress";
+        MessageType["WORKER_READY"] = "worker_ready";
+        MessageType["WORKER_SHUTDOWN"] = "worker_shutdown";
+        MessageType["HEALTH_CHECK"] = "health_check";
+        MessageType["MEMORY_WARNING"] = "memory_warning";
+    })(MessageType || (MessageType = {}));
+    /**
+     * Create a branded worker ID
+     */
+    function createWorkerId(id) {
+        return id;
+    }
+    /**
+     * Create a branded task ID
+     */
+    function createTaskId(id) {
+        return id;
+    }
+
+    /**
+     * @fileoverview Advanced Task Queue with Priority Management
+     * @version 1.7.0
+     * @author CREB Development Team
+     *
+     * This module implements a sophisticated task queue system with priority-based scheduling,
+     * timeout management, and persistence capabilities for the CREB worker thread system.
+     */
+    /**
+     * Advanced task queue with priority management and persistence
+     */
+    exports.TaskQueue = class TaskQueue extends events.EventEmitter {
+        constructor(config = {}) {
+            super();
+            this.config = {
+                maxSize: 10000,
+                priorityLevels: 4,
+                timeoutCleanupInterval: 30000, // 30 seconds
+                persistToDisk: false,
+                ...config
+            };
+            // Initialize priority queues
+            this.queues = new Map();
+            for (let priority = 0; priority < this.config.priorityLevels; priority++) {
+                this.queues.set(priority, []);
+            }
+            this.taskMap = new Map();
+            this.timeouts = new Map();
+            this.startTime = new Date();
+            // Initialize stats
+            this.stats = {
+                totalTasks: 0,
+                pendingTasks: 0,
+                runningTasks: 0,
+                completedTasks: 0,
+                failedTasks: 0,
+                averageWaitTime: 0,
+                averageExecutionTime: 0,
+                throughput: 0,
+                queueLength: 0,
+                priorityBreakdown: {
+                    [TaskPriority.LOW]: 0,
+                    [TaskPriority.NORMAL]: 0,
+                    [TaskPriority.HIGH]: 0,
+                    [TaskPriority.CRITICAL]: 0
+                }
+            };
+            this.setupCleanupInterval();
+            this.setupPersistence();
+        }
+        /**
+         * Enqueue a task with priority-based insertion
+         */
+        async enqueue(task) {
+            if (this.size() >= this.config.maxSize) {
+                throw new ValidationError(`Queue is full (max size: ${this.config.maxSize})`, { maxSize: this.config.maxSize, currentSize: this.size() }, { field: 'queueSize', value: this.size(), constraint: `must be less than ${this.config.maxSize}` });
+            }
+            // Validate task
+            this.validateTask(task);
+            // Add to task map for quick lookup
+            this.taskMap.set(task.id, { ...task });
+            // Add to priority queue
+            const priorityQueue = this.queues.get(task.priority);
+            if (!priorityQueue) {
+                throw new ValidationError(`Invalid priority level: ${task.priority}`, { priority: task.priority, validPriorities: Object.values(TaskPriority) }, { field: 'priority', value: task.priority, constraint: 'must be a valid TaskPriority enum value' });
+            }
+            const node = {
+                task: { ...task },
+                priority: task.priority,
+                enqueuedAt: new Date()
+            };
+            // Insert based on priority and FIFO within priority
+            priorityQueue.push(node);
+            // Setup timeout if specified
+            if (task.timeout && task.timeout > 0) {
+                const timeoutId = setTimeout(() => {
+                    this.handleTaskTimeout(task.id);
+                }, task.timeout);
+                this.timeouts.set(task.id, timeoutId);
+            }
+            // Update stats
+            this.updateStatsOnEnqueue(task);
+            // Emit event
+            this.emit('task-enqueued', task);
+            // Persist if enabled
+            if (this.config.persistToDisk) {
+                await this.persistQueue();
+            }
+        }
+        /**
+         * Dequeue the highest priority task
+         */
+        dequeue() {
+            // Check priorities from highest to lowest
+            for (let priority = TaskPriority.CRITICAL; priority >= TaskPriority.LOW; priority--) {
+                const queue = this.queues.get(priority);
+                if (queue && queue.length > 0) {
+                    const node = queue.shift();
+                    const task = node.task;
+                    // Clean up timeout
+                    this.clearTaskTimeout(task.id);
+                    // Update stats
+                    this.updateStatsOnDequeue(task, node.enqueuedAt);
+                    // Emit event
+                    this.emit('task-dequeued', task);
+                    return task;
+                }
+            }
+            return null;
+        }
+        /**
+         * Peek at the next task without removing it
+         */
+        peek() {
+            for (let priority = TaskPriority.CRITICAL; priority >= TaskPriority.LOW; priority--) {
+                const queue = this.queues.get(priority);
+                if (queue && queue.length > 0) {
+                    return queue[0].task;
+                }
+            }
+            return null;
+        }
+        /**
+         * Get task by ID
+         */
+        getTask(taskId) {
+            return this.taskMap.get(taskId) || null;
+        }
+        /**
+         * Remove a specific task from the queue
+         */
+        removeTask(taskId) {
+            const task = this.taskMap.get(taskId);
+            if (!task) {
+                return false;
+            }
+            // Remove from priority queue
+            const queue = this.queues.get(task.priority);
+            if (queue) {
+                const index = queue.findIndex(node => node.task.id === taskId);
+                if (index !== -1) {
+                    queue.splice(index, 1);
+                }
+            }
+            // Clean up
+            this.taskMap.delete(taskId);
+            this.clearTaskTimeout(taskId);
+            // Update stats
+            this.updateStatsOnRemoval(task);
+            // Emit event
+            this.emit('task-removed', task);
+            return true;
+        }
+        /**
+         * Get tasks by priority
+         */
+        getTasksByPriority(priority) {
+            const queue = this.queues.get(priority);
+            return queue ? queue.map(node => node.task) : [];
+        }
+        /**
+         * Get all pending tasks
+         */
+        getAllTasks() {
+            const allTasks = [];
+            for (const queue of this.queues.values()) {
+                allTasks.push(...queue.map(node => node.task));
+            }
+            return allTasks;
+        }
+        /**
+         * Clear all tasks from the queue
+         */
+        clear() {
+            // Clear all timeouts
+            for (const timeoutId of this.timeouts.values()) {
+                clearTimeout(timeoutId);
+            }
+            // Clear collections
+            for (const queue of this.queues.values()) {
+                queue.length = 0;
+            }
+            this.taskMap.clear();
+            this.timeouts.clear();
+            // Reset stats
+            this.resetStats();
+            // Emit event
+            this.emit('queue-cleared');
+        }
+        /**
+         * Get current queue size
+         */
+        size() {
+            return this.taskMap.size;
+        }
+        /**
+         * Check if queue is empty
+         */
+        isEmpty() {
+            return this.size() === 0;
+        }
+        /**
+         * Check if queue is full
+         */
+        isFull() {
+            return this.size() >= this.config.maxSize;
+        }
+        /**
+         * Get queue statistics
+         */
+        getStats() {
+            return { ...this.stats };
+        }
+        /**
+         * Get detailed queue information
+         */
+        getQueueInfo() {
+            const info = {
+                totalSize: this.size(),
+                maxSize: this.config.maxSize,
+                utilization: (this.size() / this.config.maxSize) * 100,
+                uptime: Date.now() - this.startTime.getTime(),
+                priorityQueues: {}
+            };
+            // Add priority queue details
+            for (const [priority, queue] of this.queues.entries()) {
+                const priorityName = TaskPriority[priority] || `Priority_${priority}`;
+                info.priorityQueues[priorityName] = {
+                    size: queue.length,
+                    oldestTask: queue.length > 0 ? queue[0].enqueuedAt : null,
+                    averageAge: this.calculateAverageAge(queue)
+                };
+            }
+            return info;
+        }
+        /**
+         * Gracefully shutdown the queue
+         */
+        async shutdown() {
+            // Clear intervals
+            if (this.cleanupInterval) {
+                clearInterval(this.cleanupInterval);
+            }
+            if (this.persistenceInterval) {
+                clearInterval(this.persistenceInterval);
+            }
+            // Persist final state if enabled
+            if (this.config.persistToDisk && this.size() > 0) {
+                await this.persistQueue();
+            }
+            // Clear all tasks and timeouts
+            this.clear();
+            // Emit shutdown event
+            this.emit('queue-shutdown');
+        }
+        /**
+         * Load queue from disk (if persistence is enabled)
+         */
+        async loadFromDisk() {
+            if (!this.config.persistToDisk || !this.config.queuePath) {
+                return;
+            }
+            try {
+                const data = await fs.promises.readFile(this.config.queuePath, 'utf-8');
+                const savedTasks = JSON.parse(data);
+                // Restore tasks
+                for (const task of savedTasks) {
+                    await this.enqueue({
+                        ...task,
+                        createdAt: new Date(task.createdAt)
+                    });
+                }
+                this.emit('queue-loaded', savedTasks.length);
+            }
+            catch (error) {
+                // File might not exist or be corrupted - that's okay
+                this.emit('queue-load-error', error);
+            }
+        }
+        // ========================================
+        // Private Methods
+        // ========================================
+        validateTask(task) {
+            if (!task.id || typeof task.id !== 'string') {
+                throw new ValidationError('Task must have a valid string ID', { taskId: task.id, taskType: typeof task.id }, { field: 'taskId', value: task.id, constraint: 'must be a non-empty string' });
+            }
+            if (this.taskMap.has(task.id)) {
+                throw new ValidationError(`Task with ID ${task.id} already exists`, { taskId: task.id, existingTasks: Array.from(this.taskMap.keys()) }, { field: 'taskId', value: task.id, constraint: 'must be unique' });
+            }
+            if (task.priority < 0 || task.priority >= this.config.priorityLevels) {
+                throw new ValidationError(`Invalid priority: ${task.priority}`, { priority: task.priority, maxPriority: this.config.priorityLevels - 1 }, { field: 'priority', value: task.priority, constraint: `must be between 0 and ${this.config.priorityLevels - 1}` });
+            }
+            if (task.timeout !== undefined && task.timeout < 0) {
+                throw new ValidationError('Task timeout must be non-negative', { timeout: task.timeout }, { field: 'timeout', value: task.timeout, constraint: 'must be >= 0' });
+            }
+        }
+        handleTaskTimeout(taskId) {
+            const task = this.taskMap.get(taskId);
+            if (task) {
+                this.removeTask(taskId);
+                this.stats.failedTasks++;
+                this.emit('task-timeout', task);
+            }
+        }
+        clearTaskTimeout(taskId) {
+            const timeoutId = this.timeouts.get(taskId);
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+                this.timeouts.delete(taskId);
+            }
+        }
+        updateStatsOnEnqueue(task) {
+            this.stats.totalTasks++;
+            this.stats.pendingTasks++;
+            this.stats.queueLength = this.size();
+            this.stats.priorityBreakdown[task.priority]++;
+        }
+        updateStatsOnDequeue(task, enqueuedAt) {
+            this.stats.pendingTasks--;
+            this.stats.runningTasks++;
+            this.stats.queueLength = this.size();
+            // Update average wait time
+            const waitTime = Date.now() - enqueuedAt.getTime();
+            this.stats.averageWaitTime = this.calculateMovingAverage(this.stats.averageWaitTime, waitTime, this.stats.totalTasks);
+            // Update throughput
+            const uptimeSeconds = (Date.now() - this.startTime.getTime()) / 1000;
+            this.stats.throughput = this.stats.completedTasks / Math.max(uptimeSeconds, 1);
+        }
+        updateStatsOnRemoval(task) {
+            this.stats.pendingTasks--;
+            this.stats.queueLength = this.size();
+            this.stats.priorityBreakdown[task.priority]--;
+        }
+        calculateMovingAverage(current, newValue, count) {
+            if (count <= 1)
+                return newValue;
+            return ((current * (count - 1)) + newValue) / count;
+        }
+        calculateAverageAge(queue) {
+            if (queue.length === 0)
+                return 0;
+            const now = Date.now();
+            const totalAge = queue.reduce((sum, node) => {
+                return sum + (now - node.enqueuedAt.getTime());
+            }, 0);
+            return totalAge / queue.length;
+        }
+        resetStats() {
+            Object.assign(this.stats, {
+                totalTasks: 0,
+                pendingTasks: 0,
+                runningTasks: 0,
+                completedTasks: 0,
+                failedTasks: 0,
+                averageWaitTime: 0,
+                averageExecutionTime: 0,
+                throughput: 0,
+                queueLength: 0,
+                priorityBreakdown: {
+                    [TaskPriority.LOW]: 0,
+                    [TaskPriority.NORMAL]: 0,
+                    [TaskPriority.HIGH]: 0,
+                    [TaskPriority.CRITICAL]: 0
+                }
+            });
+        }
+        setupCleanupInterval() {
+            this.cleanupInterval = setInterval(() => {
+                this.performCleanup();
+            }, this.config.timeoutCleanupInterval);
+        }
+        setupPersistence() {
+            if (this.config.persistToDisk) {
+                // Persist every 5 minutes
+                this.persistenceInterval = setInterval(() => {
+                    this.persistQueue().catch(error => {
+                        this.emit('persistence-error', error);
+                    });
+                }, 5 * 60 * 1000);
+            }
+        }
+        performCleanup() {
+            // Clean up completed timeouts and update stats
+            const now = Date.now();
+            let cleanedTasks = 0;
+            // This is mainly for housekeeping - actual timeout handling
+            // is done in handleTaskTimeout
+            for (const [taskId, task] of this.taskMap.entries()) {
+                if (task.timeout && task.timeout > 0) {
+                    const age = now - task.createdAt.getTime();
+                    if (age > task.timeout * 2) { // Clean up very old tasks
+                        this.removeTask(taskId);
+                        cleanedTasks++;
+                    }
+                }
+            }
+            if (cleanedTasks > 0) {
+                this.emit('cleanup-completed', cleanedTasks);
+            }
+        }
+        async persistQueue() {
+            if (!this.config.queuePath) {
+                throw new SystemError('Queue path not configured for persistence', { operation: 'persistQueue', config: this.config }, { subsystem: 'workers', resource: 'queue-persistence' });
+            }
+            try {
+                const tasks = this.getAllTasks();
+                const data = JSON.stringify(tasks, null, 2);
+                await fs.promises.writeFile(this.config.queuePath, data, 'utf-8');
+                this.emit('queue-persisted', tasks.length);
+            }
+            catch (error) {
+                this.emit('persistence-error', error);
+                throw error;
+            }
+        }
+    };
+    exports.TaskQueue = __decorate([
+        Injectable(),
+        __metadata("design:paramtypes", [Object])
+    ], exports.TaskQueue);
+    /**
+     * Task builder for fluent task creation
+     */
+    class TaskBuilder {
+        constructor() {
+            this.task = {};
+        }
+        static create() {
+            return new TaskBuilder();
+        }
+        withId(id) {
+            this.task.id = id;
+            return this;
+        }
+        withType(type) {
+            this.task.type = type;
+            return this;
+        }
+        withData(data) {
+            this.task.data = data;
+            return this;
+        }
+        withPriority(priority) {
+            this.task.priority = priority;
+            return this;
+        }
+        withTimeout(timeout) {
+            this.task.timeout = timeout;
+            return this;
+        }
+        withRetries(retries) {
+            this.task.retryAttempts = retries;
+            return this;
+        }
+        withMetadata(metadata) {
+            this.task.metadata = metadata;
+            return this;
+        }
+        build() {
+            // Validate required fields
+            if (!this.task.id) {
+                this.task.id = createTaskId(`task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+            }
+            if (!this.task.type) {
+                throw new ValidationError('Task type is required', { task: this.task }, { field: 'type', value: this.task.type, constraint: 'must be specified' });
+            }
+            if (this.task.data === undefined) {
+                throw new ValidationError('Task data is required', { task: this.task }, { field: 'data', value: this.task.data, constraint: 'must be defined' });
+            }
+            if (this.task.priority === undefined) {
+                this.task.priority = TaskPriority.NORMAL;
+            }
+            if (!this.task.createdAt) {
+                this.task.createdAt = new Date();
+            }
+            return this.task;
+        }
+    }
+
+    /**
+     * @fileoverview Worker Pool Manager for CREB Chemistry Calculations
+     * @version 1.7.0
+     * @author CREB Development Team
+     *
+     * This module provides a sophisticated worker pool for managing multiple worker threads,
+     * distributing tasks efficiently, and monitoring performance metrics.
+     */
+    const __filename = url.fileURLToPath((typeof document === 'undefined' && typeof location === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : typeof document === 'undefined' ? location.href : (_documentCurrentScript && _documentCurrentScript.tagName.toUpperCase() === 'SCRIPT' && _documentCurrentScript.src || new URL('index.umd.js', document.baseURI).href)));
+    const __dirname = path.dirname(__filename);
+    /**
+     * Advanced worker pool with load balancing and health monitoring
+     */
+    exports.WorkerPool = class WorkerPool extends events.EventEmitter {
+        constructor(config = {}, recoveryConfig = {}) {
+            super();
+            this.isShuttingDown = false;
+            this.nextWorkerId = 1;
+            this.config = {
+                minWorkers: 2,
+                maxWorkers: Math.max(4, require('os').cpus().length),
+                idleTimeout: 300000, // 5 minutes
+                taskTimeout: 300000, // 5 minutes
+                maxRetries: 3,
+                memoryLimit: 512 * 1024 * 1024, // 512MB
+                cpuTimeLimit: 600000, // 10 minutes
+                loadBalancing: 'least-busy',
+                autoScale: true,
+                scalingThreshold: 5,
+                ...config
+            };
+            this.recoveryConfig = {
+                maxRetries: 3,
+                retryDelay: 1000,
+                exponentialBackoff: true,
+                restartWorkerOnError: true,
+                isolateFailedTasks: true,
+                fallbackToMainThread: false,
+                ...recoveryConfig
+            };
+            this.workers = new Map();
+            this.activeExecutions = new Map();
+            this.startTime = new Date();
+            // Initialize task queue
+            this.taskQueue = new exports.TaskQueue({
+                maxSize: 10000,
+                priorityLevels: 4,
+                timeoutCleanupInterval: 30000,
+                persistToDisk: false
+            });
+            // Set worker script path
+            this.workerScriptPath = path.join(__dirname, 'ChemistryWorker.js');
+            this.setupEventHandlers();
+            this.initializeWorkerPool();
+            this.startHealthMonitoring();
+        }
+        /**
+         * Submit a task to the worker pool
+         */
+        async submitTask(task) {
+            if (this.isShuttingDown) {
+                throw new SystemError('Worker pool is shutting down', { operation: 'submitTask', taskId: task.id, poolState: 'shutting-down' }, { subsystem: 'workers', resource: 'worker-pool' });
+            }
+            // Add task to queue
+            await this.taskQueue.enqueue(task);
+            // Try to process immediately if workers are available
+            await this.processQueuedTasks();
+            // Return a promise that resolves when the task completes
+            return new Promise((resolve, reject) => {
+                const onTaskCompleted = (result) => {
+                    if (result.taskId === task.id) {
+                        this.removeListener('task-completed', onTaskCompleted);
+                        this.removeListener('task-failed', onTaskFailed);
+                        resolve(result);
+                    }
+                };
+                const onTaskFailed = (error) => {
+                    if (error.taskId === task.id) {
+                        this.removeListener('task-completed', onTaskCompleted);
+                        this.removeListener('task-failed', onTaskFailed);
+                        reject(error);
+                    }
+                };
+                this.on('task-completed', onTaskCompleted);
+                this.on('task-failed', onTaskFailed);
+                // Set up timeout
+                if (task.timeout) {
+                    setTimeout(() => {
+                        this.removeListener('task-completed', onTaskCompleted);
+                        this.removeListener('task-failed', onTaskFailed);
+                        reject(new Error(`Task ${task.id} timed out after ${task.timeout}ms`));
+                    }, task.timeout);
+                }
+            });
+        }
+        /**
+         * Get current pool metrics
+         */
+        getMetrics() {
+            const workers = Array.from(this.workers.values());
+            const totalTasks = workers.reduce((sum, w) => sum + w.tasksCompleted, 0);
+            const totalExecutionTime = workers.reduce((sum, w) => sum + w.totalExecutionTime, 0);
+            const totalErrors = workers.reduce((sum, w) => sum + w.errorCount, 0);
+            const peakMemory = Math.max(...workers.map(w => w.peakMemoryUsage), 0);
+            return {
+                poolSize: this.workers.size,
+                activeWorkers: workers.filter(w => w.status === WorkerStatus.BUSY).length,
+                idleWorkers: workers.filter(w => w.status === WorkerStatus.IDLE).length,
+                totalTasksProcessed: totalTasks,
+                averageTaskTime: totalTasks > 0 ? totalExecutionTime / totalTasks : 0,
+                peakMemoryUsage: peakMemory,
+                totalCpuTime: totalExecutionTime,
+                errorRate: totalTasks > 0 ? totalErrors / totalTasks : 0,
+                throughput: this.calculateThroughput(),
+                efficiency: this.calculateEfficiency(),
+                queueHealth: this.taskQueue.getStats(),
+                workerHealth: workers.map(w => this.getWorkerHealth(w))
+            };
+        }
+        /**
+         * Scale the worker pool
+         */
+        async scalePool(targetSize) {
+            if (targetSize < this.config.minWorkers || targetSize > this.config.maxWorkers) {
+                throw new ValidationError(`Target size must be between ${this.config.minWorkers} and ${this.config.maxWorkers}`, { targetSize, minWorkers: this.config.minWorkers, maxWorkers: this.config.maxWorkers }, { field: 'targetSize', value: targetSize, constraint: `must be between ${this.config.minWorkers} and ${this.config.maxWorkers}` });
+            }
+            const currentSize = this.workers.size;
+            if (targetSize > currentSize) {
+                // Scale up
+                const workersToAdd = targetSize - currentSize;
+                await Promise.all(Array.from({ length: workersToAdd }, () => this.createWorker()));
+            }
+            else if (targetSize < currentSize) {
+                // Scale down
+                const workersToRemove = currentSize - targetSize;
+                const idleWorkers = Array.from(this.workers.values())
+                    .filter(w => w.status === WorkerStatus.IDLE)
+                    .slice(0, workersToRemove);
+                await Promise.all(idleWorkers.map(w => this.terminateWorker(w.id)));
+            }
+            this.emit('pool-scaled', currentSize, this.workers.size);
+        }
+        /**
+         * Get detailed worker information
+         */
+        getWorkerInfo() {
+            return Array.from(this.workers.values()).map(worker => ({
+                id: worker.id,
+                status: worker.status,
+                uptime: Date.now() - worker.createdAt.getTime(),
+                tasksCompleted: worker.tasksCompleted,
+                memoryUsage: worker.currentMemoryUsage,
+                currentTask: worker.currentTask
+            }));
+        }
+        /**
+         * Gracefully shutdown the worker pool
+         */
+        async shutdown() {
+            if (this.isShuttingDown) {
+                return;
+            }
+            this.isShuttingDown = true;
+            // Clear intervals
+            if (this.metricsInterval) {
+                clearInterval(this.metricsInterval);
+            }
+            if (this.healthCheckInterval) {
+                clearInterval(this.healthCheckInterval);
+            }
+            // Wait for active tasks to complete (with timeout)
+            const activeTaskIds = Array.from(this.activeExecutions.keys());
+            if (activeTaskIds.length > 0) {
+                await Promise.race([
+                    this.waitForActiveTasks(),
+                    new Promise(resolve => setTimeout(resolve, 30000)) // 30s timeout
+                ]);
+            }
+            // Terminate all workers
+            await Promise.all(Array.from(this.workers.keys()).map(workerId => this.terminateWorker(workerId)));
+            // Shutdown task queue
+            await this.taskQueue.shutdown();
+            this.emit('pool-shutdown');
+        }
+        // ========================================
+        // Private Methods
+        // ========================================
+        setupEventHandlers() {
+            this.taskQueue.on('task-enqueued', () => {
+                this.processQueuedTasks();
+            });
+            this.taskQueue.on('task-timeout', (task) => {
+                this.handleTaskTimeout(task);
+            });
+            // Handle uncaught exceptions
+            process.on('uncaughtException', (error) => {
+                this.emit('error', error);
+            });
+            process.on('unhandledRejection', (reason) => {
+                this.emit('error', new Error(`Unhandled rejection: ${reason}`));
+            });
+        }
+        async initializeWorkerPool() {
+            // Create minimum number of workers
+            const initialWorkers = Array.from({ length: this.config.minWorkers }, () => this.createWorker());
+            await Promise.all(initialWorkers);
+            this.emit('pool-initialized', this.workers.size);
+        }
+        async createWorker() {
+            const workerId = createWorkerId(`worker_${this.nextWorkerId++}`);
+            const config = {
+                id: workerId,
+                scriptPath: this.workerScriptPath,
+                maxMemory: this.config.memoryLimit,
+                maxCpuTime: this.config.cpuTimeLimit,
+                idleTimeout: this.config.idleTimeout,
+                env: Object.fromEntries(Object.entries(process.env).filter(([_, value]) => value !== undefined)),
+                execArgv: []
+            };
+            const worker = new worker_threads.Worker(this.workerScriptPath, {
+                workerData: { workerId },
+                resourceLimits: {
+                    maxOldGenerationSizeMb: Math.floor(this.config.memoryLimit / (1024 * 1024)),
+                    maxYoungGenerationSizeMb: Math.floor(this.config.memoryLimit / (4 * 1024 * 1024))
+                }
+            });
+            const workerInstance = {
+                id: workerId,
+                config,
+                worker,
+                status: WorkerStatus.STARTING,
+                createdAt: new Date(),
+                lastUsed: new Date(),
+                tasksCompleted: 0,
+                totalExecutionTime: 0,
+                currentMemoryUsage: 0,
+                peakMemoryUsage: 0,
+                errorCount: 0
+            };
+            this.setupWorkerEventHandlers(workerInstance);
+            this.workers.set(workerId, workerInstance);
+            this.emit('worker-created', workerInstance);
+            return workerInstance;
+        }
+        setupWorkerEventHandlers(workerInstance) {
+            const { worker, id: workerId } = workerInstance;
+            worker.on('message', (message) => {
+                this.handleWorkerMessage(workerId, message);
+            });
+            worker.on('error', (error) => {
+                this.handleWorkerError(workerId, error);
+            });
+            worker.on('exit', (code) => {
+                this.handleWorkerExit(workerId, code);
+            });
+        }
+        handleWorkerMessage(workerId, message) {
+            const worker = this.workers.get(workerId);
+            if (!worker)
+                return;
+            switch (message.type) {
+                case MessageType.WORKER_READY:
+                    worker.status = WorkerStatus.IDLE;
+                    this.processQueuedTasks();
+                    break;
+                case MessageType.TASK_RESULT:
+                    this.handleTaskResult(workerId, message);
+                    break;
+                case MessageType.TASK_ERROR:
+                    this.handleTaskError(workerId, message);
+                    break;
+                case MessageType.TASK_PROGRESS:
+                    this.handleTaskProgress(workerId, message);
+                    break;
+                case MessageType.MEMORY_WARNING:
+                    this.handleMemoryWarning(workerId, message);
+                    break;
+                case MessageType.HEALTH_CHECK:
+                    this.handleHealthCheckResponse(workerId, message);
+                    break;
+            }
+        }
+        handleTaskResult(workerId, message) {
+            const worker = this.workers.get(workerId);
+            const taskResult = message.data;
+            if (worker && message.taskId) {
+                // Update worker stats
+                worker.status = WorkerStatus.IDLE;
+                worker.currentTask = undefined;
+                worker.tasksCompleted++;
+                worker.totalExecutionTime += taskResult.executionTime;
+                worker.lastUsed = new Date();
+                // Update memory usage
+                if (taskResult.memoryUsage > worker.peakMemoryUsage) {
+                    worker.peakMemoryUsage = taskResult.memoryUsage;
+                }
+                worker.currentMemoryUsage = taskResult.memoryUsage;
+                // Remove from active executions
+                this.activeExecutions.delete(message.taskId);
+                // Emit result
+                this.emit('task-completed', taskResult);
+                // Process next queued task
+                this.processQueuedTasks();
+            }
+        }
+        handleTaskError(workerId, message) {
+            const worker = this.workers.get(workerId);
+            const error = message.data;
+            if (worker && message.taskId) {
+                worker.status = WorkerStatus.IDLE;
+                worker.currentTask = undefined;
+                worker.errorCount++;
+                worker.lastError = error;
+                // Remove from active executions
+                this.activeExecutions.delete(message.taskId);
+                // Handle error recovery
+                this.handleErrorRecovery(workerId, error);
+                // Emit error
+                this.emit('task-failed', error);
+                // Process next queued task
+                this.processQueuedTasks();
+            }
+        }
+        handleTaskProgress(workerId, message) {
+            if (message.taskId && this.activeExecutions.has(message.taskId)) {
+                const execution = this.activeExecutions.get(message.taskId);
+                execution.progress = message.data.progress;
+                this.emit('task-progress', message.taskId, message.data.progress);
+            }
+        }
+        handleMemoryWarning(workerId, message) {
+            const worker = this.workers.get(workerId);
+            if (worker) {
+                worker.currentMemoryUsage = message.data.memoryUsage;
+                this.emit('memory-warning', workerId, message.data);
+                // Consider terminating worker if memory usage is too high
+                if (message.data.memoryUsage > this.config.memoryLimit * 0.9) {
+                    this.restartWorker(workerId);
+                }
+            }
+        }
+        handleHealthCheckResponse(workerId, message) {
+            const worker = this.workers.get(workerId);
+            if (worker) {
+                // Update worker health status
+                worker.currentMemoryUsage = message.data.memoryUsage;
+                // Additional health processing can be added here
+            }
+        }
+        handleWorkerError(workerId, error) {
+            const worker = this.workers.get(workerId);
+            if (worker) {
+                worker.status = WorkerStatus.ERROR;
+                worker.errorCount++;
+                worker.lastError = {
+                    name: error.name,
+                    message: error.message,
+                    type: 'crash',
+                    workerId,
+                    timestamp: new Date(),
+                    stackTrace: error.stack
+                };
+                // Restart worker if configured to do so
+                if (this.recoveryConfig.restartWorkerOnError) {
+                    this.restartWorker(workerId);
+                }
+                this.emit('worker-error', worker.lastError);
+            }
+        }
+        handleWorkerExit(workerId, code) {
+            const worker = this.workers.get(workerId);
+            if (worker) {
+                worker.status = WorkerStatus.TERMINATED;
+                // Clean up active tasks
+                if (worker.currentTask) {
+                    this.activeExecutions.delete(worker.currentTask);
+                }
+                this.emit('worker-terminated', workerId, `Exit code: ${code}`);
+                // Replace worker if pool is not shutting down and we're below minimum
+                if (!this.isShuttingDown && this.workers.size < this.config.minWorkers) {
+                    this.createWorker();
+                }
+            }
+        }
+        async processQueuedTasks() {
+            while (!this.taskQueue.isEmpty() && this.hasAvailableWorkers()) {
+                const task = this.taskQueue.dequeue();
+                if (task) {
+                    const worker = this.selectWorker();
+                    if (worker) {
+                        await this.assignTaskToWorker(worker, task);
+                    }
+                }
+            }
+            // Auto-scale if needed
+            if (this.config.autoScale && this.shouldScaleUp()) {
+                const targetSize = Math.min(this.workers.size + 1, this.config.maxWorkers);
+                await this.scalePool(targetSize);
+            }
+        }
+        hasAvailableWorkers() {
+            return Array.from(this.workers.values()).some(worker => worker.status === WorkerStatus.IDLE);
+        }
+        selectWorker() {
+            const availableWorkers = Array.from(this.workers.values())
+                .filter(worker => worker.status === WorkerStatus.IDLE);
+            if (availableWorkers.length === 0) {
+                return null;
+            }
+            switch (this.config.loadBalancing) {
+                case 'round-robin':
+                    return availableWorkers[0]; // Simple round-robin
+                case 'least-busy':
+                    return availableWorkers.reduce((least, current) => current.tasksCompleted < least.tasksCompleted ? current : least);
+                case 'random':
+                    return availableWorkers[Math.floor(Math.random() * availableWorkers.length)];
+                default:
+                    return availableWorkers[0];
+            }
+        }
+        async assignTaskToWorker(worker, task) {
+            worker.status = WorkerStatus.BUSY;
+            worker.currentTask = task.id;
+            // Track execution
+            const execution = {
+                taskId: task.id,
+                workerId: worker.id,
+                startedAt: new Date(),
+                status: TaskStatus.RUNNING
+            };
+            this.activeExecutions.set(task.id, execution);
+            // Send task to worker
+            worker.worker.postMessage({
+                type: MessageType.TASK_ASSIGNMENT,
+                taskId: task.id,
+                data: task,
+                timestamp: new Date()
+            });
+            this.emit('task-started', execution);
+        }
+        shouldScaleUp() {
+            return (this.taskQueue.size() >= this.config.scalingThreshold &&
+                this.workers.size < this.config.maxWorkers);
+        }
+        async restartWorker(workerId) {
+            await this.terminateWorker(workerId);
+            await this.createWorker();
+        }
+        async terminateWorker(workerId) {
+            const worker = this.workers.get(workerId);
+            if (worker) {
+                // Send shutdown message
+                worker.worker.postMessage({
+                    type: MessageType.WORKER_SHUTDOWN,
+                    data: {},
+                    timestamp: new Date()
+                });
+                // Force terminate after timeout
+                setTimeout(() => {
+                    if (!worker.worker.threadId) {
+                        worker.worker.terminate();
+                    }
+                }, 5000);
+                this.workers.delete(workerId);
+                this.emit('worker-terminated', workerId, 'Manual termination');
+            }
+        }
+        handleTaskTimeout(task) {
+            const execution = this.activeExecutions.get(task.id);
+            if (execution) {
+                const worker = this.workers.get(execution.workerId);
+                if (worker && worker.currentTask === task.id) {
+                    worker.status = WorkerStatus.IDLE;
+                    worker.currentTask = undefined;
+                }
+                this.activeExecutions.delete(task.id);
+                const error = {
+                    name: 'TaskTimeoutError',
+                    message: `Task ${task.id} timed out`,
+                    type: 'timeout',
+                    taskId: task.id,
+                    timestamp: new Date()
+                };
+                this.emit('task-failed', error);
+            }
+        }
+        handleErrorRecovery(workerId, error) {
+            if (this.recoveryConfig.restartWorkerOnError && error.type === 'crash') {
+                this.restartWorker(workerId);
+            }
+            // Additional recovery strategies can be implemented here
+        }
+        calculateThroughput() {
+            const uptime = (Date.now() - this.startTime.getTime()) / 1000; // seconds
+            const totalTasks = Array.from(this.workers.values())
+                .reduce((sum, w) => sum + w.tasksCompleted, 0);
+            return uptime > 0 ? totalTasks / uptime : 0;
+        }
+        calculateEfficiency() {
+            const totalWorkers = this.workers.size;
+            const busyWorkers = Array.from(this.workers.values())
+                .filter(w => w.status === WorkerStatus.BUSY).length;
+            return totalWorkers > 0 ? (busyWorkers / totalWorkers) * 100 : 0;
+        }
+        getWorkerHealth(worker) {
+            const uptime = Date.now() - worker.createdAt.getTime();
+            const avgTaskTime = worker.tasksCompleted > 0
+                ? worker.totalExecutionTime / worker.tasksCompleted
+                : 0;
+            return {
+                workerId: worker.id,
+                status: worker.status,
+                uptime,
+                tasksCompleted: worker.tasksCompleted,
+                averageTaskTime: avgTaskTime,
+                memoryUsage: worker.currentMemoryUsage,
+                cpuUsage: 0, // Would need additional monitoring
+                errorCount: worker.errorCount,
+                efficiency: worker.tasksCompleted > 0 ?
+                    (worker.totalExecutionTime / uptime) * 100 : 0,
+                lastActivity: worker.lastUsed
+            };
+        }
+        async waitForActiveTasks() {
+            return new Promise((resolve) => {
+                const checkActiveTasks = () => {
+                    if (this.activeExecutions.size === 0) {
+                        resolve();
+                    }
+                    else {
+                        setTimeout(checkActiveTasks, 100);
+                    }
+                };
+                checkActiveTasks();
+            });
+        }
+        startHealthMonitoring() {
+            // Metrics collection
+            this.metricsInterval = setInterval(() => {
+                const metrics = this.getMetrics();
+                this.emit('metrics-updated', metrics);
+            }, 30000); // Every 30 seconds
+            // Health checks
+            this.healthCheckInterval = setInterval(() => {
+                this.performHealthChecks();
+            }, 60000); // Every minute
+        }
+        performHealthChecks() {
+            for (const worker of this.workers.values()) {
+                if (worker.status !== WorkerStatus.TERMINATED) {
+                    worker.worker.postMessage({
+                        type: MessageType.HEALTH_CHECK,
+                        data: {},
+                        timestamp: new Date()
+                    });
+                }
+            }
+        }
+    };
+    exports.WorkerPool = __decorate([
+        Injectable(),
+        __metadata("design:paramtypes", [Object, Object])
+    ], exports.WorkerPool);
+
+    /**
+     * @fileoverview Worker Thread Integration and Utilities
+     * @version 1.7.0
+     * @author CREB Development Team
+     *
+     * This module provides integration utilities, factory functions, and high-level
+     * APIs for the CREB worker thread system.
+     */
+    /**
+     * High-level worker thread manager for CREB calculations
+     */
+    class CREBWorkerManager {
+        constructor(config = {}) {
+            this.isInitialized = false;
+            const defaultConfig = {
+                minWorkers: Math.max(1, Math.floor(require('os').cpus().length / 2)),
+                maxWorkers: require('os').cpus().length,
+                idleTimeout: 300000, // 5 minutes
+                taskTimeout: 600000, // 10 minutes
+                autoScale: true,
+                scalingThreshold: 5,
+                loadBalancing: 'least-busy'
+            };
+            this.workerPool = new exports.WorkerPool({ ...defaultConfig, ...config });
+        }
+        /**
+         * Initialize the worker manager
+         */
+        async initialize() {
+            if (this.isInitialized) {
+                return;
+            }
+            // Wait for initial workers to be ready
+            await new Promise((resolve) => {
+                this.workerPool.on('pool-initialized', () => {
+                    this.isInitialized = true;
+                    resolve();
+                });
+            });
+        }
+        /**
+         * Balance a chemical equation using worker threads
+         */
+        async balanceEquation(equation, options = {}) {
+            const taskData = {
+                equation,
+                options: {
+                    method: options.method || 'matrix',
+                    maxIterations: options.maxIterations || 1000,
+                    tolerance: options.tolerance || 1e-10
+                }
+            };
+            const task = TaskBuilder.create()
+                .withType(CalculationType.EQUATION_BALANCING)
+                .withData(taskData)
+                .withPriority(options.priority || TaskPriority.NORMAL)
+                .withTimeout(options.timeout || 30000)
+                .build();
+            const result = await this.workerPool.submitTask(task);
+            if (!result.success) {
+                throw new Error(`Equation balancing failed: ${result.error?.message}`);
+            }
+            return result.result;
+        }
+        /**
+         * Calculate thermodynamic properties using worker threads
+         */
+        async calculateThermodynamics(compounds, conditions, calculations, options = {}) {
+            const taskData = {
+                compounds,
+                conditions,
+                calculations
+            };
+            const task = TaskBuilder.create()
+                .withType(CalculationType.THERMODYNAMICS)
+                .withData(taskData)
+                .withPriority(options.priority || TaskPriority.NORMAL)
+                .withTimeout(options.timeout || 60000)
+                .build();
+            const result = await this.workerPool.submitTask(task);
+            if (!result.success) {
+                throw new Error(`Thermodynamics calculation failed: ${result.error?.message}`);
+            }
+            return result.result;
+        }
+        /**
+         * Perform batch compound analysis using worker threads
+         */
+        async analyzeBatch(compounds, properties, options = {}) {
+            const { batchSize = 100 } = options;
+            // Split large batches into smaller chunks for better performance
+            if (compounds.length > batchSize) {
+                const chunks = [];
+                for (let i = 0; i < compounds.length; i += batchSize) {
+                    chunks.push(compounds.slice(i, i + batchSize));
+                }
+                // Process chunks in parallel
+                const chunkResults = await Promise.all(chunks.map(chunk => this.processBatchChunk(chunk, properties, options)));
+                // Combine results
+                const allResults = chunkResults.flatMap(chunk => chunk.results);
+                return {
+                    totalCompounds: compounds.length,
+                    results: allResults,
+                    options
+                };
+            }
+            else {
+                return this.processBatchChunk(compounds, properties, options);
+            }
+        }
+        /**
+         * Solve matrix equation using worker threads
+         */
+        async solveMatrix(matrix, vector, options = {}) {
+            const taskData = {
+                matrix,
+                vector,
+                method: options.method || 'gaussian',
+                options: {
+                    tolerance: options.tolerance || 1e-10,
+                    maxIterations: options.maxIterations || 1000,
+                    pivoting: options.pivoting !== false
+                }
+            };
+            const task = TaskBuilder.create()
+                .withType(CalculationType.MATRIX_SOLVING)
+                .withData(taskData)
+                .withPriority(options.priority || TaskPriority.NORMAL)
+                .withTimeout(options.timeout || 120000) // 2 minutes for matrix operations
+                .build();
+            const result = await this.workerPool.submitTask(task);
+            if (!result.success) {
+                throw new Error(`Matrix solving failed: ${result.error?.message}`);
+            }
+            return result.result;
+        }
+        /**
+         * Get performance metrics for the worker system
+         */
+        getMetrics() {
+            return this.workerPool.getMetrics();
+        }
+        /**
+         * Get worker information
+         */
+        getWorkerInfo() {
+            return this.workerPool.getWorkerInfo();
+        }
+        /**
+         * Scale the worker pool
+         */
+        async scaleWorkers(targetSize) {
+            await this.workerPool.scalePool(targetSize);
+        }
+        /**
+         * Run performance benchmark
+         */
+        async runBenchmark(operation, dataSize) {
+            const singleThreadTime = await this.benchmarkSingleThread(operation, dataSize);
+            const multiThreadTime = await this.benchmarkMultiThread(operation, dataSize);
+            const speedup = singleThreadTime / multiThreadTime;
+            const efficiency = speedup / this.workerPool.getMetrics().poolSize;
+            return {
+                operation,
+                dataSize,
+                singleThreadTime,
+                multiThreadTime,
+                speedup,
+                efficiency: efficiency * 100,
+                memoryOverhead: this.calculateMemoryOverhead(),
+                optimalWorkerCount: this.calculateOptimalWorkerCount(speedup)
+            };
+        }
+        /**
+         * Gracefully shutdown the worker manager
+         */
+        async shutdown() {
+            await this.workerPool.shutdown();
+            this.isInitialized = false;
+        }
+        // ========================================
+        // Private Methods
+        // ========================================
+        async processBatchChunk(compounds, properties, options) {
+            const taskData = {
+                compounds,
+                properties,
+                options: {
+                    includeIsomers: options.includeIsomers || false,
+                    includeSpectroscopy: options.includeSpectroscopy || false,
+                    dataProvider: options.dataProvider || 'internal'
+                }
+            };
+            const task = TaskBuilder.create()
+                .withType(CalculationType.BATCH_ANALYSIS)
+                .withData(taskData)
+                .withPriority(options.priority || TaskPriority.NORMAL)
+                .withTimeout(options.timeout || 300000) // 5 minutes
+                .build();
+            const result = await this.workerPool.submitTask(task);
+            if (!result.success) {
+                throw new Error(`Batch analysis failed: ${result.error?.message}`);
+            }
+            return result.result;
+        }
+        async benchmarkSingleThread(operation, dataSize) {
+            // Simulate single-thread execution time
+            // In a real implementation, this would run the operation on the main thread
+            const baseTime = {
+                'equation_balancing': 10,
+                'thermodynamics': 50,
+                'matrix_solving': 100,
+                'batch_analysis': 20
+            }[operation] || 50;
+            return baseTime * Math.sqrt(dataSize);
+        }
+        async benchmarkMultiThread(operation, dataSize) {
+            const startTime = Date.now();
+            // Create benchmark tasks based on operation type
+            const tasks = this.createBenchmarkTasks(operation, dataSize);
+            // Execute tasks in parallel
+            await Promise.all(tasks.map(task => this.workerPool.submitTask(task)));
+            return Date.now() - startTime;
+        }
+        createBenchmarkTasks(operation, dataSize) {
+            const tasks = [];
+            switch (operation) {
+                case 'equation_balancing':
+                    for (let i = 0; i < dataSize; i++) {
+                        tasks.push(TaskBuilder.create()
+                            .withType(CalculationType.EQUATION_BALANCING)
+                            .withData({ equation: `H${i + 1} + O2 -> H${i + 1}O` })
+                            .withPriority(TaskPriority.HIGH)
+                            .build());
+                    }
+                    break;
+                case 'thermodynamics':
+                    for (let i = 0; i < dataSize; i++) {
+                        tasks.push(TaskBuilder.create()
+                            .withType(CalculationType.THERMODYNAMICS)
+                            .withData({
+                            compounds: [{ formula: 'H2O', amount: i + 1 }],
+                            conditions: { temperature: 298.15 + i },
+                            calculations: ['enthalpy', 'entropy']
+                        })
+                            .withPriority(TaskPriority.HIGH)
+                            .build());
+                    }
+                    break;
+                case 'matrix_solving':
+                    for (let i = 0; i < dataSize; i++) {
+                        const size = Math.max(2, Math.floor(Math.sqrt(i + 1)));
+                        const matrix = Array(size).fill(null).map(() => Array(size).fill(null).map(() => Math.random()));
+                        tasks.push(TaskBuilder.create()
+                            .withType(CalculationType.MATRIX_SOLVING)
+                            .withData({ matrix, method: 'gaussian' })
+                            .withPriority(TaskPriority.HIGH)
+                            .build());
+                    }
+                    break;
+                case 'batch_analysis':
+                    const batchSize = Math.max(1, Math.floor(dataSize / 10));
+                    for (let i = 0; i < 10; i++) {
+                        const compounds = Array(batchSize).fill(null).map((_, j) => `C${i}H${j + 1}`);
+                        tasks.push(TaskBuilder.create()
+                            .withType(CalculationType.BATCH_ANALYSIS)
+                            .withData({
+                            compounds,
+                            properties: ['molecular_weight', 'density']
+                        })
+                            .withPriority(TaskPriority.HIGH)
+                            .build());
+                    }
+                    break;
+            }
+            return tasks;
+        }
+        calculateMemoryOverhead() {
+            const metrics = this.workerPool.getMetrics();
+            // Estimate memory overhead based on worker pool metrics
+            return metrics.poolSize * 50 * 1024 * 1024; // Rough estimate: 50MB per worker
+        }
+        calculateOptimalWorkerCount(speedup) {
+            const cpuCount = require('os').cpus().length;
+            // Simple heuristic: optimal worker count is where efficiency is highest
+            if (speedup > cpuCount * 0.8) {
+                return cpuCount;
+            }
+            else if (speedup > cpuCount * 0.6) {
+                return Math.floor(cpuCount * 0.75);
+            }
+            else {
+                return Math.floor(cpuCount * 0.5);
+            }
+        }
+    }
+    /**
+     * Factory function for creating worker managers
+     */
+    function createWorkerManager(config) {
+        return new CREBWorkerManager(config);
+    }
+    /**
+     * Utility function for creating high-priority tasks
+     */
+    function createCriticalTask(type, data, timeout) {
+        return TaskBuilder.create()
+            .withType(type)
+            .withData(data)
+            .withPriority(TaskPriority.CRITICAL)
+            .withTimeout(timeout || 60000)
+            .build();
+    }
+    /**
+     * Utility function for creating batch tasks
+     */
+    function createBatchTasks(type, dataArray, priority = TaskPriority.NORMAL) {
+        return dataArray.map(data => TaskBuilder.create()
+            .withType(type)
+            .withData(data)
+            .withPriority(priority)
+            .build());
+    }
+    /**
+     * Performance monitor for worker threads
+     */
+    class WorkerPerformanceMonitor {
+        constructor(manager) {
+            this.metrics = [];
+            this.manager = manager;
+        }
+        /**
+         * Start performance monitoring
+         */
+        startMonitoring(intervalMs = 30000) {
+            this.monitoringInterval = setInterval(() => {
+                const metrics = this.manager.getMetrics();
+                this.metrics.push(metrics);
+                // Keep only last 100 measurements
+                if (this.metrics.length > 100) {
+                    this.metrics.shift();
+                }
+            }, intervalMs);
+        }
+        /**
+         * Stop performance monitoring
+         */
+        stopMonitoring() {
+            if (this.monitoringInterval) {
+                clearInterval(this.monitoringInterval);
+                this.monitoringInterval = undefined;
+            }
+        }
+        /**
+         * Get performance trends
+         */
+        getTrends() {
+            return {
+                throughputTrend: this.metrics.map(m => m.throughput),
+                efficiencyTrend: this.metrics.map(m => m.efficiency),
+                errorRateTrend: this.metrics.map(m => m.errorRate),
+                memoryTrend: this.metrics.map(m => m.peakMemoryUsage)
+            };
+        }
+        /**
+         * Get performance summary
+         */
+        getSummary() {
+            if (this.metrics.length === 0) {
+                return null;
+            }
+            const latest = this.metrics[this.metrics.length - 1];
+            const throughputs = this.metrics.map(m => m.throughput);
+            const efficiencies = this.metrics.map(m => m.efficiency);
+            return {
+                current: latest,
+                averageThroughput: throughputs.reduce((a, b) => a + b, 0) / throughputs.length,
+                averageEfficiency: efficiencies.reduce((a, b) => a + b, 0) / efficiencies.length,
+                peakThroughput: Math.max(...throughputs),
+                peakEfficiency: Math.max(...efficiencies),
+                measurementCount: this.metrics.length
+            };
+        }
+    }
+
     exports.AdaptiveEvictionPolicy = AdaptiveEvictionPolicy;
-    exports.AdvancedCache = AdvancedCache;
     exports.AdvancedKineticsAnalyzer = AdvancedKineticsAnalyzer;
     exports.CREBError = CREBError;
+    exports.CREBServices = CREBServices;
     exports.CREBValidationError = ValidationError;
+    exports.CREBWorkerManager = CREBWorkerManager;
     exports.CacheFactory = CacheFactory;
     exports.CachedChemicalDatabase = CachedChemicalDatabase;
     exports.CachedEquationBalancer = CachedEquationBalancer;
     exports.CachedThermodynamicsCalculator = CachedThermodynamicsCalculator;
-    exports.ChemicalDatabaseManager = ChemicalDatabaseManager;
-    exports.ChemicalEquationBalancer = ChemicalEquationBalancer;
     exports.ChemicalFormulaError = ChemicalFormulaError;
     exports.CircuitBreaker = CircuitBreaker;
     exports.CircuitBreakerManager = CircuitBreakerManager;
     exports.CircularDependencyError = CircularDependencyError;
     exports.ComputationError = ComputationError;
-    exports.ConfigManager = ConfigManager;
     exports.Container = Container;
     exports.DataValidationService = DataValidationService;
     exports.ELEMENTS_LIST = ELEMENTS_LIST;
     exports.ElementCounter = ElementCounter;
     exports.EnergyProfileGenerator = EnergyProfileGenerator;
     exports.EnhancedBalancer = EnhancedBalancer;
-    exports.EnhancedChemicalEquationBalancer = EnhancedChemicalEquationBalancer;
     exports.EnhancedNISTIntegration = EnhancedNISTIntegration;
     exports.EnhancedPubChemIntegration = EnhancedPubChemIntegration;
     exports.EnhancedSQLiteStorage = EnhancedSQLiteStorage;
@@ -9747,7 +12147,16 @@ ${this.generateRecommendations(stats, metrics)}
     exports.ExternalAPIError = ExternalAPIError;
     exports.FIFOEvictionPolicy = FIFOEvictionPolicy;
     exports.GracefulDegradationService = GracefulDegradationService;
+    exports.IBalancerToken = IBalancerToken;
+    exports.ICacheToken = ICacheToken;
+    exports.IConfigManagerToken = IConfigManagerToken;
+    exports.IEnhancedBalancerToken = IEnhancedBalancerToken;
     exports.INJECTABLE_METADATA_KEY = INJECTABLE_METADATA_KEY;
+    exports.IStoichiometryToken = IStoichiometryToken;
+    exports.IStorageProviderToken = IStorageProviderToken;
+    exports.ITaskQueueToken = ITaskQueueToken;
+    exports.IThermodynamicsCalculatorToken = IThermodynamicsCalculatorToken;
+    exports.IWorkerPoolToken = IWorkerPoolToken;
     exports.Inject = Inject;
     exports.Injectable = Injectable;
     exports.LFUEvictionPolicy = LFUEvictionPolicy;
@@ -9755,7 +12164,6 @@ ${this.generateRecommendations(stats, metrics)}
     exports.MaxDepthExceededError = MaxDepthExceededError;
     exports.MechanismAnalyzer = MechanismAnalyzer;
     exports.MultiLevelCache = MultiLevelCache;
-    exports.NISTWebBookIntegration = NISTWebBookIntegration;
     exports.NetworkError = NetworkError;
     exports.Optional = Optional;
     exports.PARAMETER_SYMBOLS = PARAMETER_SYMBOLS;
@@ -9768,24 +12176,30 @@ ${this.generateRecommendations(stats, metrics)}
     exports.RetryPolicy = RetryPolicy;
     exports.ServiceNotFoundError = ServiceNotFoundError;
     exports.Singleton = Singleton;
-    exports.Stoichiometry = Stoichiometry;
     exports.SystemError = SystemError;
     exports.SystemHealthMonitor = SystemHealthMonitor;
     exports.TTLEvictionPolicy = TTLEvictionPolicy;
-    exports.ThermodynamicsCalculator = ThermodynamicsCalculator;
+    exports.TaskBuilder = TaskBuilder;
     exports.ThermodynamicsEquationBalancer = ThermodynamicsEquationBalancer;
     exports.Transient = Transient;
     exports.WithCircuitBreaker = WithCircuitBreaker;
     exports.WithRetry = WithRetry;
+    exports.WorkerPerformanceMonitor = WorkerPerformanceMonitor;
     exports.calculateMolarWeight = calculateMolarWeight;
     exports.circuitBreakerManager = circuitBreakerManager;
     exports.configManager = configManager;
     exports.container = container;
+    exports.createBatchTasks = createBatchTasks;
     exports.createChemicalFormula = createChemicalFormula;
+    exports.createChildContainer = createChildContainer;
+    exports.createCriticalTask = createCriticalTask;
     exports.createElementSymbol = createElementSymbol;
     exports.createEnergyProfile = createEnergyProfile;
     exports.createRetryPolicy = createRetryPolicy;
+    exports.createTaskId = createTaskId;
     exports.createToken = createToken;
+    exports.createWorkerId = createWorkerId;
+    exports.createWorkerManager = createWorkerManager;
     exports.defaultConfig = defaultConfig;
     exports.demonstrateAdvancedCaching = demonstrateAdvancedCaching;
     exports.demonstrateEnhancedErrorHandling = demonstrateEnhancedErrorHandling;
@@ -9795,6 +12209,8 @@ ${this.generateRecommendations(stats, metrics)}
     exports.getDependencyTokens = getDependencyTokens;
     exports.getFullConfig = getFullConfig;
     exports.getInjectableMetadata = getInjectableMetadata;
+    exports.getService = getService;
+    exports.initializeCREBDI = initializeCREBDI;
     exports.isBalancedEquation = isBalancedEquation;
     exports.isCREBConfig = isCREBConfig;
     exports.isChemicalFormula = isChemicalFormula;
@@ -9802,6 +12218,7 @@ ${this.generateRecommendations(stats, metrics)}
     exports.isInjectable = isInjectable;
     exports.parseFormula = parseFormula;
     exports.setConfig = setConfig;
+    exports.setupCREBContainer = setupCREBContainer;
     exports.validateConfig = validateConfig;
 
 }));

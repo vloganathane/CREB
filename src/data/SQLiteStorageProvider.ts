@@ -12,6 +12,8 @@ import {
   ExtendedThermodynamicProperties 
 } from './types';
 import { ValidationResult } from './DataValidationService';
+import { SystemError, ValidationError } from '../core/errors/CREBError';
+import { Injectable } from '../core/decorators/Injectable';
 
 // Define SQLite interface (works with both better-sqlite3 and sql.js)
 interface SQLiteDatabase {
@@ -47,6 +49,7 @@ export interface SQLiteQuery extends DatabaseQuery {
 /**
  * SQLite-backed storage provider for chemical compounds
  */
+@Injectable()
 export class SQLiteStorageProvider {
   private db: SQLiteDatabase | null = null;
   private config: Required<SQLiteConfig>;
@@ -76,7 +79,11 @@ export class SQLiteStorageProvider {
         // If we're in a browser environment or better-sqlite3 isn't available,
         // gracefully fall back or provide a warning
         console.warn('SQLite storage not available in this environment. Better-sqlite3 not found.');
-        throw new Error('SQLite storage requires better-sqlite3 package. Install with: npm install better-sqlite3');
+        throw new SystemError(
+          'SQLite storage requires better-sqlite3 package. Install with: npm install better-sqlite3',
+          { databasePath: this.config.databasePath, error: nodeError },
+          { subsystem: 'data', resource: 'sqlite-database' }
+        );
       }
 
       if (this.db) {
@@ -102,7 +109,13 @@ export class SQLiteStorageProvider {
    * Create database tables
    */
   private async createTables(): Promise<void> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) {
+      throw new SystemError(
+        'Database not initialized',
+        { operation: 'createTables' },
+        { subsystem: 'data', resource: 'sqlite-database' }
+      );
+    }
 
     const schema = `
       -- Main compounds table

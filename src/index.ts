@@ -145,6 +145,24 @@ export {
   INJECTABLE_METADATA_KEY
 } from './core/decorators/Injectable';
 
+// Dependency Injection Setup (v1.6.0 - Full Integration)
+export {
+  setupCREBContainer,
+  initializeCREBDI,
+  getService,
+  createChildContainer,
+  CREBServices,
+  IConfigManagerToken,
+  IBalancerToken,
+  IEnhancedBalancerToken,
+  IStoichiometryToken,
+  IThermodynamicsCalculatorToken,
+  IStorageProviderToken,
+  ICacheToken,
+  IWorkerPoolToken,
+  ITaskQueueToken,
+} from './DISetup';
+
 // Enhanced Error Handling (v1.6.0 - Resilience & Reliability)
 export {
   CREBError,
@@ -257,3 +275,41 @@ export {
   AdaptiveEvictionPolicy,
   EvictionPolicyFactory
 } from './performance/cache/EvictionPolicies';
+
+// Worker Thread System (v1.7.0 - Advanced Parallel Computing)
+export {
+  CREBWorkerManager,
+  WorkerPool,
+  TaskQueue,
+  TaskBuilder,
+  WorkerPerformanceMonitor,
+  createWorkerManager,
+  createCriticalTask,
+  createBatchTasks
+} from './performance/workers';
+
+export {
+  type WorkerTask,
+  type TaskResult,
+  type WorkerPoolConfig,
+  type WorkerPoolMetrics,
+  type WorkerHealthMetrics,
+  type TaskPriority,
+  type TaskStatus,
+  type WorkerStatus,
+  type CalculationType,
+  type WorkerError,
+  type WorkerInstance,
+  type TaskExecution,
+  type QueueStats,
+  type PerformanceBenchmark,
+  type EquationBalancingTask,
+  type ThermodynamicsTask,
+  type BatchAnalysisTask,
+  type MatrixSolvingTask,
+  type RecoveryConfig,
+  type WorkerId,
+  type TaskId,
+  createWorkerId,
+  createTaskId
+} from './performance/workers/types';

@@ -222,12 +222,24 @@ describe('AdvancedCache', () => {
     });
 
     test('should handle event listener errors gracefully', async () => {
+      // Mock console.warn to capture the warning
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      
       cache.addEventListener('set', () => {
         throw new Error('Listener error');
       });
       
       // Should not throw
       await expect(cache.set('key1', 'value1')).resolves.toBeDefined();
+      
+      // Verify that the error was logged
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        'Cache event listener error:',
+        expect.any(Error)
+      );
+      
+      // Restore console.warn
+      consoleWarnSpy.mockRestore();
     });
   });
 

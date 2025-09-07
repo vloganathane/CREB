@@ -123,11 +123,11 @@ export declare class EnhancedChemicalEquationBalancer extends ChemicalEquationBa
     /**
      * Clear the compound cache
      */
-    clearCache(): void;
+    clearCache(): Promise<void>;
     /**
      * Get cached compound info without making new requests
      */
-    getCachedCompoundInfo(compoundName: string): CompoundInfo | undefined;
+    getCachedCompoundInfo(compoundName: string): Promise<CompoundInfo | undefined>;
 }
 export {};
 //# sourceMappingURL=enhancedBalancer.d.ts.map

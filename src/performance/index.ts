@@ -106,7 +106,9 @@ interface WeakRefLike<T extends object> {
   deref(): T | undefined;
 }
 
-// Memory Management Utilities
+import { AdvancedCache } from './cache/AdvancedCache';
+
+// Memory Management System
 class MemoryManager {
   private static weakRefs = new Set<WeakRefLike<any>>();
   private static cleanupInterval: NodeJS.Timeout | null = null;
@@ -488,7 +490,11 @@ interface OptimizedBalanceResult {
 
 // Performance-optimized Chemical Equation Balancer
 class OptimizedBalancer {
-  private cache = PerformanceCache.getInstance();
+  private cache = new AdvancedCache<OptimizedBalanceResult>({
+    maxSize: 1000,
+    defaultTtl: 3600000, // 1 hour
+    evictionStrategy: 'lru'
+  });
   private wasmInitialized = false;
 
   constructor() {
@@ -511,12 +517,13 @@ class OptimizedBalancer {
     const cacheKey = `balance_${equation}`;
     
     // Check cache first
-    const cached = this.cache.get<OptimizedBalanceResult>(cacheKey, 'equation');
-    if (cached) {
+    const cached = await this.cache.get(cacheKey);
+    if (cached.hit && cached.value) {
+      // Return cached result with updated fromCache flag and zero calculation time
       return { 
-        ...cached, 
-        fromCache: true, 
-        calculationTime: 0 
+        ...cached.value, 
+        fromCache: true,
+        calculationTime: 0  // Cached results have zero calculation time
       };
     }
 
@@ -543,8 +550,14 @@ class OptimizedBalancer {
         calculationTime 
       };
       
-      // Cache the result
-      this.cache.set(cacheKey, result, 'equation');
+      // Cache the result (store without fromCache flag to avoid confusion)
+      const cacheableResult = {
+        coefficients,
+        balanced,
+        fromCache: false,
+        calculationTime
+      };
+      await this.cache.set(cacheKey, cacheableResult);
       
       return result;
     } catch (error) {
@@ -609,6 +622,7 @@ class OptimizedBalancer {
 
 // Export all performance optimization components
 export {
+  // Legacy PerformanceCache kept for backward compatibility
   PerformanceCache,
   MemoryManager,
   LazyLoader,
@@ -616,3 +630,13 @@ export {
   PerformanceMonitor,
   OptimizedBalancer
 };
+
+// Export new Advanced Cache System as the recommended approach
+export { 
+  AdvancedCache,
+  CacheFactory,
+  CachedThermodynamicsCalculator,
+  CachedChemicalDatabase, 
+  CachedEquationBalancer,
+  MultiLevelCache
+} from './cache/CacheIntegration';

@@ -5,12 +5,14 @@
 
 import { ThermodynamicsResult, ReactionConditions, ThermodynamicProperties, TemperatureProfile } from './types';
 import { BalancedEquation } from '../types';
+import { Injectable } from '../core/decorators/Injectable';
 
 interface CompoundData {
   formula: string;
   coefficient: number;
 }
 
+@Injectable()
 export class ThermodynamicsCalculator {
   private readonly R = 8.314; // Gas constant J/(mol·K)
   private readonly standardTemperature = 298.15; // K

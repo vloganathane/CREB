@@ -4,6 +4,8 @@
  */
 
 import { CompoundDatabase, ExtendedThermodynamicProperties } from './types';
+import { AdvancedCache } from '../performance/cache/AdvancedCache';
+import { Injectable } from '../core/decorators/Injectable';
 
 interface NISTResponse {
   formula: string;
@@ -27,10 +29,15 @@ interface NISTResponse {
   };
 }
 
+@Injectable()
 export class NISTWebBookIntegration {
   private readonly baseURL = 'https://webbook.nist.gov/cgi/cbook.cgi';
   private readonly apiKey?: string;
-  private cache: Map<string, { data: NISTResponse; timestamp: number }> = new Map();
+  private cache = new AdvancedCache<{ data: NISTResponse; timestamp: number }>({
+    maxSize: 1000,
+    defaultTtl: 86400000, // 24 hours
+    enableMetrics: true
+  });
   private readonly cacheTimeout = 86400000; // 24 hours in ms
 
   constructor(apiKey?: string) {
@@ -44,10 +51,10 @@ export class NISTWebBookIntegration {
     try {
       // Check cache first
       const cacheKey = `${type}:${identifier}`;
-      const cached = this.cache.get(cacheKey);
+      const cached = await this.cache.get(cacheKey);
       
-      if (cached && (Date.now() - cached.timestamp) < this.cacheTimeout) {
-        return this.convertNISTToCompound(cached.data);
+      if (cached.hit && cached.value && (Date.now() - cached.value.timestamp) < this.cacheTimeout) {
+        return this.convertNISTToCompound(cached.value.data);
       }
 
       // Make API request
@@ -55,7 +62,7 @@ export class NISTWebBookIntegration {
       
       if (response) {
         // Cache the response
-        this.cache.set(cacheKey, {
+        await this.cache.set(cacheKey, {
           data: response,
           timestamp: Date.now()
         });
@@ -345,22 +352,12 @@ export class NISTWebBookIntegration {
    * Get cache statistics
    */
   getCacheStats(): { size: number; oldestEntry: Date | null; newestEntry: Date | null } {
-    let oldestTimestamp = Infinity;
-    let newestTimestamp = 0;
-
-    for (const entry of this.cache.values()) {
-      if (entry.timestamp < oldestTimestamp) {
-        oldestTimestamp = entry.timestamp;
-      }
-      if (entry.timestamp > newestTimestamp) {
-        newestTimestamp = entry.timestamp;
-      }
-    }
-
+    const metrics = this.cache.getMetrics();
+    
     return {
-      size: this.cache.size,
-      oldestEntry: oldestTimestamp === Infinity ? null : new Date(oldestTimestamp),
-      newestEntry: newestTimestamp === 0 ? null : new Date(newestTimestamp)
+      size: this.cache.size(),
+      oldestEntry: null, // AdvancedCache doesn't expose entry timestamps directly
+      newestEntry: null  // Would need to track separately if needed
     };
   }
 }

@@ -17,9 +17,9 @@ interface ILogger {
     error(message: string): void;
 }
 interface ICache {
-    get(key: string): any;
-    set(key: string, value: any): void;
-    clear(): void;
+    get(key: string): Promise<any>;
+    set(key: string, value: any): Promise<void>;
+    clear(): Promise<void>;
 }
 interface ICalculator {
     calculate(equation: string): any;
@@ -32,9 +32,9 @@ declare class EnhancedLogger implements ILogger {
 }
 declare class SimpleCache implements ICache {
     private cache;
-    get(key: string): any;
-    set(key: string, value: any): void;
-    clear(): void;
+    get(key: string): Promise<any>;
+    set(key: string, value: any): Promise<void>;
+    clear(): Promise<void>;
     size(): number;
 }
 declare class CachedCalculator implements ICalculator {

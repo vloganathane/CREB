@@ -19,6 +19,7 @@ import {
 } from './types';
 import { EvictionPolicyFactory } from './EvictionPolicies';
 import { CacheMetricsCollector, CachePerformanceAnalyzer } from './CacheMetrics';
+import { Injectable } from '../../core/decorators/Injectable';
 
 /**
  * Default cache configuration
@@ -39,6 +40,7 @@ const DEFAULT_CONFIG: AdvancedCacheConfig = {
 /**
  * Advanced cache implementation with comprehensive features
  */
+@Injectable()
 export class AdvancedCache<T = any> implements IAdvancedCache<T> {
   private entries = new Map<string, CacheEntry<T>>();
   private config: AdvancedCacheConfig;

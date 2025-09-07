@@ -28,6 +28,8 @@ import {
   RateLimiter
 } from './resilience/RetryPolicy';
 
+import { AdvancedCache } from '../performance/cache/AdvancedCache';
+
 /**
  * Example: Enhanced NIST Integration with Error Handling
  */
@@ -388,12 +390,15 @@ export class SystemHealthMonitor {
 export class GracefulDegradationService {
   private nistIntegration: EnhancedNISTIntegration;
   private pubchemIntegration: EnhancedPubChemIntegration;
-  private localCache: Map<string, any>;
+  private localCache = new AdvancedCache<any>({
+    maxSize: 500,
+    defaultTtl: 1800000, // 30 minutes
+    enableMetrics: true
+  });
 
   constructor() {
     this.nistIntegration = new EnhancedNISTIntegration();
     this.pubchemIntegration = new EnhancedPubChemIntegration();
-    this.localCache = new Map();
   }
 
   /**
@@ -405,10 +410,10 @@ export class GracefulDegradationService {
     confidence: number;
   }> {
     // Try cache first
-    const cachedData = this.localCache.get(compoundName);
-    if (cachedData) {
+    const cachedResult = await this.localCache.get(compoundName);
+    if (cachedResult.hit && cachedResult.value) {
       return {
-        data: cachedData,
+        data: cachedResult.value,
         source: 'cache',
         confidence: 0.9
       };
@@ -417,7 +422,7 @@ export class GracefulDegradationService {
     // Try NIST (primary source)
     try {
       const nistData = await this.nistIntegration.getThermodynamicData(compoundName);
-      this.localCache.set(compoundName, nistData);
+      await this.localCache.set(compoundName, nistData);
       return {
         data: nistData,
         source: 'nist',
@@ -431,7 +436,7 @@ export class GracefulDegradationService {
     try {
       const pubchemData = await this.pubchemIntegration.searchCompounds(compoundName);
       const estimatedThermoData = this.estimateThermodynamicData(pubchemData[0]);
-      this.localCache.set(compoundName, estimatedThermoData);
+      await this.localCache.set(compoundName, estimatedThermoData);
       return {
         data: estimatedThermoData,
         source: 'pubchem',

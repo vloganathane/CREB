@@ -14,12 +14,19 @@ import {
   ExtendedThermodynamicProperties
 } from './types';
 import { ThermodynamicProperties } from '../thermodynamics/types';
+import { AdvancedCache } from '../performance/cache/AdvancedCache';
+import { Injectable } from '../core/decorators/Injectable';
 
+@Injectable()
 export class ChemicalDatabaseManager {
   private compounds: Map<string, CompoundDatabase> = new Map();
   private sources: Map<string, DatabaseSource> = new Map();
   private validationRules: DataValidationRule[] = [];
-  private cache: Map<string, { data: any; timestamp: number }> = new Map();
+  private cache = new AdvancedCache<any>({
+    maxSize: 1000,
+    defaultTtl: 1800000, // 30 minutes
+    enableMetrics: true
+  });
 
   constructor() {
     this.initializeDefaultSources();
