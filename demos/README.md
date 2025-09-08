@@ -1,6 +1,40 @@
-# CREB-JS Demos
+# CREB Molecular Visualization Demos
 
-This directory contains the demonstration files for the CREB-JS computational chemistry platform.
+This directory contains interactive demonstrations of the CREB molecular visualization system, showcasing the integration of RDKit.js, 3Dmol.js, and PubChem APIs.
+
+## 🎯 Current Demos
+
+### [Molecular Visualization Demo v2](molecular-visualization-demo.html)
+**Primary Demo** - Clean, modern interface with comprehensive molecular visualization capabilities.
+
+**Features:**
+- ✨ Modern, responsive UI with gradient design
+- 🔬 RDKit.js integration for 2D molecular structures
+- 🌐 3Dmol.js integration for 3D molecular visualization
+- 🔍 PubChem API integration for compound search
+- 📊 Real-time molecular property calculations
+- 🎲 Random molecule examples
+- 📱 Mobile-responsive design
+- 🐛 Advanced debugging panel
+
+**Capabilities:**
+- Manual SMILES input with instant 2D/3D rendering
+- PubChem compound search by name or CID
+- Real PubChem 3D structure integration when available
+- Fallback to generated structures when needed
+- Comprehensive molecular properties display
+- Interactive 3D molecular viewer
+
+### [Archive: RDKit-3Dmol Demo v1](archive/rdkit-3dmol-demo-v1.html)
+**Archived Version** - Original comprehensive demo with extended features.
+
+**Features:**
+- Complete RDKit.js and 3Dmol.js integration
+- PubChem search and 3D structure fetching
+- Molecular property calculations
+- SVG/PNG export functionality
+- Multiple visualization styles
+- Comprehensive error handling
 
 ## 🎮 Interactive Playground
 
