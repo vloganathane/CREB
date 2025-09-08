@@ -254,6 +254,9 @@
                     3D Structure (3Dmol.js)
                     <span class="version-info" id="mol3d-version">Loading...</span>
                 </div>
+                <div class="structure-info" id="structure-info" style="background: #e8f4fd; padding: 8px; margin: 5px; border-radius: 4px; font-size: 12px; display: none;">
+                    <strong>Structure Source:</strong> <span id="structure-source">Generated</span>
+                </div>
                 <div class="viewer-content">
                     <div id="mol3d-viewer" class="loading">Waiting for 3Dmol.js...</div>
                 </div>
@@ -521,6 +524,68 @@
             }
         }
 
+        // PubChem 3D Structure Integration
+        async function fetchPubChem3DStructure(cid) {
+            try {
+                updateDebug(`Fetching 3D structure for CID: ${cid}`);
+                updateStatus('Fetching real 3D structure from PubChem...', 'progress');
+                
+                // First try to get 3D SDF structure
+                const sdf3DUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/SDF?record_type=3d`;
+                const sdf3DResponse = await fetch(sdf3DUrl);
+                
+                if (sdf3DResponse.ok) {
+                    const sdf3DData = await sdf3DResponse.text();
+                    updateDebug('Successfully fetched 3D SDF structure from PubChem');
+                    updateStatus('Using real 3D structure data from PubChem!', 'success');
+                    return { format: 'sdf', data: sdf3DData };
+                }
+                
+                // Fallback to 2D SDF if 3D not available
+                updateDebug('3D structure not available, trying 2D structure...');
+                const sdf2DUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/SDF`;
+                const sdf2DResponse = await fetch(sdf2DUrl);
+                
+                if (sdf2DResponse.ok) {
+                    const sdf2DData = await sdf2DResponse.text();
+                    updateDebug('Successfully fetched 2D SDF structure (will be used for 3D visualization)');
+                    updateStatus('Using 2D structure from PubChem (3D not available)', 'warning');
+                    return { format: 'sdf', data: sdf2DData };
+                }
+                
+                throw new Error('No SDF structure data available');
+                
+            } catch (error) {
+                console.error('Failed to fetch PubChem structure:', error);
+                updateDebug('PubChem structure fetch failed: ' + error.message);
+                updateStatus('PubChem structure unavailable, using generated structure', 'warning');
+                return null;
+            }
+        }
+
+        async function fetchPubChemConformers(cid) {
+            try {
+                updateDebug(`Fetching conformer data for CID: ${cid}`);
+                
+                const conformerUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/conformers/JSON?conformers_type=3d`;
+                const conformerResponse = await fetch(conformerUrl);
+                
+                if (conformerResponse.ok) {
+                    const conformerData = await conformerResponse.json();
+                    updateDebug('Successfully fetched conformer data');
+                    return conformerData;
+                } else {
+                    updateDebug('Conformer data not available');
+                    return null;
+                }
+                
+            } catch (error) {
+                console.error('Failed to fetch conformers:', error);
+                updateDebug('Conformer fetch failed: ' + error.message);
+                return null;
+            }
+        }
+
         // PubChem search functionality
         async function searchPubChem() {
             const searchTerm = document.getElementById('pubchem-search').value.trim();
@@ -588,8 +653,12 @@
                 // Update the SMILES input field
                 document.getElementById('molecule-input').value = smiles;
 
-                // Load the molecule
-                await loadMoleculeFromSMILES(smiles, { pubchemCID: cid, searchTerm: searchTerm });
+                // Load the molecule with enhanced 3D structure data
+                await loadMoleculeFromSMILES(smiles, { 
+                    pubchemCID: cid, 
+                    searchTerm: searchTerm,
+                    use3DStructure: true  // Enable 3D structure fetching
+                });
 
                 updateStatus(`PubChem compound loaded: ${searchTerm} (CID: ${cid})`, 'success');
 
@@ -623,6 +692,9 @@
 
             try {
                 updateDebug('Processing SMILES: ' + smiles);
+                if (metadata.cid) {
+                    updateDebug('PubChem CID available: ' + metadata.cid);
+                }
 
                 // Show loading states
                 document.getElementById('rdkit-viewer').innerHTML = '<div class="loading">Generating 2D structure...</div>';
@@ -634,9 +706,9 @@
                 // Render 2D structure
                 await render2D(smiles);
 
-                // Render 3D structure (if available)
+                // Render 3D structure (with PubChem CID if available)
                 if (mol3dViewer) {
-                    await render3D(smiles);
+                    await render3D(smiles, metadata.cid);
                 }
 
                 // Calculate properties (include PubChem metadata if available)
@@ -737,7 +809,7 @@
             }
         }
 
-        async function render3D(smiles) {
+        async function render3D(smiles, cid = null) {
             try {
                 if (!mol3dViewer) {
                     throw new Error('3Dmol viewer not available');
@@ -756,15 +828,37 @@
                     cartoonQuality: 10
                 });
                 
-                // Generate PDB data
-                const pdbData = createPDBFromSMILES(smiles);
+                let structureData = null;
                 
-                if (!pdbData) {
-                    throw new Error('Failed to generate PDB data');
+                // Try to get PubChem 3D structure if CID is available
+                if (cid) {
+                    updateDebug(`Attempting to fetch PubChem 3D structure for CID: ${cid}`);
+                    structureData = await fetchPubChem3DStructure(cid);
                 }
                 
-                // Add model to viewer
-                mol3dViewer.addModel(pdbData, 'pdb');
+                // Use PubChem structure if available
+                if (structureData) {
+                    updateDebug(`Using PubChem ${structureData.format} structure data`);
+                    mol3dViewer.addModel(structureData.data, structureData.format);
+                    
+                    // Update UI to show source
+                    document.getElementById('structure-info').style.display = 'block';
+                    document.getElementById('structure-source').textContent = `PubChem 3D SDF (CID: ${cid})`;
+                } else {
+                    // Fallback to generated PDB data
+                    updateDebug('Falling back to generated PDB structure');
+                    const pdbData = createPDBFromSMILES(smiles);
+                    
+                    if (!pdbData) {
+                        throw new Error('Failed to generate PDB data');
+                    }
+                    
+                    mol3dViewer.addModel(pdbData, 'pdb');
+                    
+                    // Update UI to show source
+                    document.getElementById('structure-info').style.display = 'block';
+                    document.getElementById('structure-source').textContent = 'Generated from SMILES';
+                }
                 
                 // Apply default style
                 const currentStyle = document.getElementById('style-select').value;
