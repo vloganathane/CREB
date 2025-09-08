@@ -208,12 +208,18 @@
     <div class="container">
         <div class="header">
             <h1>CREB Enhanced Molecular Visualization</h1>
-            <p>Official RDKit.js and 3Dmol.js Integration</p>
+            <p>RDKit.js, 3Dmol.js, and PubChem Integration</p>
         </div>
 
         <div class="status" id="status">Initializing RDKit.js WASM module...</div>
 
         <div class="controls">
+            <div class="control-group">
+                <label for="pubchem-search">PubChem Search:</label>
+                <input type="text" id="pubchem-search" placeholder="Enter compound name or CID (e.g., caffeine, aspirin, 2244)">
+                <button onclick="searchPubChem()" id="search-btn" disabled>Search</button>
+                <button onclick="loadPubChemExample()" id="pubchem-example-btn" disabled>Random Drug</button>
+            </div>
             <div class="control-group">
                 <label for="molecule-input">SMILES:</label>
                 <input type="text" id="molecule-input" value="CCO" placeholder="Enter SMILES string">
@@ -257,6 +263,14 @@
         <div class="properties">
             <h3>Molecular Properties</h3>
             <div class="properties-grid">
+                <div class="property" id="compound-name-property" style="display: none;">
+                    <div class="property-label">Compound Name</div>
+                    <div class="property-value" id="compound-name">-</div>
+                </div>
+                <div class="property" id="pubchem-cid-property" style="display: none;">
+                    <div class="property-label">PubChem CID</div>
+                    <div class="property-value" id="pubchem-cid">-</div>
+                </div>
                 <div class="property">
                     <div class="property-label">Molecular Weight</div>
                     <div class="property-value" id="mw-value">-</div>
@@ -326,7 +340,7 @@
         }
 
         function enableControls() {
-            const controls = ['load-btn', 'example-btn', 'style-select', 'svg-btn', 'png-btn'];
+            const controls = ['load-btn', 'example-btn', 'search-btn', 'pubchem-example-btn', 'style-select', 'svg-btn', 'png-btn'];
             controls.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.disabled = false;
@@ -481,20 +495,94 @@
             }
         }
 
-        async function loadMolecule() {
+        // PubChem search functionality
+        async function searchPubChem() {
+            const searchTerm = document.getElementById('pubchem-search').value.trim();
+            if (!searchTerm) {
+                updateStatus('Please enter a compound name or CID', 'error');
+                return;
+            }
+
+            try {
+                updateStatus('Searching PubChem for: ' + searchTerm);
+                updateDebug('PubChem search initiated: ' + searchTerm);
+
+                // Show loading state
+                document.getElementById('rdkit-viewer').innerHTML = '<div class="loading">Searching PubChem...</div>';
+                if (mol3dViewer) {
+                    mol3dViewer.clear();
+                    document.getElementById('mol3d-viewer').innerHTML = '<div class="loading">Searching PubChem...</div>';
+                }
+
+                // Search PubChem for compound
+                let cid;
+                if (/^\d+$/.test(searchTerm)) {
+                    // If it's a number, assume it's a CID
+                    cid = searchTerm;
+                } else {
+                    // Search by name
+                    const searchUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(searchTerm)}/cids/JSON`;
+                    const searchResponse = await fetch(searchUrl);
+                    
+                    if (!searchResponse.ok) {
+                        throw new Error(`PubChem search failed: ${searchResponse.status}`);
+                    }
+                    
+                    const searchData = await searchResponse.json();
+                    if (!searchData.IdentifierList || !searchData.IdentifierList.CID || searchData.IdentifierList.CID.length === 0) {
+                        throw new Error('No compounds found for: ' + searchTerm);
+                    }
+                    
+                    cid = searchData.IdentifierList.CID[0]; // Use first result
+                }
+
+                updateDebug(`Found PubChem CID: ${cid}`);
+
+                // Get SMILES from PubChem
+                const smilesUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/property/CanonicalSMILES/JSON`;
+                const smilesResponse = await fetch(smilesUrl);
+                
+                if (!smilesResponse.ok) {
+                    throw new Error(`Failed to get SMILES: ${smilesResponse.status}`);
+                }
+                
+                const smilesData = await smilesResponse.json();
+                if (!smilesData.PropertyTable || !smilesData.PropertyTable.Properties || smilesData.PropertyTable.Properties.length === 0) {
+                    throw new Error('No SMILES data found for CID: ' + cid);
+                }
+                
+                const smiles = smilesData.PropertyTable.Properties[0].CanonicalSMILES;
+                updateDebug(`Retrieved SMILES: ${smiles}`);
+
+                // Update the SMILES input field
+                document.getElementById('molecule-input').value = smiles;
+
+                // Load the molecule
+                await loadMoleculeFromSMILES(smiles, { pubchemCID: cid, searchTerm: searchTerm });
+
+                updateStatus(`PubChem compound loaded: ${searchTerm} (CID: ${cid})`, 'success');
+
+            } catch (error) {
+                console.error('PubChem search failed:', error);
+                updateStatus('PubChem search failed: ' + error.message, 'error');
+                updateDebug('PubChem search error: ' + error.message);
+                
+                // Reset viewers to show error
+                document.getElementById('rdkit-viewer').innerHTML = '<div class="error">PubChem search failed<br>' + error.message + '</div>';
+                if (mol3dViewer) {
+                    mol3dViewer.clear();
+                    document.getElementById('mol3d-viewer').innerHTML = '<div class="error">PubChem search failed</div>';
+                }
+            }
+        }
+
+        async function loadMoleculeFromSMILES(smiles, metadata = {}) {
             if (!systemReady || !RDKit) {
                 updateStatus('System not ready yet', 'error');
                 return;
             }
 
-            const smiles = document.getElementById('molecule-input').value.trim();
-            if (!smiles) {
-                updateStatus('Please enter a SMILES string', 'error');
-                return;
-            }
-
             try {
-                updateStatus('Loading molecule: ' + smiles);
                 updateDebug('Processing SMILES: ' + smiles);
 
                 // Show loading states
@@ -512,11 +600,34 @@
                     await render3D(smiles);
                 }
 
-                // Calculate properties
-                await updateProperties(smiles);
+                // Calculate properties (include PubChem metadata if available)
+                await updateProperties(smiles, metadata);
 
-                updateStatus('Molecule loaded successfully: ' + smiles, 'success');
                 updateDebug('Molecule processing completed');
+
+            } catch (error) {
+                console.error('Failed to load molecule:', error);
+                updateStatus('Failed to load molecule: ' + error.message, 'error');
+                updateDebug('Molecule loading error: ' + error.message);
+            }
+        }
+
+        async function loadMolecule() {
+            if (!systemReady || !RDKit) {
+                updateStatus('System not ready yet', 'error');
+                return;
+            }
+
+            const smiles = document.getElementById('molecule-input').value.trim();
+            if (!smiles) {
+                updateStatus('Please enter a SMILES string', 'error');
+                return;
+            }
+
+            try {
+                updateStatus('Loading molecule: ' + smiles);
+                await loadMoleculeFromSMILES(smiles);
+                updateStatus('Molecule loaded successfully: ' + smiles, 'success');
 
             } catch (error) {
                 console.error('Failed to load molecule:', error);
@@ -812,7 +923,7 @@ END`;
             }
         }
 
-        async function updateProperties(smiles) {
+        async function updateProperties(smiles, metadata = {}) {
             try {
                 updateDebug('Calculating molecular properties...');
                 
@@ -878,6 +989,21 @@ END`;
                 document.getElementById('hba-value').textContent = hba !== null ? hba : 'N/A';
                 document.getElementById('canonical-smiles').textContent = canonical || smiles;
 
+                // Add PubChem metadata if available
+                if (metadata.pubchemCID) {
+                    document.getElementById('pubchem-cid').textContent = metadata.pubchemCID;
+                    document.getElementById('pubchem-cid-property').style.display = 'block';
+                } else {
+                    document.getElementById('pubchem-cid-property').style.display = 'none';
+                }
+                
+                if (metadata.searchTerm) {
+                    document.getElementById('compound-name').textContent = metadata.searchTerm;
+                    document.getElementById('compound-name-property').style.display = 'block';
+                } else {
+                    document.getElementById('compound-name-property').style.display = 'none';
+                }
+
                 mol.delete();
                 updateDebug('Properties calculated successfully');
                 
@@ -893,6 +1019,27 @@ END`;
                 document.getElementById('hba-value').textContent = 'Error';
                 document.getElementById('canonical-smiles').textContent = smiles;
             }
+        }
+
+        function loadPubChemExample() {
+            const examples = [
+                'caffeine',
+                'aspirin', 
+                'ibuprofen',
+                'acetaminophen',
+                'penicillin',
+                'morphine',
+                'nicotine',
+                'ethanol',
+                'glucose',
+                'testosterone',
+                'dopamine',
+                'serotonin'
+            ];
+            
+            const randomExample = examples[Math.floor(Math.random() * examples.length)];
+            document.getElementById('pubchem-search').value = randomExample;
+            searchPubChem();
         }
 
         function loadExample() {

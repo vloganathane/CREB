@@ -1,8 +1,8 @@
 /**
- * Enhanced Molecular Visualization with RDKit.js and 3Dmol.js Integration
+ * Enhanced Molecular Visualization with RDKit.js, 3Dmol.js, and PubChem Integration
  * Unified API for advanced 2D/3D molecular structure visualization and processing
  * 
- * This module integrates RDKit.js and 3Dmol.js wrappers with the existing CREB
+ * This module integrates RDKit.js, 3Dmol.js, and PubChem wrappers with the existing CREB
  * visualization system to provide comprehensive molecular visualization capabilities.
  */
 
@@ -10,6 +10,7 @@ import { Canvas2DRenderer, type Molecule2D } from './Canvas2DRenderer';
 import { SVGRenderer } from './SVGRenderer';
 import { RDKitWrapper, type RDKitMolecule, type MolecularProperties } from './RDKitWrapper';
 import { Mol3DWrapper, type Mol3DMolecule, type Mol3DStyle } from './Mol3DWrapper';
+import { PubChemIntegration, type PubChemCompound, type CompoundSearchOptions, type PubChemSearchResult } from './PubChemIntegration';
 
 export interface EnhancedVisualizationConfig {
   // 2D Configuration
@@ -69,15 +70,17 @@ export interface VisualizationExports {
 
 /**
  * Enhanced Molecular Visualization Class
- * Combines Canvas2D, RDKit.js, and 3Dmol.js for comprehensive molecular visualization
+ * Combines Canvas2D, RDKit.js, 3Dmol.js, and PubChem for comprehensive molecular visualization
  */
 export class EnhancedMolecularVisualization {
   private canvas2DRenderer: Canvas2DRenderer | null = null;
   private svgRenderer: SVGRenderer | null = null;
   private rdkitWrapper: RDKitWrapper;
   private mol3DWrapper: Mol3DWrapper | null = null;
+  private pubchemIntegration: PubChemIntegration;
   private config: EnhancedVisualizationConfig;
   private currentMolecule: RDKitMolecule | null = null;
+  private currentPubChemCompound: PubChemCompound | null = null;
 
   constructor(config: Partial<EnhancedVisualizationConfig> = {}) {
     this.config = {
@@ -110,6 +113,7 @@ export class EnhancedMolecularVisualization {
     };
 
     this.rdkitWrapper = new RDKitWrapper(this.config.rdkit);
+    this.pubchemIntegration = new PubChemIntegration();
   }
 
   /**
@@ -202,6 +206,196 @@ export class EnhancedMolecularVisualization {
         this.canvas2DRenderer.loadMolecule(molecule2D);
       }
     }
+  }
+
+  /**
+   * Search and load molecule from PubChem by compound name
+   */
+  async loadMoleculeFromPubChemName(compoundName: string): Promise<MolecularAnalysisResult | null> {
+    try {
+      const molecularData = await this.pubchemIntegration.searchAndGetMolecularData(
+        compoundName, 
+        { searchType: 'name', includeSynonyms: true, include3D: true }
+      );
+
+      if (!molecularData) {
+        throw new Error(`Compound "${compoundName}" not found in PubChem database`);
+      }
+
+      this.currentPubChemCompound = molecularData.compound;
+
+      // Load molecule using SMILES from PubChem
+      if (molecularData.compound.smiles) {
+        const result = await this.loadMoleculeFromSMILES(molecularData.compound.smiles);
+        
+        // Enhance result with PubChem data
+        if (result) {
+          result.validation.warnings = result.validation.warnings || [];
+          result.validation.warnings.push(`Data sourced from PubChem CID ${molecularData.compound.cid}`);
+          
+          // Update properties with PubChem data
+          result.properties = {
+            ...result.properties,
+            molecularWeight: molecularData.compound.molecularWeight,
+            formula: molecularData.compound.molecularFormula
+          };
+        }
+
+        // Load 3D structure if available
+        if (molecularData.structure3D && this.mol3DWrapper) {
+          await this.mol3DWrapper.addMolecule('pubchem', molecularData.structure3D, 'sdf');
+        } else if (molecularData.structure2D && this.mol3DWrapper) {
+          await this.mol3DWrapper.addMolecule('pubchem', molecularData.structure2D, 'sdf');
+        }
+
+        return result;
+      }
+
+      return null;
+    } catch (error) {
+      console.error('PubChem search failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Load molecule from PubChem by CID
+   */
+  async loadMoleculeFromPubChemCID(cid: number): Promise<MolecularAnalysisResult | null> {
+    try {
+      const molecularData = await this.pubchemIntegration.getMolecularData(cid, true);
+
+      if (!molecularData) {
+        throw new Error(`Compound with CID ${cid} not found in PubChem database`);
+      }
+
+      this.currentPubChemCompound = molecularData.compound;
+
+      // Load molecule using SMILES from PubChem
+      if (molecularData.compound.smiles) {
+        const result = await this.loadMoleculeFromSMILES(molecularData.compound.smiles);
+        
+        // Enhance result with PubChem data
+        if (result) {
+          result.validation.warnings = result.validation.warnings || [];
+          result.validation.warnings.push(`Data sourced from PubChem CID ${cid}`);
+          
+          // Update properties with PubChem data
+          result.properties = {
+            ...result.properties,
+            molecularWeight: molecularData.compound.molecularWeight,
+            formula: molecularData.compound.molecularFormula
+          };
+        }
+
+        // Load 3D structure if available
+        if (molecularData.structure3D && this.mol3DWrapper) {
+          await this.mol3DWrapper.addMolecule('pubchem', molecularData.structure3D, 'sdf');
+        } else if (molecularData.structure2D && this.mol3DWrapper) {
+          await this.mol3DWrapper.addMolecule('pubchem', molecularData.structure2D, 'sdf');
+        }
+
+        return result;
+      }
+
+      return null;
+    } catch (error) {
+      console.error('PubChem CID search failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Search PubChem compounds without loading
+   */
+  async searchPubChemCompounds(
+    query: string, 
+    options: CompoundSearchOptions = { searchType: 'name', limit: 10 }
+  ): Promise<PubChemSearchResult> {
+    return await this.pubchemIntegration.searchCompounds(query, options);
+  }
+
+  /**
+   * Load a compound from PubChem by CID
+   */
+  async loadPubChemCompound(cid: string): Promise<PubChemCompound> {
+    const cidNumber = parseInt(cid, 10);
+    if (isNaN(cidNumber)) {
+      throw new Error(`Invalid CID: ${cid}`);
+    }
+    
+    const compound = await this.pubchemIntegration.getCompoundByCid(cidNumber);
+    if (!compound) {
+      throw new Error(`Compound not found for CID: ${cid}`);
+    }
+    
+    this.currentPubChemCompound = compound;
+    return compound;
+  }
+
+  /**
+   * Analyze a molecule using RDKit
+   */
+  async analyzeMolecule(smiles: string): Promise<MolecularAnalysisResult> {
+    const molecule = await this.rdkitWrapper.parseSMILES(smiles);
+    if (!molecule) {
+      throw new Error('Failed to parse SMILES');
+    }
+
+    this.currentMolecule = molecule;
+    
+    return {
+      molecule,
+      properties: molecule.properties,
+      validation: {
+        isValid: true,
+        errors: [],
+        warnings: []
+      },
+      visualization: {
+        svg2D: await this.rdkitWrapper.generateSVG(smiles),
+        hasCoordinates: molecule.atoms.length > 0,
+        canRender3D: molecule.atoms.length > 0
+      }
+    };
+  }
+
+  /**
+   * Export molecule as SVG
+   */
+  async exportSVG(smiles: string, options: any = {}): Promise<string> {
+    return await this.rdkitWrapper.generateSVG(smiles, options);
+  }
+
+  /**
+   * Export molecular data
+   */
+  async exportMolecularData(smiles: string): Promise<VisualizationExports> {
+    const analysis = await this.analyzeMolecule(smiles);
+    
+    return {
+      svg2D: analysis.visualization.svg2D,
+      // Other formats could be implemented later
+      png2D: undefined,
+      jpg2D: undefined,
+      png3D: undefined,
+      pdb: undefined,
+      sdf: undefined
+    };
+  }
+
+  /**
+   * Get current PubChem compound information
+   */
+  getCurrentPubChemCompound(): PubChemCompound | null {
+    return this.currentPubChemCompound;
+  }
+
+  /**
+   * Validate PubChem connection
+   */
+  async validatePubChemConnection(): Promise<boolean> {
+    return await this.pubchemIntegration.validateConnection();
   }
 
   /**
@@ -560,7 +754,7 @@ export class EnhancedVisualizationUtils {
 }
 
 // Re-export wrapper classes for direct use
-export { RDKitWrapper, Mol3DWrapper };
-export type { RDKitMolecule, MolecularProperties, Mol3DMolecule, Mol3DStyle };
+export { RDKitWrapper, Mol3DWrapper, PubChemIntegration };
+export type { RDKitMolecule, MolecularProperties, Mol3DMolecule, Mol3DStyle, PubChemCompound, PubChemSearchResult, CompoundSearchOptions };
 
 export default EnhancedMolecularVisualization;

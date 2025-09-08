@@ -12,6 +12,7 @@ import { MolecularVisualization, MolecularDataUtils } from './SimplifiedMolecula
 // Export new enhanced visualization components
 export { RDKitWrapper, type RDKitMolecule, type MolecularProperties } from './RDKitWrapper';
 export { Mol3DWrapper, type Mol3DMolecule, type Mol3DStyle } from './Mol3DWrapper';
+export { PubChemIntegration, type PubChemCompound, type PubChemSearchResult, type CompoundSearchOptions } from './PubChemIntegration';
 export { 
   EnhancedMolecularVisualization, 
   createEnhancedVisualization,
