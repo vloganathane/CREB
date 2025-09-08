@@ -385,13 +385,32 @@
                     
                     // Test which property methods are available
                     const availableMethods = [];
-                    const methodsToTest = ['get_mw', 'get_logp', 'get_tpsa', 'get_num_hbd', 'get_num_hba', 'get_smiles', 'get_svg'];
+                    const methodsToTest = [
+                        'get_mw', 'mw', 
+                        'get_logp', 'logp', 
+                        'get_tpsa', 'tpsa', 
+                        'get_num_hbd', 'num_hbd', 
+                        'get_num_hba', 'num_hba', 
+                        'get_smiles', 'smiles', 
+                        'get_svg', 'get_svg_with_highlights',
+                        'get_descriptors', 'descriptors'
+                    ];
                     methodsToTest.forEach(method => {
                         if (typeof testMol[method] === 'function') {
                             availableMethods.push(method);
                         }
                     });
                     console.log('Available property methods:', availableMethods);
+                    
+                    // Test descriptors if available
+                    if (typeof testMol.get_descriptors === 'function') {
+                        try {
+                            const desc = testMol.get_descriptors();
+                            console.log('Sample descriptors:', desc);
+                        } catch (e) {
+                            console.warn('Descriptors test failed:', e);
+                        }
+                    }
                     
                     testMol.delete();
                     
@@ -675,26 +694,33 @@
                 // Generate SVG with better error handling
                 let svg;
                 try {
-                    if (mol.get_svg_with_highlights) {
-                        // Use string parameters instead of JSON object
+                    // Try the simplest SVG generation first
+                    if (typeof mol.get_svg === 'function') {
+                        svg = mol.get_svg();
+                        updateDebug('SVG generated using get_svg()');
+                    } else if (typeof mol.get_svg_with_highlights === 'function') {
                         svg = mol.get_svg_with_highlights('{}');
-                    } else if (mol.get_svg) {
-                        svg = mol.get_svg(350, 350);
+                        updateDebug('SVG generated using get_svg_with_highlights()');
                     } else {
                         throw new Error('No SVG generation method available');
                     }
                 } catch (svgError) {
-                    console.warn('SVG generation failed:', svgError);
+                    console.warn('Primary SVG generation failed:', svgError);
                     try {
-                        // Try simpler SVG generation
-                        svg = mol.get_svg ? mol.get_svg() : null;
-                        if (!svg) {
-                            throw new Error('Basic SVG generation failed');
+                        // Try alternative SVG generation
+                        if (typeof mol.get_svg_with_highlights === 'function') {
+                            svg = mol.get_svg_with_highlights('{}');
+                            updateDebug('SVG generated using fallback get_svg_with_highlights()');
+                        } else if (typeof mol.get_svg === 'function') {
+                            svg = mol.get_svg();
+                            updateDebug('SVG generated using fallback get_svg()');
+                        } else {
+                            throw new Error('All SVG generation methods failed');
                         }
                     } catch (fallbackError) {
                         console.warn('Fallback SVG generation failed:', fallbackError);
-                        // Fallback to simple text representation
-                        svg = `<div class="info">2D structure available<br>SMILES: ${smiles}<br><small>SVG rendering not supported in this RDKit.js version</small></div>`;
+                        // Final fallback to simple text representation
+                        svg = `<div class="info">2D structure loaded<br>SMILES: ${smiles}<br><small>SVG rendering not available</small></div>`;
                     }
                 }
 
@@ -962,93 +988,68 @@ END`;
                     throw new Error('Could not create molecule from SMILES');
                 }
 
-                // Calculate properties using correct RDKit.js API with better error handling
+                // Try different approaches to get molecular properties
                 let mw, logp, tpsa, hbd, hba, canonical;
                 
+                // First try: Use descriptors if available
                 try {
-                    // Molecular weight - check if method exists first
-                    if (typeof mol.get_mw === 'function') {
-                        mw = mol.get_mw();
-                    } else {
-                        console.warn('get_mw method not available');
-                        mw = null;
+                    if (typeof mol.get_descriptors === 'function') {
+                        const descriptorsJson = mol.get_descriptors();
+                        updateDebug('Raw descriptors: ' + descriptorsJson);
+                        
+                        if (descriptorsJson) {
+                            const desc = JSON.parse(descriptorsJson);
+                            console.log('Parsed descriptors:', desc);
+                            
+                            // Try common descriptor names
+                            mw = desc.MW || desc.mw || desc.MolWt || desc.molecular_weight || null;
+                            logp = desc.LogP || desc.logp || desc.MolLogP || desc.logP || null;
+                            tpsa = desc.TPSA || desc.tpsa || null;
+                            hbd = desc.NumHBD || desc.HBD || desc.hbd || desc.num_hbd || null;
+                            hba = desc.NumHBA || desc.HBA || desc.hba || desc.num_hba || null;
+                        }
                     }
                 } catch (e) {
-                    console.warn('MW calculation failed:', e);
-                    mw = null;
+                    console.warn('Descriptors approach failed:', e);
                 }
                 
-                try {
-                    // LogP
-                    if (typeof mol.get_logp === 'function') {
-                        logp = mol.get_logp();
-                    } else {
-                        console.warn('get_logp method not available');
-                        logp = null;
+                // Second try: Use RDKit level functions if molecule methods don't work
+                if (mw === null || mw === undefined) {
+                    try {
+                        // Try RDKit level functions
+                        if (typeof RDKit.get_mol_mw === 'function') {
+                            mw = RDKit.get_mol_mw(mol);
+                        }
+                    } catch (e) {
+                        console.warn('RDKit level MW failed:', e);
                     }
-                } catch (e) {
-                    console.warn('LogP calculation failed:', e);
-                    logp = null;
                 }
                 
+                // Canonical SMILES
                 try {
-                    // TPSA
-                    if (typeof mol.get_tpsa === 'function') {
-                        tpsa = mol.get_tpsa();
-                    } else {
-                        console.warn('get_tpsa method not available');
-                        tpsa = null;
-                    }
-                } catch (e) {
-                    console.warn('TPSA calculation failed:', e);
-                    tpsa = null;
-                }
-                
-                try {
-                    // H-bond donors
-                    if (typeof mol.get_num_hbd === 'function') {
-                        hbd = mol.get_num_hbd();
-                    } else {
-                        console.warn('get_num_hbd method not available');
-                        hbd = null;
-                    }
-                } catch (e) {
-                    console.warn('HBD calculation failed:', e);
-                    hbd = null;
-                }
-                
-                try {
-                    // H-bond acceptors
-                    if (typeof mol.get_num_hba === 'function') {
-                        hba = mol.get_num_hba();
-                    } else {
-                        console.warn('get_num_hba method not available');
-                        hba = null;
-                    }
-                } catch (e) {
-                    console.warn('HBA calculation failed:', e);
-                    hba = null;
-                }
-                
-                try {
-                    // Canonical SMILES - be very careful with this one
                     if (typeof mol.get_smiles === 'function') {
                         canonical = mol.get_smiles();
                     } else {
-                        console.warn('get_smiles method not available');
                         canonical = smiles;
+                        console.warn('Using input SMILES as canonical');
                     }
                 } catch (e) {
                     console.warn('Canonical SMILES failed:', e);
                     canonical = smiles;
                 }
 
+                // Clean up molecule
+                mol.delete();
+
                 // Update displays with fallback values
-                document.getElementById('mw-value').textContent = mw ? mw.toFixed(2) : 'N/A';
-                document.getElementById('logp-value').textContent = logp !== null ? logp.toFixed(2) : 'N/A';
-                document.getElementById('tpsa-value').textContent = tpsa ? tpsa.toFixed(2) : 'N/A';
-                document.getElementById('hbd-value').textContent = hbd !== null ? hbd : 'N/A';
-                document.getElementById('hba-value').textContent = hba !== null ? hba : 'N/A';
+                document.getElementById('mw-value').textContent = mw !== null && mw !== undefined ? 
+                    (typeof mw === 'number' ? mw.toFixed(2) : mw) : 'N/A';
+                document.getElementById('logp-value').textContent = logp !== null && logp !== undefined ? 
+                    (typeof logp === 'number' ? logp.toFixed(2) : logp) : 'N/A';
+                document.getElementById('tpsa-value').textContent = tpsa !== null && tpsa !== undefined ? 
+                    (typeof tpsa === 'number' ? tpsa.toFixed(2) : tpsa) : 'N/A';
+                document.getElementById('hbd-value').textContent = hbd !== null && hbd !== undefined ? hbd : 'N/A';
+                document.getElementById('hba-value').textContent = hba !== null && hba !== undefined ? hba : 'N/A';
                 document.getElementById('canonical-smiles').textContent = canonical || smiles;
 
                 // Add PubChem metadata if available
