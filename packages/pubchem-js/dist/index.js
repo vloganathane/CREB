@@ -332,6 +332,12 @@ class HTTPClient {
         this.cache = new Cache();
         this.rateLimiter = new RateLimiter(this.options.rateLimitDelay);
     }
+    /**
+     * Get the base URL for API requests
+     */
+    getBaseURL() {
+        return this.options.baseURL;
+    }
     async get(url, useCache = true) {
         const fullUrl = url.startsWith('http') ? url : `${this.options.baseURL}${url}`;
         const cacheKey = fullUrl;
@@ -899,6 +905,63 @@ async function getCompoundsByName(name, options = {}, httpClient) {
     return getCompounds(name, 'name', options, httpClient);
 }
 /**
+ * Get SDF (Structure Data Format) for a compound
+ * Returns the 3D structure data as a string
+ */
+async function getSdf(identifier, namespace = 'cid', httpClient) {
+    const client = httpClient || getHttpClient();
+    // Build URL for SDF format
+    const url = `/compound/${namespace}/${encodeURIComponent(String(identifier))}/SDF`;
+    try {
+        // Make direct HTTP request for SDF data (not JSON)
+        const fullUrl = url.startsWith('http') ? url : `${client.getBaseURL()}${url}`;
+        const response = await fetch(fullUrl, {
+            headers: {
+                'Accept': 'chemical/x-sdf',
+                'User-Agent': 'CREB-PubChem-JS/1.1.0',
+            },
+        });
+        if (!response.ok) {
+            if (response.status === 404) {
+                throw new Error(`SDF data not found for ${namespace}: ${identifier}`);
+            }
+            throw new Error(`Failed to fetch SDF: ${response.status} ${response.statusText}`);
+        }
+        const sdfData = await response.text();
+        if (!sdfData || sdfData.trim().length === 0) {
+            throw new Error(`Empty SDF data received for ${namespace}: ${identifier}`);
+        }
+        return sdfData;
+    }
+    catch (error) {
+        throw new Error(`Failed to get SDF data: ${error.message}`);
+    }
+}
+/**
+ * Get multiple formats for a compound (JSON metadata + SDF structure)
+ * Returns both structured data and 3D structure in one call
+ */
+async function getCompoundWithSdf(identifier, namespace = 'cid', httpClient) {
+    const client = httpClient || getHttpClient();
+    try {
+        // Get structured compound data and SDF in parallel
+        const [compounds, sdf] = await Promise.all([
+            getCompounds(identifier, namespace, {}, client),
+            getSdf(identifier, namespace, client)
+        ]);
+        if (compounds.length === 0) {
+            throw new Error(`Compound not found for ${namespace}: ${identifier}`);
+        }
+        return {
+            compound: compounds[0],
+            sdf: sdf
+        };
+    }
+    catch (error) {
+        throw new Error(`Failed to get compound with SDF: ${error.message}`);
+    }
+}
+/**
  * Set the default HTTP client for all search functions
  */
 function setDefaultHttpClient(client) {
@@ -934,6 +997,7 @@ exports.PubChemNotFoundError = PubChemNotFoundError;
 exports.PubChemTimeoutError = PubChemTimeoutError;
 exports.VERSION = VERSION;
 exports.getCids = getCids;
+exports.getCompoundWithSdf = getCompoundWithSdf;
 exports.getCompounds = getCompounds;
 exports.getCompoundsByFormula = getCompoundsByFormula;
 exports.getCompoundsByInchi = getCompoundsByInchi;
@@ -941,6 +1005,7 @@ exports.getCompoundsByName = getCompoundsByName;
 exports.getCompoundsBySmiles = getCompoundsBySmiles;
 exports.getDefaultHttpClient = getDefaultHttpClient;
 exports.getProperties = getProperties;
+exports.getSdf = getSdf;
 exports.getSynonyms = getSynonyms;
 exports.setDefaultHttpClient = setDefaultHttpClient;
 //# sourceMappingURL=index.js.map

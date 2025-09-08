@@ -12909,7 +12909,7 @@ const CREBServices = {
 /**
  * Initialize DI on module load for production usage
  */
-if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'test') {
+if (typeof process !== 'undefined' && "development" !== 'test') {
     initializeCREBDI();
 }
 

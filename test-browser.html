@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CREB-JS Browser Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .pass { background: #d4edda; }
+        .fail { background: #f8d7da; }
+        pre { background: #f5f5f5; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 CREB-JS Browser Compatibility Test</h1>
+    <div id="results"></div>
+
+    <!-- Load the browser build -->
+    <script type="module">
+        import { ChemicalEquationBalancer, calculateMolarWeight } from './dist/index.browser.js';
+
+        const results = document.getElementById('results');
+
+        function addResult(title, test, details) {
+            const div = document.createElement('div');
+            div.className = `test ${test.success ? 'pass' : 'fail'}`;
+            div.innerHTML = `
+                <h3>${test.success ? '✅' : '❌'} ${title}</h3>
+                <pre>${details}</pre>
+                ${test.error ? `<p><strong>Error:</strong> ${test.error}</p>` : ''}
+            `;
+            results.appendChild(div);
+        }
+
+        // Test 1: Molecular Weight Calculation
+        try {
+            const h2oWeight = calculateMolarWeight('H2O');
+            const co2Weight = calculateMolarWeight('CO2');
+            
+            addResult('Molecular Weight Calculation', {
+                success: h2oWeight > 0 && co2Weight > 0
+            }, `H2O: ${h2oWeight} g/mol\nCO2: ${co2Weight} g/mol`);
+        } catch (error) {
+            addResult('Molecular Weight Calculation', {
+                success: false,
+                error: error.message
+            }, 'Failed to calculate molecular weights');
+        }
+
+        // Test 2: Chemical Equation Balancing
+        try {
+            const balancer = new ChemicalEquationBalancer();
+            const result = balancer.balanceDetailed('H2 + O2 = H2O');
+            
+            addResult('Chemical Equation Balancing', {
+                success: result && result.equation
+            }, `Input: H2 + O2 = H2O\nOutput: ${result.equation}\nCoefficients: ${JSON.stringify(result.coefficients)}\nReactants: ${JSON.stringify(result.reactants)}\nProducts: ${JSON.stringify(result.products)}`);
+        } catch (error) {
+            addResult('Chemical Equation Balancing', {
+                success: false,
+                error: error.message
+            }, 'Failed to balance equation');
+        }
+
+        // Test 3: Complex Equation
+        try {
+            const balancer = new ChemicalEquationBalancer();
+            const result = balancer.balanceDetailed('CH4 + O2 = CO2 + H2O');
+            
+            addResult('Complex Equation (Methane Combustion)', {
+                success: result && result.equation
+            }, `Input: CH4 + O2 = CO2 + H2O\nOutput: ${result.equation}\nCoefficients: ${JSON.stringify(result.coefficients)}`);
+        } catch (error) {
+            addResult('Complex Equation (Methane Combustion)', {
+                success: false,
+                error: error.message
+            }, 'Failed to balance complex equation');
+        }
+
+        // Test 4: Import Test
+        addResult('Module Import', {
+            success: typeof ChemicalEquationBalancer === 'function' && typeof calculateMolarWeight === 'function'
+        }, `ChemicalEquationBalancer: ${typeof ChemicalEquationBalancer}\ncalculateMolarWeight: ${typeof calculateMolarWeight}`);
+
+        // Overall summary
+        setTimeout(() => {
+            const tests = document.querySelectorAll('.test');
+            const passed = document.querySelectorAll('.test.pass').length;
+            const total = tests.length;
+            
+            const summary = document.createElement('div');
+            summary.className = `test ${passed === total ? 'pass' : 'fail'}`;
+            summary.innerHTML = `
+                <h2>📊 Test Summary</h2>
+                <p><strong>${passed}/${total} tests passed</strong></p>
+                <p>${passed === total ? '🎉 All tests passed! CREB-JS is working in the browser!' : '⚠️ Some tests failed. Check the errors above.'}</p>
+            `;
+            results.appendChild(summary);
+        }, 100);
+    </script>
+</body>
+</html>

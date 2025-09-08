@@ -19,6 +19,8 @@ export {
   getCompoundsBySmiles,
   getCompoundsByInchi,
   getCompoundsByName,
+  getSdf,
+  getCompoundWithSdf,
   setDefaultHttpClient,
   getDefaultHttpClient,
 } from './search/index';

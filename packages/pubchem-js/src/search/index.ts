@@ -289,6 +289,81 @@ export async function getCompoundsByName(
 }
 
 /**
+ * Get SDF (Structure Data Format) for a compound
+ * Returns the 3D structure data as a string
+ */
+export async function getSdf(
+  identifier: string | number,
+  namespace: Namespace = 'cid',
+  httpClient?: HTTPClient
+): Promise<string> {
+  const client = httpClient || getHttpClient();
+  
+  // Build URL for SDF format
+  const url = `/compound/${namespace}/${encodeURIComponent(String(identifier))}/SDF`;
+  
+  try {
+    // Make direct HTTP request for SDF data (not JSON)
+    const fullUrl = url.startsWith('http') ? url : `${client.getBaseURL()}${url}`;
+    
+    const response = await fetch(fullUrl, {
+      headers: {
+        'Accept': 'chemical/x-sdf',
+        'User-Agent': 'CREB-PubChem-JS/1.1.0',
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`SDF data not found for ${namespace}: ${identifier}`);
+      }
+      throw new Error(`Failed to fetch SDF: ${response.status} ${response.statusText}`);
+    }
+
+    const sdfData = await response.text();
+    
+    if (!sdfData || sdfData.trim().length === 0) {
+      throw new Error(`Empty SDF data received for ${namespace}: ${identifier}`);
+    }
+    
+    return sdfData;
+  } catch (error: any) {
+    throw new Error(`Failed to get SDF data: ${error.message}`);
+  }
+}
+
+/**
+ * Get multiple formats for a compound (JSON metadata + SDF structure)
+ * Returns both structured data and 3D structure in one call
+ */
+export async function getCompoundWithSdf(
+  identifier: string | number,
+  namespace: Namespace = 'cid',
+  httpClient?: HTTPClient
+): Promise<{ compound: Compound; sdf: string }> {
+  const client = httpClient || getHttpClient();
+  
+  try {
+    // Get structured compound data and SDF in parallel
+    const [compounds, sdf] = await Promise.all([
+      getCompounds(identifier, namespace, {}, client),
+      getSdf(identifier, namespace, client)
+    ]);
+    
+    if (compounds.length === 0) {
+      throw new Error(`Compound not found for ${namespace}: ${identifier}`);
+    }
+    
+    return {
+      compound: compounds[0],
+      sdf: sdf
+    };
+  } catch (error: any) {
+    throw new Error(`Failed to get compound with SDF: ${error.message}`);
+  }
+}
+
+/**
  * Set the default HTTP client for all search functions
  */
 export function setDefaultHttpClient(client: HTTPClient): void {

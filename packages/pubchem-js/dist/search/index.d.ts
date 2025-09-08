@@ -41,6 +41,19 @@ export declare function getCompoundsByInchi(inchi: string, options?: SearchOptio
  */
 export declare function getCompoundsByName(name: string, options?: SearchOptions, httpClient?: HTTPClient): Promise<Compound[]>;
 /**
+ * Get SDF (Structure Data Format) for a compound
+ * Returns the 3D structure data as a string
+ */
+export declare function getSdf(identifier: string | number, namespace?: Namespace, httpClient?: HTTPClient): Promise<string>;
+/**
+ * Get multiple formats for a compound (JSON metadata + SDF structure)
+ * Returns both structured data and 3D structure in one call
+ */
+export declare function getCompoundWithSdf(identifier: string | number, namespace?: Namespace, httpClient?: HTTPClient): Promise<{
+    compound: Compound;
+    sdf: string;
+}>;
+/**
  * Set the default HTTP client for all search functions
  */
 export declare function setDefaultHttpClient(client: HTTPClient): void;

@@ -18,6 +18,10 @@ export declare class HTTPClient {
     private rateLimiter;
     private options;
     constructor(options?: HTTPClientOptions);
+    /**
+     * Get the base URL for API requests
+     */
+    getBaseURL(): string;
     get<T>(url: string, useCache?: boolean): Promise<T>;
     private makeRequest;
     private isRetryableError;

@@ -180,6 +180,13 @@ export class HTTPClient {
     this.rateLimiter = new RateLimiter(this.options.rateLimitDelay);
   }
 
+  /**
+   * Get the base URL for API requests
+   */
+  getBaseURL(): string {
+    return this.options.baseURL;
+  }
+
   async get<T>(url: string, useCache = true): Promise<T> {
     const fullUrl = url.startsWith('http') ? url : `${this.options.baseURL}${url}`;
     const cacheKey = fullUrl;

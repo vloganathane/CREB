@@ -1,61 +1,108 @@
 # CREB-JS Demos
 
-This directory contains demonstration files showcasing the CREB-JS library capabilities.
+This directory contains the demonstration files for the CREB-JS computational chemistry platform.
 
-## Files
+## 🎮 Interactive Playground
 
-### `demo.html`
-**Main Interactive Demo**
-- Comprehensive showcase of CREB-JS features
-- Professional UI with navigation menu
-- Core CREB functionality (equation balancing, stoichiometry, molar weight)
-- Enhanced PubChem integration for compound data
-- Compound search and comparison tools
-- **Usage**: Open directly in a web browser
+### **[New] Modern React Playground** 🚀
+- **Location**: `playground/` directory
+- **URL**: `http://localhost:5173/` (when running `npm run dev`)
+- **Features**:
+  - **Live Code Editor** with Monaco Editor (VS Code editor)
+  - **Real-time Execution** of CREB-JS code
+  - **Interactive Examples Gallery** with progressive difficulty
+  - **API Explorer** with live documentation
+  - **Chemical Visualizer** for 2D/3D molecular structures
+  - **Dark Theme** with professional styling
 
-### `test-demo.html` 
-**Test Suite Demo**
-- Automated testing interface for all CREB features
-- Unit tests for core functionality
-- Integration tests for PubChem features
-- Manual testing capabilities with detailed results
-- **Usage**: Open in browser to run comprehensive tests
+### **Getting Started with Playground**
+```bash
+cd playground/
+npm install
+npm run dev
+# Open http://localhost:5173/ in your browser
+```
 
-### `enhanced-demo.js`
-**Node.js Console Demo**  
-- Command-line demonstration of CREB-JS v1.4.0 features
-- Enhanced PubChem integration examples
-- **NEW**: Thermodynamics-Integrated Balancer showcase
-- Automated examples with detailed output
-- **Usage**: `node demos/enhanced-demo.js`
+## 📁 Archived Legacy Demos
 
-### `thermodynamics-test.html`
-**Thermodynamics Feature Testing**
-- Interactive testing of thermodynamic calculations
-- Real-time thermodynamic analysis
-- **Usage**: Open in browser for thermodynamics testing
+The previous HTML demos have been moved to `archive/legacy-demos/` for reference:
 
-## Getting Started
+### **Archive Contents**
+- `demo.html` - Main interactive demo with comprehensive features
+- `enhanced-2d-structures.html` - 2D molecular structure rendering
+- `pubchem-real-data.html` - PubChem integration showcase
+- `svg-export-demo.html` - SVG export capabilities
+- `molecular-visualization-integrated.html` - 3D molecular visualization
+- `test-demo.html` - Automated testing interface
+- `enhanced-demo.js` - Node.js console demonstration
 
-1. **Main Demo**: Open `demo.html` in your web browser to explore all features
-2. **Enhanced Demo**: Run `node demos/enhanced-demo.js` for command-line examples
-3. **Testing**: Open `test-demo.html` to run the test suite and verify functionality
-4. **Development**: Use these demos as reference for integrating CREB-JS in your projects
+### **Why Archived?**
+The legacy demos served their purpose but have been superseded by the modern playground:
+- ✅ **Better UX**: Interactive playground vs static HTML
+- ✅ **Modern Tech**: React + TypeScript vs vanilla JS/HTML
+- ✅ **Educational**: Progressive examples with explanations
+- ✅ **Comprehensive**: All features in one unified interface
+- ✅ **Maintainable**: Single codebase vs multiple HTML files
 
-## Features Demonstrated
+## 🎯 Playground Features
 
-- ⚗️ **Chemical Equation Balancing**: Balance complex chemical equations
-- 🧮 **Stoichiometry Calculations**: Calculate reactant/product quantities
-- ⚖️ **Molar Weight Calculations**: Determine molecular weights
-- 🧬 **PubChem Integration**: Search and retrieve compound data
-- 🔍 **Compound Analysis**: Compare molecular properties
-- 📊 **Enhanced Calculations**: Stoichiometry with real compound data
-- 🚀 **NEW: Thermodynamics Integration**: Advanced thermodynamic analysis with equation balancing
-- 🔥 **Reaction Analysis**: Feasibility, safety, and optimization insights
-- 🏭 **Industrial Applications**: Real-world process recommendations
+### **1. Code Editor**
+- Monaco Editor with TypeScript support
+- Syntax highlighting for chemical formulas
+- Auto-completion for CREB-JS APIs
+- Real-time error checking
 
-## Requirements
+### **2. Examples Gallery**
+- **Beginner**: Basic equation balancing
+- **Intermediate**: PubChem integration, 2D visualization
+- **Advanced**: SVG export, thermodynamic calculations
+- **Expert**: Custom plugins and complex workflows
 
-- Modern web browser with JavaScript enabled
-- Internet connection (for PubChem features)
-- All necessary libraries are included and loaded automatically
+### **3. API Explorer**
+- Interactive method browser
+- Live parameter testing
+- Code generation
+- Complete documentation
+
+### **4. Chemical Visualizer**
+- 2D molecular structures with Canvas rendering
+- 3D interactive models with 3Dmol.js
+- Export capabilities (PNG, SVG, JSON)
+- Real-time updates from code execution
+
+### **5. Results Panel**
+- Live code execution output
+- Chemical calculation results
+- Error handling with helpful messages
+- Console output capture
+
+## 🔧 Development
+
+### **Playground Architecture**
+```
+playground/
+├── src/
+│   ├── components/
+│   │   ├── CodeEditor.tsx        # Monaco editor wrapper
+│   │   ├── ChemicalVisualizer.tsx # 2D/3D molecular display
+│   │   ├── ResultsPanel.tsx      # Output visualization
+│   │   ├── ExamplesGallery.tsx   # Pre-built examples
+│   │   └── APIExplorer.tsx       # Interactive API docs
+│   ├── types.ts                  # TypeScript definitions
+│   ├── App.tsx                   # Main application
+│   └── App.css                   # Styling
+├── package.json                  # Dependencies and scripts
+└── dist/                        # Built playground (after npm run build)
+```
+
+### **Tech Stack**
+- **Frontend**: React 19 + TypeScript
+- **Editor**: Monaco Editor (VS Code editor)
+- **Styling**: CSS Custom Properties + Framer Motion
+- **Icons**: Lucide React
+- **Build**: Vite
+- **Chemistry**: CREB-JS integration
+
+---
+
+*For technical support or feature requests for the playground, please open an issue in the main CREB-JS repository.*
