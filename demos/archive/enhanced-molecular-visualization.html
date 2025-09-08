@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CREB Enhanced Molecular Visualization - RDKit.js & 3Dmol.js Integration</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .demo-section {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .demo-section h2 {
+            color: #4a5568;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .control-group label {
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 0.9em;
+        }
+
+        input, select, button {
+            padding: 8px 12px;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        button:disabled {
+            background: #a0aec0;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .visualization-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .visualization-panel {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .visualization-header {
+            background: #495057;
+            color: white;
+            padding: 12px 16px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .visualization-content {
+            height: 400px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #canvas2d {
+            border: none;
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        #mol3d-container {
+            width: 100%;
+            height: 100%;
+            background: #ffffff;
+        }
+
+        .properties-panel {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .properties-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .property-item {
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+
+        .property-label {
+            font-size: 0.85em;
+            color: #6c757d;
+            margin-bottom: 4px;
+        }
+
+        .property-value {
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .status {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-weight: 500;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #cce7ff;
+            color: #004085;
+            border: 1px solid #b8daff;
+        }
+
+        .export-section {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .export-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .export-buttons button {
+            background: #28a745;
+            padding: 8px 16px;
+            font-size: 0.9em;
+        }
+
+        .export-buttons button:hover {
+            background: #218838;
+        }
+
+        .molecular-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .info-panel {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+
+        .info-panel h4 {
+            color: #495057;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .feature-highlight {
+            background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%);
+            color: #2d3436;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .demo-molecules {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .demo-molecules button {
+            background: #6c757d;
+            font-size: 0.85em;
+            padding: 6px 12px;
+        }
+
+        .demo-molecules button:hover {
+            background: #545b62;
+        }
+
+        .advanced-controls {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e9ecef;
+            border-radius: 8px;
+        }
+
+        .advanced-controls h4 {
+            margin-bottom: 15px;
+            color: #495057;
+        }
+
+        @media (max-width: 768px) {
+            .visualization-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .molecular-info {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧬 CREB Enhanced Molecular Visualization</h1>
+            <p>RDKit.js & 3Dmol.js Integration for Advanced Chemical Structure Analysis</p>
+        </div>
+
+        <div class="demo-section">
+            <h2>🔬 Molecular Input & Analysis</h2>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <label for="smiles-input">SMILES String:</label>
+                    <input type="text" id="smiles-input" placeholder="e.g., CCO (ethanol)" value="CCO">
+                </div>
+                
+                <div class="control-group">
+                    <label for="visualization-style">3D Style:</label>
+                    <select id="visualization-style">
+                        <option value="ball-and-stick">Ball and Stick</option>
+                        <option value="space-filling">Space Filling</option>
+                        <option value="wireframe">Wireframe</option>
+                        <option value="cartoon">Cartoon</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label>&nbsp;</label>
+                    <button id="load-molecule">Load Molecule</button>
+                </div>
+                
+                <div class="control-group">
+                    <label>&nbsp;</label>
+                    <button id="add-surface">Add Surface</button>
+                </div>
+            </div>
+
+            <div class="demo-molecules">
+                <strong>Quick Examples:</strong>
+                <button onclick="loadQuickMolecule('CCO')">Ethanol</button>
+                <button onclick="loadQuickMolecule('C1=CC=CC=C1')">Benzene</button>
+                <button onclick="loadQuickMolecule('CC(=O)OC1=CC=CC=C1C(=O)O')">Aspirin</button>
+                <button onclick="loadQuickMolecule('CN1C=NC2=C1C(=O)N(C(=O)N2C)C')">Caffeine</button>
+                <button onclick="loadQuickMolecule('CC(C)CC1=CC=C(C=C1)C(C)C(=O)O')">Ibuprofen</button>
+            </div>
+
+            <div id="status-message"></div>
+        </div>
+
+        <div class="demo-section">
+            <h2>📊 Molecular Visualization</h2>
+            
+            <div class="visualization-grid">
+                <div class="visualization-panel">
+                    <div class="visualization-header">2D Canvas Visualization</div>
+                    <div class="visualization-content">
+                        <canvas id="canvas2d" width="500" height="350"></canvas>
+                    </div>
+                </div>
+                
+                <div class="visualization-panel">
+                    <div class="visualization-header">3D Interactive Visualization</div>
+                    <div class="visualization-content">
+                        <div id="mol3d-container"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="advanced-controls">
+                <h4>🎛️ Advanced Controls</h4>
+                <div class="controls">
+                    <button id="zoom-fit">Zoom to Fit</button>
+                    <button id="rotate-molecule">Auto Rotate</button>
+                    <button id="show-surfaces">Toggle Surfaces</button>
+                    <button id="animation-demo">Animation Demo</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>🧪 Molecular Properties & Analysis</h2>
+            
+            <div class="molecular-info">
+                <div class="info-panel">
+                    <h4>Basic Properties</h4>
+                    <div id="basic-properties">
+                        <p>Load a molecule to see properties...</p>
+                    </div>
+                </div>
+                
+                <div class="info-panel">
+                    <h4>Advanced Descriptors</h4>
+                    <div id="advanced-descriptors">
+                        <p>Load a molecule to see descriptors...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="properties-panel">
+                <h4>📈 Calculated Properties</h4>
+                <div class="properties-grid" id="properties-grid">
+                    <!-- Properties will be populated dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>🔍 Substructure Search & Chemical Transformations</h2>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <label for="search-pattern">Search Pattern (SMARTS):</label>
+                    <select id="search-pattern">
+                        <option value="c1ccccc1">Benzene Ring</option>
+                        <option value="[OH]">Hydroxyl Group</option>
+                        <option value="C=O">Carbonyl Group</option>
+                        <option value="C(=O)O">Carboxyl Group</option>
+                        <option value="N">Nitrogen Atom</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label>&nbsp;</label>
+                    <button id="search-substructure">Search</button>
+                </div>
+                
+                <div class="control-group">
+                    <label for="transformation">Chemical Transformation:</label>
+                    <select id="transformation">
+                        <option value="[C:1]>>[C:1]O">Hydroxylation</option>
+                        <option value="[N:1]>>[N:1]C">Methylation</option>
+                        <option value="[C:1][OH]>>[C:1]=O">Oxidation</option>
+                        <option value="[C:1]=[O:2]>>[C:1][OH:2]">Reduction</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label>&nbsp;</label>
+                    <button id="apply-transformation">Apply</button>
+                </div>
+            </div>
+
+            <div id="search-results"></div>
+        </div>
+
+        <div class="demo-section">
+            <h2>💾 Export & Download</h2>
+            
+            <div class="export-section">
+                <h4>Export Options</h4>
+                <div class="export-buttons">
+                    <button id="export-png2d">2D PNG</button>
+                    <button id="export-svg">SVG Vector</button>
+                    <button id="export-png3d">3D PNG</button>
+                    <button id="export-pdb">PDB File</button>
+                    <button id="export-sdf">SDF File</button>
+                    <button id="export-all">Export All</button>
+                </div>
+                <div id="export-status"></div>
+            </div>
+        </div>
+
+        <div class="feature-highlight">
+            🚀 This demo showcases the integrated power of CREB's molecular visualization system with RDKit.js for chemical computation and 3Dmol.js for interactive 3D rendering. All processing happens in your browser!
+        </div>
+    </div>
+
+    <!-- Include dependencies -->
+    <script src="https://3dmol.org/build/3Dmol-min.js"></script>
+    <!-- Note: RDKit.js would normally be loaded here, but we'll use fallback implementations for the demo -->
+    
+    <script type="module">
+        // Mock implementations for demonstration (replace with actual CREB imports in production)
+        class MockEnhancedVisualization {
+            constructor(config) {
+                this.config = config;
+                this.currentMolecule = null;
+                this.initialized = false;
+            }
+
+            async initialize(canvas2D, mol3DContainer) {
+                // Initialize 2D canvas
+                if (canvas2D) {
+                    this.canvas2D = canvas2D;
+                    this.ctx = canvas2D.getContext('2d');
+                }
+
+                // Initialize 3D viewer
+                if (mol3DContainer && window.$3Dmol) {
+                    this.viewer3D = $3Dmol.createViewer(mol3DContainer, {
+                        backgroundColor: 'white'
+                    });
+                }
+
+                this.initialized = true;
+                this.showStatus('Visualization system initialized', 'success');
+            }
+
+            async loadMoleculeFromSMILES(smiles) {
+                this.showStatus('Loading molecule...', 'info');
+                
+                // Simulate molecule loading and analysis
+                await this.delay(500);
+
+                const mockMolecule = {
+                    smiles: smiles,
+                    properties: {
+                        molecularWeight: this.calculateMockMW(smiles),
+                        formula: this.generateMockFormula(smiles),
+                        logP: (Math.random() * 4 - 2).toFixed(2),
+                        tpsa: (Math.random() * 150).toFixed(1),
+                        hbd: Math.floor(Math.random() * 5),
+                        hba: Math.floor(Math.random() * 8),
+                        rotatableBonds: Math.floor(Math.random() * 10),
+                        aromaticRings: smiles.includes('c') || smiles.includes('C1=CC=CC=C1') ? 1 : 0,
+                        inchi: `InChI=1S/${smiles}`,
+                        inchiKey: this.generateMockInChIKey()
+                    },
+                    atoms: this.generateMockAtoms(smiles),
+                    validation: {
+                        isValid: true,
+                        errors: [],
+                        warnings: []
+                    }
+                };
+
+                this.currentMolecule = mockMolecule;
+                
+                // Update visualizations
+                this.update2DVisualization(mockMolecule);
+                this.update3DVisualization(mockMolecule);
+                this.updateProperties(mockMolecule.properties);
+
+                this.showStatus(`Molecule loaded: ${mockMolecule.properties.formula}`, 'success');
+                
+                return {
+                    molecule: mockMolecule,
+                    properties: mockMolecule.properties,
+                    validation: mockMolecule.validation,
+                    visualization: {
+                        svg2D: '<svg>Mock SVG</svg>',
+                        hasCoordinates: true,
+                        canRender3D: true
+                    }
+                };
+            }
+
+            update2DVisualization(molecule) {
+                if (!this.ctx) return;
+
+                // Clear canvas
+                this.ctx.clearRect(0, 0, this.canvas2D.width, this.canvas2D.height);
+                this.ctx.fillStyle = '#ffffff';
+                this.ctx.fillRect(0, 0, this.canvas2D.width, this.canvas2D.height);
+
+                // Draw mock molecular structure
+                this.ctx.strokeStyle = '#333';
+                this.ctx.lineWidth = 2;
+                this.ctx.fillStyle = '#333';
+                this.ctx.font = '14px Arial';
+                this.ctx.textAlign = 'center';
+
+                const centerX = this.canvas2D.width / 2;
+                const centerY = this.canvas2D.height / 2;
+
+                // Draw atoms and bonds (simplified)
+                molecule.atoms.forEach((atom, index) => {
+                    const x = centerX + (atom.x - centerX) * 0.3;
+                    const y = centerY + (atom.y - centerY) * 0.3;
+                    
+                    // Draw atom
+                    this.ctx.beginPath();
+                    this.ctx.arc(x, y, 15, 0, 2 * Math.PI);
+                    this.ctx.fillStyle = this.getAtomColor(atom.element);
+                    this.ctx.fill();
+                    this.ctx.stroke();
+                    
+                    // Draw element label
+                    this.ctx.fillStyle = '#fff';
+                    this.ctx.fillText(atom.element, x, y + 5);
+                    
+                    // Draw bonds to next atom
+                    if (index < molecule.atoms.length - 1) {
+                        const nextAtom = molecule.atoms[index + 1];
+                        const nextX = centerX + (nextAtom.x - centerX) * 0.3;
+                        const nextY = centerY + (nextAtom.y - centerY) * 0.3;
+                        
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(x, y);
+                        this.ctx.lineTo(nextX, nextY);
+                        this.ctx.strokeStyle = '#333';
+                        this.ctx.stroke();
+                    }
+                });
+
+                // Add title
+                this.ctx.fillStyle = '#333';
+                this.ctx.font = '16px Arial';
+                this.ctx.fillText(molecule.properties.formula, centerX, 30);
+            }
+
+            update3DVisualization(molecule) {
+                if (!this.viewer3D) return;
+
+                // Clear previous molecules
+                this.viewer3D.removeAllModels();
+
+                // Generate mock 3D structure
+                const mockPDB = this.generateMockPDB(molecule);
+                this.viewer3D.addModel(mockPDB, 'pdb');
+                
+                // Set default style
+                this.set3DStyle(document.getElementById('visualization-style').value);
+                
+                this.viewer3D.zoomTo();
+                this.viewer3D.render();
+            }
+
+            set3DStyle(styleName) {
+                if (!this.viewer3D) return;
+
+                const styles = {
+                    'ball-and-stick': { stick: { radius: 0.2 }, sphere: { scale: 0.3 } },
+                    'space-filling': { sphere: { scale: 1.0 } },
+                    'wireframe': { line: { linewidth: 2 } },
+                    'cartoon': { cartoon: { style: 'trace' } }
+                };
+
+                const style = styles[styleName] || styles['ball-and-stick'];
+                this.viewer3D.setStyle({}, style);
+                this.viewer3D.render();
+            }
+
+            addSurface() {
+                if (!this.viewer3D) return;
+                
+                this.viewer3D.addSurface('VDW', { opacity: 0.7, color: 'lightblue' });
+                this.viewer3D.render();
+                this.showStatus('Molecular surface added', 'success');
+            }
+
+            updateProperties(properties) {
+                const grid = document.getElementById('properties-grid');
+                grid.innerHTML = '';
+
+                const propertyList = [
+                    { label: 'Molecular Weight', value: `${properties.molecularWeight} g/mol` },
+                    { label: 'LogP', value: properties.logP },
+                    { label: 'TPSA', value: `${properties.tpsa} Ų` },
+                    { label: 'H-Bond Donors', value: properties.hbd },
+                    { label: 'H-Bond Acceptors', value: properties.hba },
+                    { label: 'Rotatable Bonds', value: properties.rotatableBonds },
+                    { label: 'Aromatic Rings', value: properties.aromaticRings },
+                    { label: 'Formula', value: properties.formula }
+                ];
+
+                propertyList.forEach(prop => {
+                    const item = document.createElement('div');
+                    item.className = 'property-item';
+                    item.innerHTML = `
+                        <div class="property-label">${prop.label}</div>
+                        <div class="property-value">${prop.value}</div>
+                    `;
+                    grid.appendChild(item);
+                });
+
+                // Update info panels
+                document.getElementById('basic-properties').innerHTML = `
+                    <p><strong>Formula:</strong> ${properties.formula}</p>
+                    <p><strong>MW:</strong> ${properties.molecularWeight} g/mol</p>
+                    <p><strong>InChI Key:</strong> ${properties.inchiKey}</p>
+                `;
+
+                document.getElementById('advanced-descriptors').innerHTML = `
+                    <p><strong>LogP:</strong> ${properties.logP}</p>
+                    <p><strong>TPSA:</strong> ${properties.tpsa} Ų</p>
+                    <p><strong>Lipinski's Rule:</strong> ${this.checkLipinskiRule(properties)}</p>
+                `;
+            }
+
+            async searchSubstructure(pattern) {
+                this.showStatus('Searching for substructure...', 'info');
+                await this.delay(300);
+                
+                const hasMatch = Math.random() > 0.3; // 70% chance of match
+                const resultsDiv = document.getElementById('search-results');
+                
+                if (hasMatch) {
+                    resultsDiv.innerHTML = `
+                        <div class="status success">
+                            ✅ Substructure found! Pattern "${pattern}" matches in the molecule.
+                        </div>
+                    `;
+                } else {
+                    resultsDiv.innerHTML = `
+                        <div class="status error">
+                            ❌ No matches found for pattern "${pattern}".
+                        </div>
+                    `;
+                }
+            }
+
+            async exportAll() {
+                const statusDiv = document.getElementById('export-status');
+                statusDiv.innerHTML = '<div class="loading"></div> Generating exports...';
+
+                await this.delay(1000);
+
+                const exports = {
+                    png2D: this.canvas2D ? this.canvas2D.toDataURL('image/png') : null,
+                    svg2D: '<svg>Mock SVG data</svg>',
+                    png3D: 'data:image/png;base64,mock3d',
+                    pdb: this.generateMockPDB(this.currentMolecule),
+                    sdf: this.generateMockSDF(this.currentMolecule)
+                };
+
+                statusDiv.innerHTML = `
+                    <div class="status success">
+                        ✅ All formats exported successfully!
+                        <br>
+                        <small>In a real implementation, these would be downloadable files.</small>
+                    </div>
+                `;
+
+                return exports;
+            }
+
+            // Helper methods
+            delay(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+
+            showStatus(message, type = 'info') {
+                const statusDiv = document.getElementById('status-message');
+                statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+            }
+
+            calculateMockMW(smiles) {
+                // Very simplified MW calculation
+                const carbonCount = (smiles.match(/C/g) || []).length;
+                const oxygenCount = (smiles.match(/O/g) || []).length;
+                const nitrogenCount = (smiles.match(/N/g) || []).length;
+                return (carbonCount * 12 + oxygenCount * 16 + nitrogenCount * 14 + 10).toFixed(2);
+            }
+
+            generateMockFormula(smiles) {
+                const elements = { C: 0, H: 0, O: 0, N: 0 };
+                for (const char of smiles) {
+                    if (elements.hasOwnProperty(char)) {
+                        elements[char]++;
+                    }
+                }
+                elements.H = Math.max(elements.C * 2, 2); // Simplified
+                
+                let formula = '';
+                Object.entries(elements).forEach(([element, count]) => {
+                    if (count > 0) {
+                        formula += element + (count > 1 ? count : '');
+                    }
+                });
+                return formula || 'C2H6O';
+            }
+
+            generateMockInChIKey() {
+                const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                let key = '';
+                for (let i = 0; i < 27; i++) {
+                    if (i === 14 || i === 25) key += '-';
+                    else key += chars[Math.floor(Math.random() * chars.length)];
+                }
+                return key;
+            }
+
+            generateMockAtoms(smiles) {
+                const atomCount = Math.max(3, smiles.length / 2);
+                const atoms = [];
+                const elements = ['C', 'O', 'N', 'H'];
+                
+                for (let i = 0; i < atomCount; i++) {
+                    atoms.push({
+                        element: elements[Math.floor(Math.random() * elements.length)],
+                        x: 200 + Math.random() * 100,
+                        y: 150 + Math.random() * 100,
+                        z: Math.random() * 50
+                    });
+                }
+                return atoms;
+            }
+
+            generateMockPDB(molecule) {
+                if (!molecule) return '';
+                
+                let pdb = '';
+                molecule.atoms.forEach((atom, i) => {
+                    const serial = (i + 1).toString().padStart(5);
+                    const atomName = atom.element.padEnd(4);
+                    const x = atom.x.toFixed(3).padStart(8);
+                    const y = atom.y.toFixed(3).padStart(8);
+                    const z = atom.z.toFixed(3).padStart(8);
+                    
+                    pdb += `ATOM  ${serial}  ${atomName} UNK A   1    ${x}${y}${z}  1.00  0.00           ${atom.element}\n`;
+                });
+                pdb += 'END\n';
+                return pdb;
+            }
+
+            generateMockSDF(molecule) {
+                return `Mock SDF for ${molecule?.properties?.formula || 'Unknown'}`;
+            }
+
+            getAtomColor(element) {
+                const colors = {
+                    C: '#333333',
+                    O: '#ff0000',
+                    N: '#0000ff',
+                    H: '#ffffff',
+                    S: '#ffff00',
+                    P: '#ffa500'
+                };
+                return colors[element] || '#999999';
+            }
+
+            checkLipinskiRule(props) {
+                const violations = [];
+                if (props.molecularWeight > 500) violations.push('MW > 500');
+                if (props.logP > 5) violations.push('LogP > 5');
+                if (props.hbd > 5) violations.push('HBD > 5');
+                if (props.hba > 10) violations.push('HBA > 10');
+                
+                return violations.length === 0 
+                    ? '✅ Compliant' 
+                    : `❌ ${violations.length} violation(s)`;
+            }
+        }
+
+        // Initialize the application
+        const visualization = new MockEnhancedVisualization({
+            canvas2D: { width: 500, height: 350 },
+            mol3D: { width: 500, height: 350 }
+        });
+
+        // Initialize when page loads
+        window.addEventListener('load', async () => {
+            const canvas2D = document.getElementById('canvas2d');
+            const mol3DContainer = document.getElementById('mol3d-container');
+            
+            await visualization.initialize(canvas2D, mol3DContainer);
+            
+            // Load default molecule
+            await visualization.loadMoleculeFromSMILES('CCO');
+        });
+
+        // Event listeners
+        document.getElementById('load-molecule').addEventListener('click', async () => {
+            const smiles = document.getElementById('smiles-input').value;
+            if (smiles.trim()) {
+                await visualization.loadMoleculeFromSMILES(smiles.trim());
+            }
+        });
+
+        document.getElementById('visualization-style').addEventListener('change', (e) => {
+            visualization.set3DStyle(e.target.value);
+        });
+
+        document.getElementById('add-surface').addEventListener('click', () => {
+            visualization.addSurface();
+        });
+
+        document.getElementById('search-substructure').addEventListener('click', () => {
+            const pattern = document.getElementById('search-pattern').value;
+            visualization.searchSubstructure(pattern);
+        });
+
+        document.getElementById('export-all').addEventListener('click', () => {
+            visualization.exportAll();
+        });
+
+        document.getElementById('zoom-fit').addEventListener('click', () => {
+            if (visualization.viewer3D) {
+                visualization.viewer3D.zoomTo();
+                visualization.viewer3D.render();
+            }
+        });
+
+        // Quick molecule loading
+        window.loadQuickMolecule = async (smiles) => {
+            document.getElementById('smiles-input').value = smiles;
+            await visualization.loadMoleculeFromSMILES(smiles);
+        };
+
+        // Individual export functions
+        ['export-png2d', 'export-svg', 'export-png3d', 'export-pdb', 'export-sdf'].forEach(id => {
+            document.getElementById(id).addEventListener('click', () => {
+                visualization.showStatus(`${id.replace('export-', '').toUpperCase()} export started...`, 'info');
+            });
+        });
+    </script>
+</body>
+</html>

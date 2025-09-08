@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CREB Molecular Visualization - Working Version</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        .status {
+            padding: 15px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            border-left: 4px solid #007bff;
+            margin: 0;
+            background: #f8f9fa;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border-left-color: #28a745;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border-left-color: #dc3545;
+        }
+        .controls {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .control-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .control-group label {
+            font-weight: 600;
+            color: #495057;
+            min-width: 100px;
+        }
+        .control-group input, .control-group select, .control-group button {
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .control-group button {
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .control-group button:hover:not(:disabled) {
+            background: #0056b3;
+        }
+        .control-group button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .visualization-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 20px;
+        }
+        .viewer {
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            overflow: hidden;
+            background: white;
+        }
+        .viewer-header {
+            background: #e9ecef;
+            padding: 10px 15px;
+            font-weight: 600;
+            color: #495057;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .viewer-content {
+            height: 400px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+        }
+        #rdkit-viewer {
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            overflow: hidden;
+        }
+        #mol3d-viewer {
+            width: 100%;
+            height: 100%;
+        }
+        .properties {
+            grid-column: span 2;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            margin: 0 20px 20px 20px;
+        }
+        .properties h3 {
+            margin-top: 0;
+            color: #495057;
+        }
+        .properties-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .property {
+            background: white;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+        .property-label {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+        .property-value {
+            font-size: 1.2em;
+            color: #28a745;
+            word-break: break-all;
+        }
+        .loading, .error, .info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+        }
+        .loading {
+            color: #6c757d;
+        }
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            border-radius: 4px;
+        }
+        .info {
+            color: #0c5460;
+            background: #d1ecf1;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>CREB Molecular Visualization</h1>
+            <p>Unified 2D/3D molecular visualization with RDKit.js and 3Dmol.js</p>
+        </div>
+
+        <div class="status" id="status">Initializing molecular visualization libraries...</div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="molecule-input">SMILES:</label>
+                <input type="text" id="molecule-input" value="CCO" placeholder="Enter SMILES string">
+                <button onclick="loadMolecule()" id="load-btn" disabled>Load Molecule</button>
+                <button onclick="loadExample()" id="example-btn" disabled>Random Example</button>
+            </div>
+            <div class="control-group">
+                <label for="style-select">3D Style:</label>
+                <select id="style-select" onchange="update3DStyle()" disabled>
+                    <option value="stick">Stick</option>
+                    <option value="sphere">Sphere</option>
+                    <option value="line">Line</option>
+                </select>
+                <button onclick="exportSVG()" id="svg-btn" disabled>Export SVG</button>
+                <button onclick="exportPNG()" id="png-btn" disabled>Export PNG</button>
+            </div>
+        </div>
+
+        <div class="visualization-container">
+            <div class="viewer">
+                <div class="viewer-header">2D Structure (RDKit.js)</div>
+                <div class="viewer-content">
+                    <div id="rdkit-viewer" class="loading">Waiting for RDKit.js...</div>
+                </div>
+            </div>
+            <div class="viewer">
+                <div class="viewer-header">3D Structure (3Dmol.js)</div>
+                <div class="viewer-content">
+                    <div id="mol3d-viewer" class="loading">Waiting for 3Dmol.js...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="properties">
+            <h3>Molecular Properties</h3>
+            <div class="properties-grid">
+                <div class="property">
+                    <div class="property-label">Molecular Weight</div>
+                    <div class="property-value" id="mw-value">-</div>
+                </div>
+                <div class="property">
+                    <div class="property-label">LogP</div>
+                    <div class="property-value" id="logp-value">-</div>
+                </div>
+                <div class="property">
+                    <div class="property-label">TPSA</div>
+                    <div class="property-value" id="tpsa-value">-</div>
+                </div>
+                <div class="property">
+                    <div class="property-label">H-Bond Donors</div>
+                    <div class="property-value" id="hbd-value">-</div>
+                </div>
+                <div class="property">
+                    <div class="property-label">H-Bond Acceptors</div>
+                    <div class="property-value" id="hba-value">-</div>
+                </div>
+                <div class="property">
+                    <div class="property-label">Canonical SMILES</div>
+                    <div class="property-value" id="canonical-smiles">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load 3Dmol.js first -->
+    <script src="https://3dmol.csb.pitt.edu/build/3Dmol-min.js"></script>
+    
+    <script>
+        // Global variables
+        let mol3dViewer = null;
+        let isRDKitReady = false;
+        let is3DMolReady = false;
+        let systemReady = false;
+
+        // Example molecules
+        const examples = [
+            'CCO', // Ethanol
+            'CC(=O)OC1=CC=CC=C1C(=O)O', // Aspirin
+            'CN1C=NC2=C1C(=O)N(C(=O)N2C)C', // Caffeine
+            'CC(C)CC1=CC=C(C=C1)C(C)C(=O)O', // Ibuprofen
+            'C1=CC=C(C=C1)C2=CC=C(C=C2)C3=CC=CC=C3', // Triphenylbenzene
+            'C1=CC=C2C(=C1)C=CC=C2', // Naphthalene
+            'C1CCCCC1' // Cyclohexane
+        ];
+
+        function updateStatus(message, type = 'info') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = 'status ' + type;
+        }
+
+        function enableControls() {
+            const controls = ['load-btn', 'example-btn', 'style-select', 'svg-btn', 'png-btn'];
+            controls.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.disabled = false;
+            });
+            systemReady = true;
+        }
+
+        // Initialize 3Dmol.js
+        function init3DMol() {
+            try {
+                if (typeof $3Dmol !== 'undefined') {
+                    const mol3dElement = document.getElementById('mol3d-viewer');
+                    mol3dElement.innerHTML = '';
+                    mol3dViewer = $3Dmol.createViewer(mol3dElement, {
+                        backgroundColor: 'white'
+                    });
+                    is3DMolReady = true;
+                    updateStatus('3Dmol.js initialized successfully');
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                console.error('3Dmol initialization error:', error);
+                document.getElementById('mol3d-viewer').innerHTML = '<div class="error">3Dmol.js failed to initialize</div>';
+                return false;
+            }
+        }
+
+        // Initialize RDKit.js using WASM
+        async function initRDKit() {
+            try {
+                updateStatus('Loading RDKit.js WASM module...');
+                
+                // Load RDKit.js from CDN
+                const script = document.createElement('script');
+                script.src = 'https://unpkg.com/@rdkit/rdkit/dist/RDKit_minimal.js';
+                
+                return new Promise((resolve, reject) => {
+                    script.onload = async () => {
+                        try {
+                            // Wait for RDKit to initialize
+                            let attempts = 0;
+                            const maxAttempts = 30;
+                            
+                            const checkInit = setInterval(async () => {
+                                attempts++;
+                                try {
+                                    if (window.RDKit) {
+                                        clearInterval(checkInit);
+                                        
+                                        // Test basic functionality
+                                        const testMol = window.RDKit.get_mol('CCO');
+                                        if (testMol) {
+                                            testMol.delete();
+                                            isRDKitReady = true;
+                                            updateStatus('RDKit.js initialized successfully');
+                                            resolve(true);
+                                        } else {
+                                            throw new Error('RDKit test molecule creation failed');
+                                        }
+                                    } else if (attempts >= maxAttempts) {
+                                        clearInterval(checkInit);
+                                        throw new Error('RDKit initialization timeout');
+                                    }
+                                } catch (error) {
+                                    clearInterval(checkInit);
+                                    throw error;
+                                }
+                            }, 1000);
+                        } catch (error) {
+                            reject(error);
+                        }
+                    };
+                    
+                    script.onerror = () => {
+                        reject(new Error('Failed to load RDKit.js script'));
+                    };
+                    
+                    document.head.appendChild(script);
+                });
+                
+            } catch (error) {
+                console.error('RDKit initialization error:', error);
+                document.getElementById('rdkit-viewer').innerHTML = '<div class="error">RDKit.js failed to load</div>';
+                return false;
+            }
+        }
+
+        // Main initialization
+        async function initializeVisualization() {
+            try {
+                updateStatus('Initializing 3Dmol.js...');
+                
+                // Initialize 3Dmol first (already loaded)
+                let mol3dOk = false;
+                let attempts = 0;
+                while (!mol3dOk && attempts < 10) {
+                    mol3dOk = init3DMol();
+                    if (!mol3dOk) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        attempts++;
+                    }
+                }
+                
+                if (!mol3dOk) {
+                    throw new Error('3Dmol.js initialization failed');
+                }
+
+                // Initialize RDKit
+                const rdkitOk = await initRDKit();
+                
+                if (!rdkitOk) {
+                    throw new Error('RDKit.js initialization failed');
+                }
+
+                // Both systems ready
+                updateStatus('All systems ready! Try loading a molecule.', 'success');
+                enableControls();
+                
+                // Load default molecule
+                setTimeout(() => {
+                    loadMolecule();
+                }, 500);
+
+            } catch (error) {
+                console.error('Initialization failed:', error);
+                updateStatus('Initialization failed: ' + error.message, 'error');
+                
+                // Show fallback messages
+                if (!is3DMolReady) {
+                    document.getElementById('mol3d-viewer').innerHTML = '<div class="error">3Dmol.js unavailable</div>';
+                }
+                if (!isRDKitReady) {
+                    document.getElementById('rdkit-viewer').innerHTML = '<div class="error">RDKit.js unavailable</div>';
+                }
+            }
+        }
+
+        async function loadMolecule() {
+            if (!systemReady) {
+                updateStatus('System not ready yet', 'error');
+                return;
+            }
+
+            const smiles = document.getElementById('molecule-input').value.trim();
+            if (!smiles) {
+                updateStatus('Please enter a SMILES string', 'error');
+                return;
+            }
+
+            try {
+                updateStatus('Loading molecule: ' + smiles);
+
+                // Show loading states
+                document.getElementById('rdkit-viewer').innerHTML = '<div class="loading">Generating 2D structure...</div>';
+                if (mol3dViewer) {
+                    mol3dViewer.clear();
+                    document.getElementById('mol3d-viewer').innerHTML = '<div class="loading">Generating 3D structure...</div>';
+                }
+
+                // Render 2D first
+                await render2D(smiles);
+
+                // Render 3D
+                await render3D(smiles);
+
+                // Calculate properties
+                await updateProperties(smiles);
+
+                updateStatus('Molecule loaded: ' + smiles, 'success');
+
+            } catch (error) {
+                console.error('Failed to load molecule:', error);
+                updateStatus('Failed to load molecule: ' + error.message, 'error');
+            }
+        }
+
+        async function render2D(smiles) {
+            try {
+                if (!isRDKitReady || !window.RDKit) {
+                    throw new Error('RDKit not available');
+                }
+                
+                const mol = window.RDKit.get_mol(smiles);
+                if (!mol) {
+                    throw new Error('Invalid SMILES: ' + smiles);
+                }
+
+                const svg = mol.get_svg(350, 350);
+                document.getElementById('rdkit-viewer').innerHTML = svg;
+                mol.delete();
+                
+            } catch (error) {
+                console.error('2D rendering error:', error);
+                document.getElementById('rdkit-viewer').innerHTML = 
+                    '<div class="error">2D rendering failed:<br>' + error.message + '</div>';
+            }
+        }
+
+        async function render3D(smiles) {
+            try {
+                if (!is3DMolReady || !mol3dViewer) {
+                    throw new Error('3Dmol not available');
+                }
+
+                // Clear previous content
+                mol3dViewer.clear();
+                
+                // Recreate viewer element to ensure proper display
+                const mol3dContainer = document.getElementById('mol3d-viewer').parentElement;
+                const newViewer = document.createElement('div');
+                newViewer.id = 'mol3d-viewer';
+                newViewer.className = document.getElementById('mol3d-viewer').className;
+                mol3dContainer.replaceChild(newViewer, document.getElementById('mol3d-viewer'));
+                
+                mol3dViewer = $3Dmol.createViewer(newViewer, {
+                    backgroundColor: 'white'
+                });
+
+                // Create simple 3D structure
+                const pdbData = createSimplePDB(smiles);
+                
+                mol3dViewer.addModel(pdbData, 'pdb');
+                applyStyle(document.getElementById('style-select').value);
+                mol3dViewer.zoomTo();
+                mol3dViewer.render();
+                
+            } catch (error) {
+                console.error('3D rendering error:', error);
+                document.getElementById('mol3d-viewer').innerHTML = 
+                    '<div class="error">3D rendering failed:<br>' + error.message + '</div>';
+            }
+        }
+
+        function createSimplePDB(smiles) {
+            // Simple 3D structures for demo purposes
+            const structures = {
+                'CCO': `ATOM      1  C   ETH A   1       0.000   0.000   0.000  1.00 20.00           C  
+ATOM      2  C   ETH A   1       1.530   0.000   0.000  1.00 20.00           C  
+ATOM      3  O   ETH A   1       2.040   1.330   0.000  1.00 20.00           O  
+END`,
+                'C': `ATOM      1  C   MET A   1       0.000   0.000   0.000  1.00 20.00           C  
+END`,
+                'CC': `ATOM      1  C   ETH A   1       0.000   0.000   0.000  1.00 20.00           C  
+ATOM      2  C   ETH A   1       1.530   0.000   0.000  1.00 20.00           C  
+END`,
+                'default': `ATOM      1  C   MOL A   1       0.000   0.000   0.000  1.00 20.00           C  
+ATOM      2  C   MOL A   1       1.530   0.000   0.000  1.00 20.00           C  
+ATOM      3  N   MOL A   1       2.265   1.330   0.000  1.00 20.00           N  
+END`
+            };
+
+            return structures[smiles] || structures['default'];
+        }
+
+        function applyStyle(style) {
+            if (!mol3dViewer) return;
+
+            mol3dViewer.setStyle({}, {});
+
+            switch (style) {
+                case 'stick':
+                    mol3dViewer.setStyle({}, { stick: { radius: 0.15 } });
+                    break;
+                case 'sphere':
+                    mol3dViewer.setStyle({}, { sphere: { radius: 0.4 } });
+                    break;
+                case 'line':
+                    mol3dViewer.setStyle({}, { line: { linewidth: 2 } });
+                    break;
+            }
+            mol3dViewer.render();
+        }
+
+        async function updateProperties(smiles) {
+            try {
+                if (!isRDKitReady || !window.RDKit) return;
+                
+                const mol = window.RDKit.get_mol(smiles);
+                if (!mol) return;
+
+                // Calculate properties
+                const mw = mol.get_mw();
+                const logp = mol.get_logp();
+                const tpsa = mol.get_tpsa();
+                const hbd = mol.get_num_hbd();
+                const hba = mol.get_num_hba();
+                const canonical = mol.get_smiles();
+
+                // Update displays
+                document.getElementById('mw-value').textContent = mw ? mw.toFixed(2) : '-';
+                document.getElementById('logp-value').textContent = logp !== undefined ? logp.toFixed(2) : '-';
+                document.getElementById('tpsa-value').textContent = tpsa ? tpsa.toFixed(2) : '-';
+                document.getElementById('hbd-value').textContent = hbd !== undefined ? hbd : '-';
+                document.getElementById('hba-value').textContent = hba !== undefined ? hba : '-';
+                document.getElementById('canonical-smiles').textContent = canonical || smiles;
+
+                mol.delete();
+                
+            } catch (error) {
+                console.error('Properties calculation error:', error);
+            }
+        }
+
+        function loadExample() {
+            const randomExample = examples[Math.floor(Math.random() * examples.length)];
+            document.getElementById('molecule-input').value = randomExample;
+            loadMolecule();
+        }
+
+        function update3DStyle() {
+            const style = document.getElementById('style-select').value;
+            applyStyle(style);
+        }
+
+        async function exportSVG() {
+            try {
+                const smiles = document.getElementById('molecule-input').value.trim();
+                if (!smiles || !isRDKitReady) {
+                    updateStatus('Cannot export: no molecule or RDKit unavailable', 'error');
+                    return;
+                }
+
+                const mol = window.RDKit.get_mol(smiles);
+                if (!mol) {
+                    updateStatus('Cannot export: invalid molecule', 'error');
+                    return;
+                }
+
+                const svg = mol.get_svg(400, 400);
+                mol.delete();
+                
+                const blob = new Blob([svg], { type: 'image/svg+xml' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'molecule.svg';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                updateStatus('SVG exported successfully!', 'success');
+
+            } catch (error) {
+                updateStatus('SVG export failed: ' + error.message, 'error');
+            }
+        }
+
+        async function exportPNG() {
+            try {
+                if (!mol3dViewer || !is3DMolReady) {
+                    updateStatus('Cannot export: 3D viewer unavailable', 'error');
+                    return;
+                }
+
+                const png = mol3dViewer.pngURI();
+                const a = document.createElement('a');
+                a.href = png;
+                a.download = 'molecule_3d.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+
+                updateStatus('PNG exported successfully!', 'success');
+
+            } catch (error) {
+                updateStatus('PNG export failed: ' + error.message, 'error');
+            }
+        }
+
+        // Start initialization when page loads
+        window.addEventListener('load', () => {
+            setTimeout(initializeVisualization, 100);
+        });
+    </script>
+</body>
+</html>

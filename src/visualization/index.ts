@@ -1,12 +1,25 @@
 /**
  * Integration with CREB Core Types and Systems
- * Enhanced with SVG Export Capabilities
+ * Enhanced with SVG Export Capabilities and Advanced Molecular Visualization
+ * Now includes RDKit.js and 3Dmol.js wrappers for comprehensive molecular processing
  */
 
 import type { ElementCount } from '../types';
 import { Canvas2DRenderer } from './Canvas2DRenderer';
 import { SVGRenderer } from './SVGRenderer';
 import { MolecularVisualization, MolecularDataUtils } from './SimplifiedMolecularVisualization';
+
+// Export new enhanced visualization components
+export { RDKitWrapper, type RDKitMolecule, type MolecularProperties } from './RDKitWrapper';
+export { Mol3DWrapper, type Mol3DMolecule, type Mol3DStyle } from './Mol3DWrapper';
+export { 
+  EnhancedMolecularVisualization, 
+  createEnhancedVisualization,
+  EnhancedVisualizationUtils,
+  type EnhancedVisualizationConfig,
+  type MolecularAnalysisResult,
+  type VisualizationExports
+} from './EnhancedMolecularVisualization';
 
 /**
  * Simple molecule interface for visualization

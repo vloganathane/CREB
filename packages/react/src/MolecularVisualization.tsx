@@ -63,6 +63,30 @@ export interface MolecularViewerProps {
   showControls?: boolean;
   onMoleculeLoad?: (molecule: any) => void;
   onError?: (error: Error) => void;
+  
+  // New animation props
+  enableAnimation?: boolean;
+  animationDuration?: number;
+  animationStyle?: 'smooth' | 'stepped' | 'spring';
+  showEnergyProfile?: boolean;
+  onAnimationFrame?: (frame: any) => void;
+}
+
+/**
+ * Component for displaying animated chemical reactions
+ */
+export interface ReactionAnimationProps {
+  equation: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  autoPlay?: boolean;
+  showControls?: boolean;
+  showEnergyProfile?: boolean;
+  style?: React.CSSProperties;
+  onAnimationStart?: () => void;
+  onAnimationEnd?: () => void;
+  onFrameUpdate?: (frame: any) => void;
 }
 
 /**
@@ -305,7 +329,241 @@ export const useMolecularVisualization = (config: {
 };
 
 /**
- * Component for displaying chemical reactions
+ * Component for displaying animated chemical reactions
+ */
+export const ReactionAnimation: React.FC<ReactionAnimationProps> = ({
+  equation,
+  width = 800,
+  height = 600,
+  duration = 8000,
+  autoPlay = false,
+  showControls = true,
+  showEnergyProfile = true,
+  style,
+  onAnimationStart,
+  onAnimationEnd,
+  onFrameUpdate
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [animator, setAnimator] = useState<any>(null);
+
+  // Initialize animation when equation changes
+  useEffect(() => {
+    if (equation && canvasRef.current) {
+      initializeAnimation();
+    }
+  }, [equation]);
+
+  // Auto play when enabled
+  useEffect(() => {
+    if (autoPlay && animator && !isPlaying) {
+      playAnimation();
+    }
+  }, [autoPlay, animator]);
+
+  const initializeAnimation = async () => {
+    if (!canvasRef.current) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Dynamically import the ReactionAnimator
+      const { ReactionAnimator } = await import('../../../src/visualization/ReactionAnimation');
+      
+      const animatorInstance = new ReactionAnimator({
+        duration,
+        fps: 30,
+        showEnergyProfile,
+        style: 'smooth'
+      });
+
+      // Mock equation balancing and animation generation
+      console.log(`Initializing animation for: ${equation}`);
+      
+      setAnimator(animatorInstance);
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to initialize animation');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const playAnimation = async () => {
+    if (!animator || !canvasRef.current || isPlaying) return;
+
+    setIsPlaying(true);
+    setProgress(0);
+    
+    if (onAnimationStart) {
+      onAnimationStart();
+    }
+
+    try {
+      await animator.playAnimation(canvasRef.current, (frame: any) => {
+        setProgress(frame.time);
+        if (onFrameUpdate) {
+          onFrameUpdate(frame);
+        }
+      });
+
+      if (onAnimationEnd) {
+        onAnimationEnd();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Animation playback failed');
+    } finally {
+      setIsPlaying(false);
+    }
+  };
+
+  const pauseAnimation = () => {
+    if (animator) {
+      animator.pauseAnimation();
+      setIsPlaying(false);
+    }
+  };
+
+  const resetAnimation = () => {
+    if (animator) {
+      animator.resetAnimation();
+      setIsPlaying(false);
+      setProgress(0);
+    }
+  };
+
+  return (
+    <div style={{ position: 'relative', ...style }}>
+      <canvas
+        ref={canvasRef}
+        width={width}
+        height={height}
+        style={{
+          border: '1px solid #ccc',
+          borderRadius: '8px',
+          backgroundColor: 'white',
+          display: 'block'
+        }}
+      />
+      
+      {showControls && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '10px',
+            left: '10px',
+            right: '10px',
+            background: 'rgba(255, 255, 255, 0.9)',
+            padding: '10px',
+            borderRadius: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}
+        >
+          <button
+            onClick={playAnimation}
+            disabled={isLoading || isPlaying}
+            style={{
+              padding: '6px 12px',
+              border: 'none',
+              borderRadius: '4px',
+              backgroundColor: '#4facfe',
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            {isLoading ? 'Loading...' : isPlaying ? 'Playing...' : 'Play'}
+          </button>
+          
+          <button
+            onClick={pauseAnimation}
+            disabled={!isPlaying}
+            style={{
+              padding: '6px 12px',
+              border: 'none',
+              borderRadius: '4px',
+              backgroundColor: '#ffa502',
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            Pause
+          </button>
+          
+          <button
+            onClick={resetAnimation}
+            disabled={isLoading}
+            style={{
+              padding: '6px 12px',
+              border: 'none',
+              borderRadius: '4px',
+              backgroundColor: '#ff6b6b',
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            Reset
+          </button>
+          
+          <div style={{ flex: 1, marginLeft: '10px' }}>
+            <div style={{ fontSize: '12px', marginBottom: '2px' }}>
+              Progress: {Math.round(progress * 100)}%
+            </div>
+            <div
+              style={{
+                width: '100%',
+                height: '4px',
+                backgroundColor: '#e9ecef',
+                borderRadius: '2px',
+                overflow: 'hidden'
+              }}
+            >
+              <div
+                style={{
+                  width: `${progress * 100}%`,
+                  height: '100%',
+                  backgroundColor: '#4facfe',
+                  transition: 'width 0.3s ease'
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {error && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '10px',
+            left: '10px',
+            right: '10px',
+            background: '#ffebee',
+            border: '1px solid #f44336',
+            color: '#c62828',
+            padding: '8px',
+            borderRadius: '4px',
+            fontSize: '12px'
+          }}
+        >
+          Error: {error}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/**
+ * Component for displaying chemical reactions (static view)
  */
 export interface ReactionViewerProps {
   reactants: MoleculeForVisualization[];

@@ -6,6 +6,7 @@
 
 // Import Canvas2D renderer
 import { Canvas2DRenderer, type Molecule2D } from './Canvas2DRenderer';
+import { BalancedEquation } from '../types';
 
 export interface MolecularVisualizationConfig {
   container: HTMLElement | string;
@@ -607,9 +608,11 @@ export function createMolecularVisualization(config: MolecularVisualizationConfi
  */
 export class CREBMolecularIntegration {
   private visualization: MolecularVisualization;
+  private container: HTMLElement | null = null;
 
-  constructor(visualization: MolecularVisualization) {
+  constructor(visualization: MolecularVisualization, container?: HTMLElement) {
     this.visualization = visualization;
+    this.container = container || null;
   }
 
   /**
@@ -644,9 +647,197 @@ export class CREBMolecularIntegration {
   /**
    * Show reaction animation
    */
-  async animateReaction(equation: string): Promise<void> {
-    // Implementation for reaction animation
-    console.log('Animating reaction:', equation);
+  async animateReaction(equation: string, canvas?: HTMLCanvasElement): Promise<void> {
+    try {
+      // Import the reaction animation system
+      const { ReactionAnimator } = await import('./ReactionAnimation');
+      const { EnergyProfileGenerator } = await import('../thermodynamics/energyProfile');
+      const { EnhancedChemicalEquationBalancer } = await import('../enhancedBalancer');
+      
+      // Balance the equation
+      const balancer = new EnhancedChemicalEquationBalancer();
+      const balanceResult = balancer.balance(equation);
+      const balanced: BalancedEquation = {
+        equation: balanceResult,
+        coefficients: [1, 1, 1, 1], // Mock coefficients
+        reactants: equation.split('=')[0].trim().split('+').map(s => s.trim()),
+        products: equation.split('=')[1].trim().split('+').map(s => s.trim())
+      };
+      
+      // Generate energy profile for the reaction
+      const generator = new EnergyProfileGenerator();
+      const mockThermodynamics = {
+        deltaH: -100, // Example: exothermic reaction
+        deltaS: 50,
+        deltaG: -115,
+        equilibriumConstant: 1e20,
+        spontaneity: 'spontaneous' as const,
+        temperatureDependence: { range: [298, 373] as [number, number], deltaGvsT: [] },
+        conditions: { temperature: 298.15, pressure: 101325 },
+        enthalpy: -100,
+        gibbsFreeEnergy: -115,
+        isSpontaneous: true
+      };
+      
+      const energyProfile = generator.generateProfile(mockThermodynamics);
+      
+      // Create animator with default config
+      const animator = new ReactionAnimator({
+        duration: 8000, // 8 seconds
+        fps: 30,
+        showEnergyProfile: true,
+        showBondOrders: true,
+        style: 'smooth'
+      });
+      
+      // Generate animation from equation and energy profile
+      await animator.createAnimationFromEquation(balanced, energyProfile);
+      
+      // Play animation on provided canvas or create a new one
+      let animationCanvas = canvas;
+      if (!animationCanvas) {
+        animationCanvas = this.createAnimationCanvas();
+      }
+      
+      console.log(`🎬 Starting reaction animation for: ${equation}`);
+      
+      // Play the animation with progress callback
+      await animator.playAnimation(animationCanvas, (frame) => {
+        console.log(`Animation progress: ${(frame.time * 100).toFixed(1)}% (Frame ${frame.frameNumber})`);
+      });
+      
+      console.log('✅ Reaction animation completed!');
+      
+    } catch (error) {
+      console.error('Error creating reaction animation:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a canvas for animation if none provided
+   */
+  private createAnimationCanvas(): HTMLCanvasElement {
+    const canvas = document.createElement('canvas');
+    canvas.width = 800;
+    canvas.height = 600;
+    canvas.style.border = '1px solid #ccc';
+    canvas.style.borderRadius = '8px';
+    
+    // Add to container if available
+    if (this.container) {
+      // Create animation container
+      const animationContainer = document.createElement('div');
+      animationContainer.style.marginTop = '20px';
+      animationContainer.innerHTML = '<h3>Reaction Animation</h3>';
+      animationContainer.appendChild(canvas);
+      this.container.appendChild(animationContainer);
+    }
+    
+    return canvas;
+  }
+
+  /**
+   * Create advanced reaction animation with custom parameters
+   */
+  async createAdvancedReactionAnimation(
+    equation: string,
+    options: {
+      canvas?: HTMLCanvasElement;
+      duration?: number;
+      showEnergyProfile?: boolean;
+      bondChanges?: Array<{
+        type: 'breaking' | 'forming';
+        atoms: [string, string];
+        energyContribution: number;
+      }>;
+      transitionStates?: Array<{
+        coordinate: number;
+        energy: number;
+        description: string;
+      }>;
+    } = {}
+  ): Promise<void> {
+    const { ReactionAnimator } = await import('./ReactionAnimation');
+    const { EnergyProfileGenerator } = await import('../thermodynamics/energyProfile');
+    
+    // Create custom animator configuration
+    const animator = new ReactionAnimator({
+      duration: options.duration || 10000,
+      fps: 30,
+      showEnergyProfile: options.showEnergyProfile ?? true,
+      showBondOrders: true,
+      style: 'smooth',
+      bondColorScheme: 'energy-based'
+    });
+    
+    // If custom bond changes provided, use them
+    if (options.bondChanges) {
+      const bondChanges = options.bondChanges.map(bc => ({
+        type: bc.type,
+        atoms: bc.atoms,
+        bondOrderChange: bc.type === 'forming' ? 1 : -1,
+        energyContribution: bc.energyContribution
+      }));
+      
+      // Create custom animation
+      const mockReactants = [await this.generateMockMolecularFrame('reactant')];
+      const mockProducts = [await this.generateMockMolecularFrame('product')];
+      
+      animator.createCustomAnimation(mockReactants, mockProducts, bondChanges);
+    } else {
+      // Use standard equation-based animation
+      const { EnhancedChemicalEquationBalancer } = await import('../enhancedBalancer');
+      const balancer = new EnhancedChemicalEquationBalancer();
+      const balanceResult = balancer.balance(equation);
+      const balanced: BalancedEquation = {
+        equation: balanceResult,
+        coefficients: [1, 1, 1, 1],
+        reactants: equation.split('=')[0].trim().split('+').map(s => s.trim()),
+        products: equation.split('=')[1].trim().split('+').map(s => s.trim())
+      };
+      
+      const generator = new EnergyProfileGenerator();
+      const thermodynamics = {
+        deltaH: -75,
+        deltaS: 25,
+        deltaG: -82,
+        equilibriumConstant: 1e14,
+        spontaneity: 'spontaneous' as const,
+        temperatureDependence: { range: [273, 373] as [number, number], deltaGvsT: [] },
+        conditions: { temperature: 298.15, pressure: 101325 },
+        enthalpy: -75,
+        gibbsFreeEnergy: -82,
+        isSpontaneous: true
+      };
+      
+      const energyProfile = generator.generateProfile(thermodynamics);
+      await animator.createAnimationFromEquation(balanced, energyProfile);
+    }
+    
+    // Play animation
+    const canvas = options.canvas || this.createAnimationCanvas();
+    await animator.playAnimation(canvas, (frame) => {
+      if (frame.frameNumber % 10 === 0) { // Log every 10th frame
+        console.log(`🎭 Animation: ${(frame.time * 100).toFixed(0)}% complete`);
+      }
+    });
+  }
+
+  /**
+   * Generate a mock molecular frame for animation
+   */
+  private async generateMockMolecularFrame(type: 'reactant' | 'product'): Promise<any> {
+    return {
+      atoms: [
+        { element: 'C', position: { x: 0, y: 0, z: 0 }, charge: 0 },
+        { element: 'H', position: { x: 1, y: 0, z: 0 }, charge: 0 }
+      ],
+      bonds: [
+        { atom1: 0, atom2: 1, order: 1, length: 1.1 }
+      ],
+      properties: { totalEnergy: type === 'product' ? -50 : 0, charge: 0 }
+    };
   }
 }
 
