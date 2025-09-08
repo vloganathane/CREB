@@ -222,7 +222,7 @@
             </div>
             <div class="control-group">
                 <label for="molecule-input">SMILES:</label>
-                <input type="text" id="molecule-input" value="CCO" placeholder="Enter SMILES string">
+                <input type="text" id="molecule-input" value="O" placeholder="Enter SMILES string">
                 <button onclick="loadMolecule()" id="load-btn" disabled>Load Molecule</button>
                 <button onclick="loadExample()" id="example-btn" disabled>Random Example</button>
             </div>
@@ -378,15 +378,22 @@
                 const testMol = RDKit.get_mol('CCO');
                 if (testMol) {
                     updateDebug('RDKit functionality test passed');
-                    testMol.delete();
                     
                     // Log available methods for debugging
                     console.log('Available RDKit methods:', Object.keys(RDKit));
-                    if (testMol) {
-                        const testMol2 = RDKit.get_mol('CCO');
-                        console.log('Available molecule methods:', Object.getOwnPropertyNames(testMol2.__proto__));
-                        testMol2.delete();
-                    }
+                    console.log('Available molecule methods:', Object.getOwnPropertyNames(testMol.__proto__));
+                    
+                    // Test which property methods are available
+                    const availableMethods = [];
+                    const methodsToTest = ['get_mw', 'get_logp', 'get_tpsa', 'get_num_hbd', 'get_num_hba', 'get_smiles', 'get_svg'];
+                    methodsToTest.forEach(method => {
+                        if (typeof testMol[method] === 'function') {
+                            availableMethods.push(method);
+                        }
+                    });
+                    console.log('Available property methods:', availableMethods);
+                    
+                    testMol.delete();
                     
                     return true;
                 } else {
@@ -554,6 +561,11 @@
                 const smiles = smilesData.PropertyTable.Properties[0].CanonicalSMILES;
                 updateDebug(`Retrieved SMILES: ${smiles}`);
 
+                // Validate SMILES before proceeding
+                if (!smiles || typeof smiles !== 'string' || smiles.trim() === '') {
+                    throw new Error('Invalid SMILES data received from PubChem');
+                }
+
                 // Update the SMILES input field
                 document.getElementById('molecule-input').value = smiles;
 
@@ -581,6 +593,14 @@
                 updateStatus('System not ready yet', 'error');
                 return;
             }
+
+            // Validate SMILES input
+            if (!smiles || typeof smiles !== 'string' || smiles.trim() === '') {
+                updateStatus('Invalid SMILES string provided', 'error');
+                return;
+            }
+
+            smiles = smiles.trim();
 
             try {
                 updateDebug('Processing SMILES: ' + smiles);
@@ -640,6 +660,13 @@
             try {
                 updateDebug('Rendering 2D structure...');
                 
+                // Validate SMILES input
+                if (!smiles || typeof smiles !== 'string' || smiles.trim() === '') {
+                    throw new Error('Invalid SMILES string for 2D rendering');
+                }
+                
+                smiles = smiles.trim();
+                
                 const mol = RDKit.get_mol(smiles);
                 if (!mol) {
                     throw new Error('Invalid SMILES: ' + smiles);
@@ -649,14 +676,8 @@
                 let svg;
                 try {
                     if (mol.get_svg_with_highlights) {
-                        svg = mol.get_svg_with_highlights(JSON.stringify({
-                            width: 350,
-                            height: 350,
-                            bondLineWidth: 2,
-                            addAtomIndices: false,
-                            addBondIndices: false,
-                            addStereoAnnotation: true
-                        }));
+                        // Use string parameters instead of JSON object
+                        svg = mol.get_svg_with_highlights('{}');
                     } else if (mol.get_svg) {
                         svg = mol.get_svg(350, 350);
                     } else {
@@ -664,8 +685,17 @@
                     }
                 } catch (svgError) {
                     console.warn('SVG generation failed:', svgError);
-                    // Fallback to simple text representation
-                    svg = `<div class="info">2D structure available<br>SMILES: ${smiles}<br><small>SVG rendering not supported in this RDKit.js version</small></div>`;
+                    try {
+                        // Try simpler SVG generation
+                        svg = mol.get_svg ? mol.get_svg() : null;
+                        if (!svg) {
+                            throw new Error('Basic SVG generation failed');
+                        }
+                    } catch (fallbackError) {
+                        console.warn('Fallback SVG generation failed:', fallbackError);
+                        // Fallback to simple text representation
+                        svg = `<div class="info">2D structure available<br>SMILES: ${smiles}<br><small>SVG rendering not supported in this RDKit.js version</small></div>`;
+                    }
                 }
 
                 document.getElementById('rdkit-viewer').innerHTML = svg;
@@ -928,14 +958,21 @@ END`;
                 updateDebug('Calculating molecular properties...');
                 
                 const mol = RDKit.get_mol(smiles);
-                if (!mol) return;
+                if (!mol) {
+                    throw new Error('Could not create molecule from SMILES');
+                }
 
-                // Calculate properties using correct RDKit.js API
+                // Calculate properties using correct RDKit.js API with better error handling
                 let mw, logp, tpsa, hbd, hba, canonical;
                 
                 try {
-                    // Molecular weight
-                    mw = mol.get_mw ? mol.get_mw() : null;
+                    // Molecular weight - check if method exists first
+                    if (typeof mol.get_mw === 'function') {
+                        mw = mol.get_mw();
+                    } else {
+                        console.warn('get_mw method not available');
+                        mw = null;
+                    }
                 } catch (e) {
                     console.warn('MW calculation failed:', e);
                     mw = null;
@@ -943,7 +980,12 @@ END`;
                 
                 try {
                     // LogP
-                    logp = mol.get_logp ? mol.get_logp() : null;
+                    if (typeof mol.get_logp === 'function') {
+                        logp = mol.get_logp();
+                    } else {
+                        console.warn('get_logp method not available');
+                        logp = null;
+                    }
                 } catch (e) {
                     console.warn('LogP calculation failed:', e);
                     logp = null;
@@ -951,7 +993,12 @@ END`;
                 
                 try {
                     // TPSA
-                    tpsa = mol.get_tpsa ? mol.get_tpsa() : null;
+                    if (typeof mol.get_tpsa === 'function') {
+                        tpsa = mol.get_tpsa();
+                    } else {
+                        console.warn('get_tpsa method not available');
+                        tpsa = null;
+                    }
                 } catch (e) {
                     console.warn('TPSA calculation failed:', e);
                     tpsa = null;
@@ -959,7 +1006,12 @@ END`;
                 
                 try {
                     // H-bond donors
-                    hbd = mol.get_num_hbd ? mol.get_num_hbd() : null;
+                    if (typeof mol.get_num_hbd === 'function') {
+                        hbd = mol.get_num_hbd();
+                    } else {
+                        console.warn('get_num_hbd method not available');
+                        hbd = null;
+                    }
                 } catch (e) {
                     console.warn('HBD calculation failed:', e);
                     hbd = null;
@@ -967,15 +1019,25 @@ END`;
                 
                 try {
                     // H-bond acceptors
-                    hba = mol.get_num_hba ? mol.get_num_hba() : null;
+                    if (typeof mol.get_num_hba === 'function') {
+                        hba = mol.get_num_hba();
+                    } else {
+                        console.warn('get_num_hba method not available');
+                        hba = null;
+                    }
                 } catch (e) {
                     console.warn('HBA calculation failed:', e);
                     hba = null;
                 }
                 
                 try {
-                    // Canonical SMILES
-                    canonical = mol.get_smiles ? mol.get_smiles() : smiles;
+                    // Canonical SMILES - be very careful with this one
+                    if (typeof mol.get_smiles === 'function') {
+                        canonical = mol.get_smiles();
+                    } else {
+                        console.warn('get_smiles method not available');
+                        canonical = smiles;
+                    }
                 } catch (e) {
                     console.warn('Canonical SMILES failed:', e);
                     canonical = smiles;
