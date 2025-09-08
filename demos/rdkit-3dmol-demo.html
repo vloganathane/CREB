@@ -638,6 +638,8 @@
                 }
                 
                 const smilesData = await smilesResponse.json();
+                updateDebug(`SMILES API response: ${JSON.stringify(smilesData)}`);
+                
                 if (!smilesData.PropertyTable || !smilesData.PropertyTable.Properties || smilesData.PropertyTable.Properties.length === 0) {
                     throw new Error('No SMILES data found for CID: ' + cid);
                 }
@@ -647,6 +649,7 @@
 
                 // Validate SMILES before proceeding
                 if (!smiles || typeof smiles !== 'string' || smiles.trim() === '') {
+                    updateDebug(`SMILES validation failed. Raw SMILES: ${JSON.stringify(smiles)}`);
                     throw new Error('Invalid SMILES data received from PubChem');
                 }
 
@@ -655,7 +658,7 @@
 
                 // Load the molecule with enhanced 3D structure data
                 await loadMoleculeFromSMILES(smiles, { 
-                    pubchemCID: cid, 
+                    cid: cid,  // Fixed: use 'cid' not 'pubchemCID'
                     searchTerm: searchTerm,
                     use3DStructure: true  // Enable 3D structure fetching
                 });
@@ -797,7 +800,11 @@
                 }
 
                 document.getElementById('rdkit-viewer').innerHTML = svg;
-                mol.delete();
+                
+                // Clean up molecule safely
+                if (mol && mol.delete) {
+                    mol.delete();
+                }
                 
                 updateDebug('2D structure rendered successfully');
                 
@@ -1133,7 +1140,9 @@ END`;
                 }
 
                 // Clean up molecule
-                mol.delete();
+                if (mol && mol.delete) {
+                    mol.delete();
+                }
 
                 // Update displays with fallback values
                 document.getElementById('mw-value').textContent = mw !== null && mw !== undefined ? 
@@ -1147,8 +1156,8 @@ END`;
                 document.getElementById('canonical-smiles').textContent = canonical || smiles;
 
                 // Add PubChem metadata if available
-                if (metadata.pubchemCID) {
-                    document.getElementById('pubchem-cid').textContent = metadata.pubchemCID;
+                if (metadata.cid) {
+                    document.getElementById('pubchem-cid').textContent = metadata.cid;
                     document.getElementById('pubchem-cid-property').style.display = 'block';
                 } else {
                     document.getElementById('pubchem-cid-property').style.display = 'none';
@@ -1161,7 +1170,6 @@ END`;
                     document.getElementById('compound-name-property').style.display = 'none';
                 }
 
-                mol.delete();
                 updateDebug('Properties calculated successfully');
                 
             } catch (error) {
