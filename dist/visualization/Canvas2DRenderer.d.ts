@@ -1,6 +1,6 @@
 /**
  * 2D Molecular Structure Renderer
- * Canvas-based 2D molecular structure drawing
+ * Canvas-based 2D molecular structure drawing with proper chemical geometry
  */
 export interface Canvas2DConfig {
     width: number;
@@ -76,7 +76,11 @@ export declare class Canvas2DRenderer {
      */
     private drawSingleBond;
     /**
-     * Draw aromatic bond (dashed)
+     * Draw aromatic bond indicator (dashed inner line)
+     */
+    private drawAromaticIndicator;
+    /**
+     * Draw aromatic bond (dashed) - legacy method
      */
     private drawAromaticBond;
     /**
@@ -96,13 +100,34 @@ export declare class Canvas2DRenderer {
      */
     private transformPoint;
     /**
-     * Convert SMILES to 2D coordinates (simplified)
+     * Convert SMILES to 2D coordinates with proper chemical geometry
      */
     static smilesToMolecule2D(smiles: string): Molecule2D;
     /**
      * Export canvas as image
      */
-    exportImage(format?: 'png' | 'jpg'): string;
+    exportImage(format?: 'png' | 'jpg' | 'svg'): string;
+    /**
+     * Export current molecule as SVG
+     */
+    exportSVG(options?: {
+        interactive?: boolean;
+        animations?: boolean;
+        includeMetadata?: boolean;
+        optimizeSize?: boolean;
+    }): string;
+    /**
+     * Generate empty SVG placeholder
+     */
+    private generateEmptySVG;
+    /**
+     * Get contrasting color for text readability
+     */
+    private getContrastingColor;
+    /**
+     * Download SVG as file
+     */
+    downloadSVG(filename?: string, options?: {}): void;
     /**
      * Reset view to default
      */

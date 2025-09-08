@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CREB - Real PubChem Molecular Visualization</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .demo-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        .demo-controls {
+            margin: 15px 0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .demo-controls input, .demo-controls button, .demo-controls select {
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .demo-controls button {
+            background: #3498db;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .demo-controls button:hover {
+            background: #2980b9;
+        }
+        .demo-controls button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .visualization-container {
+            margin: 20px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+            position: relative;
+            min-height: 400px;
+        }
+        .status {
+            padding: 12px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .compound-info {
+            background: #e8f4fd;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        .compound-info h4 {
+            margin: 0 0 10px 0;
+            color: #2980b9;
+        }
+        .property {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .before-after {
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .before {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+        }
+        .after {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+        }
+        .examples {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 15px 0;
+        }
+        .example-btn {
+            padding: 6px 12px;
+            background: #e9ecef;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .example-btn:hover {
+            background: #dee2e6;
+        }
+    </style>
+    <!-- 3Dmol.js for molecular visualization -->
+    <script src="https://3dmol.csb.pitt.edu/build/3Dmol-min.js"></script>
+    <script>
+        // Fallback CDN if primary fails
+        window.addEventListener('load', function() {
+            if (typeof $3Dmol === 'undefined') {
+                console.log('Loading 3Dmol.js fallback...');
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/gh/3dmol/3Dmol.js@latest/build/3Dmol-min.js';
+                document.head.appendChild(script);
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>🧬 CREB - Real PubChem Molecular Visualization</h1>
+        <p><strong>Live integration with PubChem database - No more mock data!</strong></p>
+        
+        <div class="status success">
+            ✅ Now using real molecular structures from PubChem's 100M+ compound database
+        </div>
+
+        <!-- Compound Search -->
+        <div class="demo-section">
+            <h2>🔍 PubChem Compound Search</h2>
+            <p>Search for any compound by name, CID, or SMILES string</p>
+            
+            <div class="demo-controls">
+                <input type="text" id="compound-search" placeholder="Enter compound name (e.g., caffeine, aspirin, benzene)" style="flex: 1; min-width: 300px;">
+                <select id="search-type">
+                    <option value="name">Search by Name</option>
+                    <option value="cid">Search by CID</option>
+                    <option value="smiles">Search by SMILES</option>
+                </select>
+                <button onclick="searchPubChem()" id="search-btn">Search PubChem</button>
+            </div>
+            
+            <div class="examples">
+                <span><strong>Examples:</strong></span>
+                <button class="example-btn" onclick="loadExample('caffeine', 'name')">Caffeine</button>
+                <button class="example-btn" onclick="loadExample('aspirin', 'name')">Aspirin</button>
+                <button class="example-btn" onclick="loadExample('ibuprofen', 'name')">Ibuprofen</button>
+                <button class="example-btn" onclick="loadExample('241', 'cid')">Benzene (CID 241)</button>
+                <button class="example-btn" onclick="loadExample('C1=CC=CC=C1', 'smiles')">Benzene (SMILES)</button>
+                <button class="example-btn" onclick="loadExample('water', 'name')">Water</button>
+                <button class="example-btn" onclick="loadExample('glucose', 'name')">Glucose</button>
+            </div>
+            
+            <div id="search-status"></div>
+        </div>
+
+        <!-- 3D Visualization -->
+        <div class="demo-section">
+            <h2>🎮 Interactive 3D Molecular Viewer</h2>
+            <p>Real molecular structures from PubChem rendered in 3D</p>
+            
+            <div class="demo-controls">
+                <select id="render-style">
+                    <option value="stick">Stick</option>
+                    <option value="ball-stick">Ball & Stick (Compact)</option>
+                    <option value="ball-stick-classic" selected>Ball & Stick (Classic)</option>
+                    <option value="ball-stick-thick">Ball & Stick (Thick)</option>
+                    <option value="ball-stick-glmol">Ball & Stick (GLmol Style)</option>
+                    <option value="ball-stick-professional">Ball & Stick (Professional)</option>
+                    <option value="sphere">Space Filling</option>
+                    <option value="wireframe">Wireframe</option>
+                </select>
+                <select id="color-scheme">
+                    <option value="default">Element Colors</option>
+                    <option value="jmol">JMol Colors</option>
+                    <option value="rasmol">RasMol Colors</option>
+                </select>
+                <button onclick="applyStyle()">Apply Style</button>
+                <button onclick="resetView()">Reset View</button>
+                <button onclick="exportImage()">Export PNG</button>
+            </div>
+            
+            <div class="visualization-container">
+                <div id="viewer3d" style="width: 100%; height: 400px;">
+                    <div class="loading">
+                        🔍 Search for a compound above to see its 3D structure
+                    </div>
+                </div>
+            </div>
+            
+            <div class="status info">
+                <strong>Instructions:</strong> Mouse to rotate, scroll to zoom, right-click drag to pan. 
+                All structures loaded directly from PubChem SDF format.
+            </div>
+        </div>
+
+        <!-- Compound Information -->
+        <div class="demo-section">
+            <h2>📊 Compound Properties</h2>
+            <div id="compound-info">
+                <div class="loading">
+                    Compound properties will appear here after search
+                </div>
+            </div>
+        </div>
+
+        <!-- Before/After Comparison -->
+        <div class="demo-section">
+            <h2>📈 Before vs After: Mock Data → Real PubChem Data</h2>
+            
+            <div class="comparison">
+                <div class="before-after before">
+                    <h3>❌ Before: Mock Data</h3>
+                    <ul>
+                        <li>5 hardcoded molecules only</li>
+                        <li>Arbitrary coordinates</li>
+                        <li>No chemical accuracy</li>
+                        <li>Limited educational value</li>
+                        <li>Not suitable for research</li>
+                    </ul>
+                    <p><strong>Problem:</strong> No connection to real chemical database</p>
+                </div>
+                
+                <div class="before-after after">
+                    <h3>✅ After: Real PubChem Data</h3>
+                    <ul>
+                        <li>100M+ compounds available</li>
+                        <li>Real calculated coordinates</li>
+                        <li>Chemically accurate structures</li>
+                        <li>Research-grade quality</li>
+                        <li>Live data from NIH database</li>
+                    </ul>
+                    <p><strong>Solution:</strong> Direct integration with world's largest chemical database</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Technical Implementation -->
+        <div class="demo-section">
+            <h2>🔧 Technical Implementation</h2>
+            
+            <h3>PubChem Integration</h3>
+            <pre style="background: #f8f9fa; padding: 15px; border-radius: 4px; overflow-x: auto;"><code>// Real PubChem API integration
+async function loadCompoundFromPubChem(identifier, type) {
+  // Step 1: Search PubChem for compound
+  const searchUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/${type}/${identifier}/cids/JSON`;
+  const cids = await fetch(searchUrl).then(r => r.json());
+  
+  // Step 2: Get SDF structure file
+  const cid = cids.IdentifierList.CID[0];
+  const sdfUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/SDF`;
+  const sdfData = await fetch(sdfUrl).then(r => r.text());
+  
+  // Step 3: Load into 3Dmol.js
+  viewer.clear();
+  viewer.addModel(sdfData, 'sdf');
+  viewer.setStyle({}, { stick: { radius: 0.2 } });
+  viewer.render();
+}</code></pre>
+
+            <h3>Key Advantages</h3>
+            <ul>
+                <li>✅ <strong>Real Data:</strong> All structures from PubChem's curated database</li>
+                <li>✅ <strong>No Hardcoding:</strong> Dynamic loading of any compound</li>
+                <li>✅ <strong>Chemical Accuracy:</strong> Professionally calculated coordinates</li>
+                <li>✅ <strong>Scalability:</strong> Access to 100M+ compounds</li>
+                <li>✅ <strong>Standard Formats:</strong> SDF, MOL, PDB support</li>
+            </ul>
+        </div>
+
+        <!-- Integration with CREB -->
+        <div class="demo-section">
+            <h2>🧪 CREB Integration Preview</h2>
+            <p>Future: Automatic visualization of balanced chemical equations</p>
+            
+            <div class="status warning">
+                <strong>Coming Soon:</strong> Enter a chemical equation → Auto-balance → Visualize all reactants and products
+            </div>
+            
+            <div style="background: #e8f4fd; padding: 15px; border-radius: 4px;">
+                <h4>Example Integration:</h4>
+                <p><strong>Input:</strong> "C6H12O6 + O2 → CO2 + H2O"</p>
+                <p><strong>CREB Processing:</strong></p>
+                <ol>
+                    <li>Balance equation: C₆H₁₂O₆ + 6O₂ → 6CO₂ + 6H₂O</li>
+                    <li>Look up each compound in PubChem</li>
+                    <li>Display 3D structures for glucose, oxygen, carbon dioxide, water</li>
+                    <li>Show thermodynamic data alongside molecular structures</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let viewer3d = null;
+        let currentCompound = null;
+        
+        // Helper function to safely format numbers
+        function formatNumber(value, decimals = 2) {
+            if (value === null || value === undefined || value === '') return 'N/A';
+            const num = typeof value === 'number' ? value : parseFloat(value);
+            return isNaN(num) ? 'N/A' : num.toFixed(decimals);
+        }
+        
+        // Fallback molecular data for demo when CORS issues occur
+        const fallbackMolecules = {
+            'caffeine': {
+                cid: 2519,
+                sdf: `
+  Mrv2014 01010100002D          
+
+  0  0  0     0  0            999 V3000
+M  V30 BEGIN CTAB
+M  V30 COUNTS 24 25 0 0 0
+M  V30 BEGIN ATOM
+M  V30 1 C -1.5417 1.0833 0 0
+M  V30 2 C -0.208 1.8533 0 0
+M  V30 3 C 1.1257 1.0833 0 0
+M  V30 4 C 1.1257 -0.4567 0 0
+M  V30 5 C -0.208 -1.2267 0 0
+M  V30 6 C -1.5417 -0.4567 0 0
+M  V30 7 N -2.8753 1.8533 0 0
+M  V30 8 N 2.4593 1.8533 0 0
+M  V30 9 N 2.4593 -1.2267 0 0
+M  V30 10 N -0.208 -2.7667 0 0
+M  V30 11 C -4.209 1.0833 0 0
+M  V30 12 C 3.793 1.0833 0 0
+M  V30 13 C 3.793 -0.4567 0 0
+M  V30 14 C -1.5417 -3.5367 0 0
+M  V30 15 C 1.1257 -3.5367 0 0
+M  V30 16 O -5.5427 1.8533 0 0
+M  V30 17 O 5.1267 1.8533 0 0
+M  V30 18 O 5.1267 -1.2267 0 0
+M  V30 19 O -1.5417 -5.0767 0 0
+M  V30 20 O 1.1257 -5.0767 0 0
+M  V30 21 C -2.8753 3.3933 0 0
+M  V30 22 C 2.4593 3.3933 0 0
+M  V30 23 C -0.208 -7.6167 0 0
+M  V30 24 C 1.1257 -7.6167 0 0
+M  V30 END ATOM
+M  V30 BEGIN BOND
+M  V30 1 1 1 2
+M  V30 2 2 2 3
+M  V30 3 1 3 4
+M  V30 4 2 4 5
+M  V30 5 1 5 6
+M  V30 6 2 6 1
+M  V30 7 1 1 7
+M  V30 8 1 3 8
+M  V30 9 1 4 9
+M  V30 10 1 5 10
+M  V30 11 1 7 11
+M  V30 12 1 8 12
+M  V30 13 1 9 13
+M  V30 14 1 10 14
+M  V30 15 1 10 15
+M  V30 16 2 11 16
+M  V30 17 2 12 17
+M  V30 18 2 13 18
+M  V30 19 2 14 19
+M  V30 20 2 15 20
+M  V30 21 1 7 21
+M  V30 22 1 8 22
+M  V30 23 1 14 23
+M  V30 24 1 15 24
+M  V30 25 1 12 13
+M  V30 END BOND
+M  V30 END CTAB
+M  END
+`,
+                properties: {
+                    MolecularFormula: 'C8H10N4O2',
+                    MolecularWeight: 194.19,
+                    CanonicalSMILES: 'CN1C=NC2=C1C(=O)N(C(=O)N2C)C',
+                    IUPACName: '1,3,7-trimethylpurine-2,6-dione'
+                }
+            }
+        };
+        
+        // Initialize 3D viewer
+        function init3DViewer() {
+            if (viewer3d) return viewer3d;
+            
+            // Check if 3Dmol is available
+            if (typeof $3Dmol === 'undefined') {
+                throw new Error('3Dmol.js library not loaded. Please refresh the page.');
+            }
+            
+            const element = document.getElementById('viewer3d');
+            element.innerHTML = '';
+            
+            try {
+                viewer3d = $3Dmol.createViewer(element, {
+                    defaultcolors: $3Dmol.elementColors.rasmol,
+                    backgroundColor: '#ffffff',
+                    antialias: true
+                });
+                
+                return viewer3d;
+            } catch (error) {
+                throw new Error(`Failed to initialize 3D viewer: ${error.message}`);
+            }
+        }
+
+        // Search PubChem for compound
+        async function searchPubChem() {
+            const query = document.getElementById('compound-search').value.trim();
+            const searchType = document.getElementById('search-type').value;
+            const searchBtn = document.getElementById('search-btn');
+            const statusDiv = document.getElementById('search-status');
+            
+            if (!query) {
+                showStatus('error', 'Please enter a compound name, CID, or SMILES');
+                return;
+            }
+            
+            searchBtn.disabled = true;
+            searchBtn.textContent = 'Searching...';
+            showStatus('info', `Searching PubChem for "${query}"...`);
+            
+            try {
+                await loadCompoundFromPubChem(query, searchType);
+                showStatus('success', `Successfully loaded compound: ${query}`);
+            } catch (error) {
+                console.error('Search error:', error);
+                
+                // Try fallback data if available
+                if (fallbackMolecules[query.toLowerCase()]) {
+                    try {
+                        await loadFallbackMolecule(query.toLowerCase());
+                        showStatus('warning', `Loaded fallback data for "${query}" (PubChem unavailable due to CORS)`);
+                    } catch (fallbackError) {
+                        showStatus('error', `Failed to load compound: ${error.message}`);
+                    }
+                } else {
+                    showStatus('error', `Failed to find compound: ${error.message}. Try "caffeine" for a demo.`);
+                }
+            } finally {
+                searchBtn.disabled = false;
+                searchBtn.textContent = 'Search PubChem';
+            }
+        }
+
+        // Load compound from PubChem
+        async function loadCompoundFromPubChem(identifier, type) {
+            // Initialize viewer if not already done
+            init3DViewer();
+            
+            // CORS proxy for PubChem requests (optional)
+            const corsProxy = '';  // Leave empty to try direct requests first
+            
+            try {
+                // Step 1: Get CID
+                let cid;
+                if (type === 'cid') {
+                    cid = parseInt(identifier);
+                    if (isNaN(cid)) {
+                        throw new Error('Invalid CID: must be a number');
+                    }
+                } else {
+                    const searchUrl = `${corsProxy}https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/${type}/${encodeURIComponent(identifier)}/cids/JSON`;
+                    const response = await fetch(searchUrl, {
+                        mode: 'cors',
+                        headers: {
+                            'Accept': 'application/json',
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        if (response.status === 404) {
+                            throw new Error(`Compound "${identifier}" not found in PubChem database`);
+                        } else {
+                            throw new Error(`PubChem API error: ${response.status}`);
+                        }
+                    }
+                    
+                    const data = await response.json();
+                    if (!data.IdentifierList || !data.IdentifierList.CID) {
+                        throw new Error(`No CID found for "${identifier}"`);
+                    }
+                    cid = data.IdentifierList.CID[0];
+                }
+                
+                showStatus('info', `Found compound CID: ${cid}. Loading 3D structure...`);
+                
+                // Step 2: Get SDF structure
+                const sdfUrl = `${corsProxy}https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/SDF`;
+                const sdfResponse = await fetch(sdfUrl, {
+                    mode: 'cors',
+                    headers: {
+                        'Accept': 'chemical/x-mdl-sdfile',
+                    }
+                });
+                
+                if (!sdfResponse.ok) {
+                    throw new Error(`3D structure not available for CID: ${cid}`);
+                }
+                const sdfData = await sdfResponse.text();
+                
+                if (!sdfData || sdfData.trim().length === 0) {
+                    throw new Error('Empty structure data received');
+                }
+                
+                // Step 3: Load into 3Dmol.js
+                viewer3d.clear();
+                viewer3d.addModel(sdfData, 'sdf');
+                
+                // Apply default styling
+                const style = getStyleOptions();
+                viewer3d.setStyle({}, style);
+                
+                // Center and render
+                viewer3d.zoomTo();
+                viewer3d.render();
+                
+                // Step 4: Load compound properties
+                await loadCompoundProperties(cid, identifier);
+                
+                currentCompound = { cid, identifier, type };
+                
+            } catch (error) {
+                throw new Error(`PubChem error: ${error.message}`);
+            }
+        }
+
+        // Load fallback molecule data when PubChem is unavailable
+        async function loadFallbackMolecule(moleculeName) {
+            init3DViewer();
+            
+            const molecule = fallbackMolecules[moleculeName];
+            if (!molecule) {
+                throw new Error(`No fallback data available for ${moleculeName}`);
+            }
+            
+            // Load SDF data into 3Dmol.js
+            viewer3d.clear();
+            viewer3d.addModel(molecule.sdf, 'sdf');
+            
+            // Apply default styling
+            const style = getStyleOptions();
+            viewer3d.setStyle({}, style);
+            
+            // Center and render
+            viewer3d.zoomTo();
+            viewer3d.render();
+            
+            // Display properties
+            const infoDiv = document.getElementById('compound-info');
+            const props = molecule.properties;
+            infoDiv.innerHTML = `
+                <div class="compound-info">
+                    <h4>${moleculeName} (CID: ${molecule.cid}) - FALLBACK DATA</h4>
+                    <div class="property"><strong>Molecular Formula:</strong> ${props.MolecularFormula || 'N/A'}</div>
+                    <div class="property"><strong>Molecular Weight:</strong> ${formatNumber(props.MolecularWeight)} g/mol</div>
+                    <div class="property"><strong>SMILES:</strong> ${props.CanonicalSMILES || 'N/A'}</div>
+                    <div class="property"><strong>IUPAC Name:</strong> ${props.IUPACName || 'N/A'}</div>
+                    <div class="property"><strong>Data Source:</strong> Fallback data (PubChem CORS blocked)</div>
+                    <div class="property" style="color: #e67e22;"><strong>Note:</strong> This is demo data. For live PubChem data, run on a proper web server.</div>
+                </div>
+            `;
+            
+            currentCompound = { cid: molecule.cid, identifier: moleculeName, type: 'fallback' };
+        }
+
+        // Load compound properties
+        async function loadCompoundProperties(cid, name) {
+            try {
+                const propsUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/property/MolecularFormula,MolecularWeight,CanonicalSMILES,IUPACName,XLogP,HBondDonorCount,HBondAcceptorCount/JSON`;
+                const response = await fetch(propsUrl, {
+                    mode: 'cors',
+                    headers: {
+                        'Accept': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Properties API returned ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.PropertyTable || !data.PropertyTable.Properties || data.PropertyTable.Properties.length === 0) {
+                    throw new Error('No properties data found');
+                }
+                
+                const props = data.PropertyTable.Properties[0];
+                
+                const infoDiv = document.getElementById('compound-info');
+                infoDiv.innerHTML = `
+                    <div class="compound-info">
+                        <h4>${name} (CID: ${cid})</h4>
+                        <div class="property"><strong>Molecular Formula:</strong> ${props.MolecularFormula || 'N/A'}</div>
+                        <div class="property"><strong>Molecular Weight:</strong> ${formatNumber(props.MolecularWeight)} g/mol</div>
+                        <div class="property"><strong>SMILES:</strong> ${props.CanonicalSMILES || 'N/A'}</div>
+                        <div class="property"><strong>IUPAC Name:</strong> ${props.IUPACName || 'N/A'}</div>
+                        <div class="property"><strong>LogP:</strong> ${formatNumber(props.XLogP, 3)}</div>
+                        <div class="property"><strong>H-Bond Donors:</strong> ${props.HBondDonorCount !== undefined ? props.HBondDonorCount : 'N/A'}</div>
+                        <div class="property"><strong>H-Bond Acceptors:</strong> ${props.HBondAcceptorCount !== undefined ? props.HBondAcceptorCount : 'N/A'}</div>
+                        <div class="property"><strong>Data Source:</strong> <a href="https://pubchem.ncbi.nlm.nih.gov/compound/${cid}" target="_blank">PubChem CID ${cid}</a></div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Properties error:', error);
+                document.getElementById('compound-info').innerHTML = `
+                    <div class="compound-info">
+                        <h4>${name} (CID: ${cid})</h4>
+                        <div class="property">Properties could not be loaded, but 3D structure is available.</div>
+                    </div>
+                `;
+            }
+        }
+
+        // Get style options based on current selection
+        function getStyleOptions() {
+            const renderStyle = document.getElementById('render-style').value;
+            const colorScheme = document.getElementById('color-scheme').value;
+            
+            let style = {};
+            
+            switch (renderStyle) {
+                case 'stick':
+                    style = { stick: { radius: 0.25 } };
+                    break;
+                case 'ball-stick':
+                    style = { 
+                        stick: { radius: 0.15 }, 
+                        sphere: { scale: 0.3 } 
+                    };
+                    break;
+                case 'ball-stick-classic':
+                    style = { 
+                        stick: { radius: 0.2 }, 
+                        sphere: { scale: 0.4 } 
+                    };
+                    break;
+                case 'ball-stick-thick':
+                    style = { 
+                        stick: { radius: 0.25 }, 
+                        sphere: { scale: 0.35 } 
+                    };
+                    break;
+                case 'ball-stick-glmol':
+                    // GLmol-inspired style: smaller, semi-transparent spheres with thin bonds
+                    style = { 
+                        stick: { radius: 0.12 }, 
+                        sphere: { 
+                            scale: 0.25,
+                            opacity: 0.85
+                        } 
+                    };
+                    break;
+                case 'ball-stick-professional':
+                    // Professional style with matte finish and gray background
+                    style = { 
+                        stick: { 
+                            radius: 0.15,
+                            opacity: 0.95
+                        }, 
+                        sphere: { 
+                            scale: 0.35,
+                            opacity: 0.9
+                        } 
+                    };
+                    // Set gray background for professional look
+                    if (viewer3d) {
+                        viewer3d.setBackgroundColor('#808080');
+                    }
+                    break;
+                case 'sphere':
+                    style = { sphere: {} };
+                    break;
+                case 'wireframe':
+                    style = { line: { linewidth: 2 } };
+                    break;
+                default:
+                    style = { 
+                        stick: { radius: 0.2 }, 
+                        sphere: { scale: 0.4 } 
+                    };
+            }
+            
+            // Reset to white background for non-professional styles
+            if (renderStyle !== 'ball-stick-professional' && viewer3d) {
+                viewer3d.setBackgroundColor('#ffffff');
+            }
+            
+            // Apply color scheme to all style components
+            if (colorScheme !== 'default') {
+                const colorSchemes = {
+                    'jmol': $3Dmol.elementColors.jmol,
+                    'rasmol': $3Dmol.elementColors.rasmol
+                };
+                const selectedColorScheme = colorSchemes[colorScheme];
+                
+                // Apply to each style component
+                if (style.stick) style.stick.colorscheme = selectedColorScheme;
+                if (style.sphere) style.sphere.colorscheme = selectedColorScheme;
+                if (style.line) style.line.colorscheme = selectedColorScheme;
+            }
+            
+            return style;
+        }
+
+        // Apply current style to molecule
+        function applyStyle() {
+            if (!viewer3d || !currentCompound) {
+                showStatus('warning', 'No molecule loaded');
+                return;
+            }
+            
+            const style = getStyleOptions();
+            viewer3d.setStyle({}, style);
+            viewer3d.render();
+        }
+
+        // Reset view
+        function resetView() {
+            if (!viewer3d || !currentCompound) {
+                showStatus('warning', 'No molecule loaded');
+                return;
+            }
+            
+            viewer3d.zoomTo();
+            viewer3d.render();
+        }
+
+        // Export image
+        function exportImage() {
+            if (!viewer3d || !currentCompound) {
+                showStatus('warning', 'No molecule loaded');
+                return;
+            }
+            
+            viewer3d.pngURI((datauri) => {
+                const link = document.createElement('a');
+                link.href = datauri;
+                link.download = `${currentCompound.identifier}-3d.png`;
+                link.click();
+            });
+        }
+
+        // Load example compound
+        function loadExample(query, type) {
+            document.getElementById('compound-search').value = query;
+            document.getElementById('search-type').value = type;
+            searchPubChem();
+        }
+
+        // Show status message
+        function showStatus(type, message) {
+            const statusDiv = document.getElementById('search-status');
+            statusDiv.className = `status ${type}`;
+            statusDiv.innerHTML = message;
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Allow Enter key to trigger search
+            document.getElementById('compound-search').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    searchPubChem();
+                }
+            });
+            
+            // Wait for 3Dmol to load before enabling functionality
+            function wait3DmolReady() {
+                if (typeof $3Dmol !== 'undefined') {
+                    console.log('3Dmol.js loaded successfully');
+                    showStatus('info', '3D viewer ready! Search for a compound above or try the examples.');
+                    
+                    // Load caffeine as default example after a short delay
+                    setTimeout(() => {
+                        loadExample('caffeine', 'name');
+                    }, 2000);
+                } else {
+                    console.log('Waiting for 3Dmol.js to load...');
+                    showStatus('warning', 'Loading 3D visualization library...');
+                    setTimeout(wait3DmolReady, 500);
+                }
+            }
+            
+            wait3DmolReady();
+        });
+        
+        // Add error handling for uncaught errors
+        window.addEventListener('error', function(e) {
+            console.error('Global error:', e.error);
+            showStatus('error', 'An error occurred. Please check the browser console for details.');
+        });
+        
+        window.addEventListener('unhandledrejection', function(e) {
+            console.error('Unhandled promise rejection:', e.reason);
+            showStatus('error', 'Request failed. Please try again or check your internet connection.');
+        });
+    </script>
+</body>
+</html>

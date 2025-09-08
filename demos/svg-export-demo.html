@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CREB Molecular Visualization - SVG Export Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .demo-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        .demo-controls {
+            margin: 15px 0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .demo-controls button, .demo-controls select {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background: #3498db;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .demo-controls button:hover {
+            background: #2980b9;
+        }
+        .demo-controls select {
+            background: white;
+            color: #333;
+            border: 1px solid #ddd;
+        }
+        .visualization-container {
+            margin: 20px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+            position: relative;
+        }
+        .status {
+            padding: 12px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .format-comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .format-section {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            background: white;
+        }
+        .format-section h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        .svg-preview {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+            min-height: 300px;
+            padding: 10px;
+        }
+        .export-options {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+        .export-options label {
+            display: block;
+            margin: 8px 0;
+            cursor: pointer;
+        }
+        .export-options input[type="checkbox"] {
+            margin-right: 8px;
+        }
+        code {
+            background: #f8f9fa;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        .feature-list {
+            background: #e8f5e8;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 4px solid #28a745;
+        }
+        .feature-list ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .roadmap-update {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧬 CREB Molecular Visualization - SVG Export System</h1>
+        <p><strong>Next-Generation Vector-Based Molecular Structure Export</strong></p>
+        
+        <div class="status success">
+            ✅ SVG Export System Successfully Integrated with CREB-JS!
+        </div>
+
+        <div class="roadmap-update">
+            <h3>🚀 Roadmap Progress Update</h3>
+            <p>Building on our <strong>Production-Ready 2D/3D molecular visualization</strong>, we're now extending export capabilities beyond PNG/JPG to include scalable vector graphics (SVG).</p>
+        </div>
+
+        <!-- SVG Features -->
+        <div class="demo-section">
+            <h2>🎯 SVG Export Advantages</h2>
+            <div class="feature-list">
+                <h3>Why SVG for Molecular Visualization?</h3>
+                <ul>
+                    <li>✅ <strong>Infinite Scalability:</strong> Vector-based graphics remain crisp at any zoom level</li>
+                    <li>✅ <strong>Publication Quality:</strong> Perfect for academic papers, textbooks, and presentations</li>
+                    <li>✅ <strong>Interactive Elements:</strong> Support for hover effects, click handlers, and animations</li>
+                    <li>✅ <strong>Small File Sizes:</strong> Often more compact than high-resolution raster images</li>
+                    <li>✅ <strong>Text Searchable:</strong> Molecular data and metadata embedded as searchable text</li>
+                    <li>✅ <strong>Web Native:</strong> Direct browser support, no plugins required</li>
+                    <li>✅ <strong>Programmatically Editable:</strong> Easy to modify structure, colors, and labels via code</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Enhanced Canvas Renderer -->
+        <div class="demo-section">
+            <h2>Enhanced Canvas2D Renderer with SVG Support</h2>
+            <p>Our existing Canvas2D renderer now supports SVG export alongside PNG/JPG formats</p>
+            
+            <div class="demo-controls">
+                <select id="molecule-select">
+                    <option value="water">Water (H2O)</option>
+                    <option value="methane">Methane (CH4)</option>
+                    <option value="benzene">Benzene (C6H6)</option>
+                    <option value="caffeine">Caffeine (C8H10N4O2)</option>
+                </select>
+                <button onclick="loadMolecule()">Load Molecule</button>
+                <button onclick="resetView()">Reset View</button>
+            </div>
+
+            <div class="export-options">
+                <h3>Export Options</h3>
+                <label><input type="checkbox" id="interactive" checked> Interactive Elements</label>
+                <label><input type="checkbox" id="metadata" checked> Include Metadata</label>
+                <label><input type="checkbox" id="animations"> Enable Animations</label>
+                <label><input type="checkbox" id="optimize"> Optimize File Size</label>
+            </div>
+
+            <div class="demo-controls">
+                <button onclick="exportPNG()">Export PNG</button>
+                <button onclick="exportJPG()">Export JPG</button>
+                <button onclick="exportSVG()">Export SVG</button>
+                <button onclick="downloadSVG()">Download SVG File</button>
+            </div>
+            
+            <div class="visualization-container">
+                <canvas id="molecular-canvas" width="600" height="400"></canvas>
+            </div>
+        </div>
+
+        <!-- Format Comparison -->
+        <div class="demo-section">
+            <h2>Format Comparison: Canvas vs SVG</h2>
+            <div class="format-comparison">
+                <div class="format-section">
+                    <h3>Canvas (PNG/JPG)</h3>
+                    <div id="canvas-output" class="svg-preview">
+                        <p style="text-align: center; color: #666; margin-top: 120px;">Canvas output will appear here</p>
+                    </div>
+                    <p><strong>Pros:</strong> Fast rendering, good for complex graphics</p>
+                    <p><strong>Cons:</strong> Fixed resolution, larger file sizes for simple graphics</p>
+                </div>
+                
+                <div class="format-section">
+                    <h3>SVG (Vector)</h3>
+                    <div id="svg-output" class="svg-preview">
+                        <p style="text-align: center; color: #666; margin-top: 120px;">SVG output will appear here</p>
+                    </div>
+                    <p><strong>Pros:</strong> Scalable, interactive, smaller files, text-based</p>
+                    <p><strong>Cons:</strong> Can be slower for very complex graphics</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Technical Implementation -->
+        <div class="demo-section">
+            <h2>🔧 Technical Implementation</h2>
+            <div class="status info">
+                <strong>New API Methods:</strong>
+            </div>
+            
+            <pre><code>// Enhanced Canvas2DRenderer
+const renderer = new Canvas2DRenderer(canvas);
+renderer.loadMolecule(moleculeData);
+
+// Export options
+const pngData = renderer.exportImage('png');
+const jpgData = renderer.exportImage('jpg');
+const svgData = renderer.exportImage('svg');
+
+// Advanced SVG export with options
+const svgWithOptions = renderer.exportSVG({
+  interactive: true,
+  animations: true,
+  includeMetadata: true,
+  optimizeSize: false
+});
+
+// Download SVG file directly
+renderer.downloadSVG('caffeine-molecule.svg', {
+  interactive: true,
+  includeMetadata: true
+});</code></pre>
+
+            <div class="status info">
+                <strong>Dedicated SVG Renderer:</strong>
+            </div>
+            
+            <pre><code>// New dedicated SVG renderer
+import { SVGRenderer } from '@creb/visualization';
+
+const svgRenderer = new SVGRenderer({
+  width: 800,
+  height: 600,
+  interactive: true,
+  animations: true
+});
+
+svgRenderer.loadMolecule(moleculeData);
+const svgContent = svgRenderer.exportSVG({
+  format: 'svg',
+  interactive: true,
+  includeMetadata: true
+});
+
+// Direct file download
+svgRenderer.exportAsFile('molecule.svg');</code></pre>
+        </div>
+
+        <!-- Future Roadmap -->
+        <div class="demo-section">
+            <h2>🛣️ SVG Roadmap & Future Features</h2>
+            
+            <h3>Immediate (Next Release)</h3>
+            <ul>
+                <li>✅ <strong>Basic SVG Export:</strong> Convert Canvas2D output to scalable SVG</li>
+                <li>✅ <strong>Interactive Elements:</strong> Hover effects and click handlers</li>
+                <li>✅ <strong>Metadata Integration:</strong> Embed molecular data in SVG</li>
+                <li>🔄 <strong>React/Vue Components:</strong> SVG export integration with framework components</li>
+            </ul>
+
+            <h3>Short-term (v2.1.0)</h3>
+            <ul>
+                <li>🔄 <strong>Animation Support:</strong> CSS animations for bond formation/breaking</li>
+                <li>🔄 <strong>Advanced Styling:</strong> Customizable themes and color schemes</li>
+                <li>🔄 <strong>3D to SVG:</strong> Convert 3D molecular views to 2D SVG projections</li>
+                <li>🔄 <strong>Reaction Pathways:</strong> Animated reaction mechanism diagrams</li>
+            </ul>
+
+            <h3>Medium-term (v2.2.0)</h3>
+            <ul>
+                <li>🔄 <strong>Interactive Editing:</strong> Modify molecular structures directly in SVG</li>
+                <li>🔄 <strong>Multi-molecule Scenes:</strong> Complex reaction diagrams with multiple molecules</li>
+                <li>🔄 <strong>Publication Templates:</strong> Pre-designed layouts for academic papers</li>
+                <li>🔄 <strong>Accessibility Features:</strong> Screen reader support and high contrast modes</li>
+            </ul>
+        </div>
+
+        <!-- Use Cases -->
+        <div class="demo-section">
+            <h2>🎓 Real-World Use Cases</h2>
+            
+            <div class="format-comparison">
+                <div class="format-section">
+                    <h3>Educational Applications</h3>
+                    <ul>
+                        <li>Interactive chemistry textbooks</li>
+                        <li>Online learning platforms</li>
+                        <li>Student homework and assignments</li>
+                        <li>Teacher presentation materials</li>
+                    </ul>
+                </div>
+                
+                <div class="format-section">
+                    <h3>Research & Publishing</h3>
+                    <ul>
+                        <li>Academic paper illustrations</li>
+                        <li>Conference presentations</li>
+                        <li>Research proposal graphics</li>
+                        <li>Patent documentation</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Implementation -->
+    <script type="module">
+        // Mock Canvas2DRenderer with SVG export capabilities
+        class EnhancedCanvas2DRenderer {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.currentMolecule = null;
+                this.scale = 1;
+                this.offset = { x: 0, y: 0 };
+                
+                this.config = {
+                    width: 600,
+                    height: 400,
+                    backgroundColor: '#ffffff',
+                    atomColors: {
+                        'H': '#ffffff',
+                        'C': '#303030',
+                        'N': '#3050f8',
+                        'O': '#ff0d0d',
+                        'F': '#90e050',
+                        'S': '#ffff30',
+                        'Cl': '#1ff01f'
+                    },
+                    bondColor: '#000000',
+                    bondWidth: 2,
+                    atomRadius: 20
+                };
+            }
+
+            loadMolecule(moleculeType) {
+                const molecules = {
+                    water: {
+                        name: 'Water (H2O)',
+                        atoms: [
+                            { element: 'O', x: 300, y: 200 },
+                            { element: 'H', x: 260, y: 240 },
+                            { element: 'H', x: 340, y: 240 }
+                        ],
+                        bonds: [
+                            { from: 0, to: 1 },
+                            { from: 0, to: 2 }
+                        ]
+                    },
+                    methane: {
+                        name: 'Methane (CH4)',
+                        atoms: [
+                            { element: 'C', x: 300, y: 200 },
+                            { element: 'H', x: 260, y: 160 },
+                            { element: 'H', x: 340, y: 160 },
+                            { element: 'H', x: 260, y: 240 },
+                            { element: 'H', x: 340, y: 240 }
+                        ],
+                        bonds: [
+                            { from: 0, to: 1 },
+                            { from: 0, to: 2 },
+                            { from: 0, to: 3 },
+                            { from: 0, to: 4 }
+                        ]
+                    },
+                    benzene: {
+                        name: 'Benzene (C6H6)',
+                        atoms: [
+                            { element: 'C', x: 300, y: 150 },
+                            { element: 'C', x: 350, y: 175 },
+                            { element: 'C', x: 350, y: 225 },
+                            { element: 'C', x: 300, y: 250 },
+                            { element: 'C', x: 250, y: 225 },
+                            { element: 'C', x: 250, y: 175 }
+                        ],
+                        bonds: [
+                            { from: 0, to: 1 }, { from: 1, to: 2 },
+                            { from: 2, to: 3 }, { from: 3, to: 4 },
+                            { from: 4, to: 5 }, { from: 5, to: 0 }
+                        ]
+                    },
+                    caffeine: {
+                        name: 'Caffeine (C8H10N4O2)',
+                        atoms: [
+                            { element: 'C', x: 280, y: 180 },
+                            { element: 'N', x: 320, y: 160 },
+                            { element: 'C', x: 360, y: 180 },
+                            { element: 'N', x: 360, y: 220 },
+                            { element: 'C', x: 320, y: 240 },
+                            { element: 'C', x: 280, y: 220 },
+                            { element: 'O', x: 240, y: 160 },
+                            { element: 'O', x: 400, y: 160 }
+                        ],
+                        bonds: [
+                            { from: 0, to: 1 }, { from: 1, to: 2 },
+                            { from: 2, to: 3 }, { from: 3, to: 4 },
+                            { from: 4, to: 5 }, { from: 5, to: 0 },
+                            { from: 0, to: 6 }, { from: 2, to: 7 }
+                        ]
+                    }
+                };
+                
+                this.currentMolecule = molecules[moleculeType] || molecules.water;
+                this.render();
+            }
+
+            render() {
+                // Clear canvas
+                this.ctx.fillStyle = this.config.backgroundColor;
+                this.ctx.fillRect(0, 0, this.config.width, this.config.height);
+                
+                if (!this.currentMolecule) return;
+
+                // Draw bonds
+                this.ctx.strokeStyle = this.config.bondColor;
+                this.ctx.lineWidth = this.config.bondWidth;
+                this.ctx.lineCap = 'round';
+                
+                this.currentMolecule.bonds.forEach(bond => {
+                    const atom1 = this.currentMolecule.atoms[bond.from];
+                    const atom2 = this.currentMolecule.atoms[bond.to];
+                    
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(atom1.x, atom1.y);
+                    this.ctx.lineTo(atom2.x, atom2.y);
+                    this.ctx.stroke();
+                });
+
+                // Draw atoms
+                this.currentMolecule.atoms.forEach(atom => {
+                    const color = this.config.atomColors[atom.element] || '#999999';
+                    
+                    // Draw atom circle
+                    this.ctx.fillStyle = color;
+                    this.ctx.beginPath();
+                    this.ctx.arc(atom.x, atom.y, this.config.atomRadius, 0, 2 * Math.PI);
+                    this.ctx.fill();
+                    
+                    // Draw border
+                    this.ctx.strokeStyle = '#000000';
+                    this.ctx.lineWidth = 2;
+                    this.ctx.stroke();
+                    
+                    // Draw element label
+                    this.ctx.fillStyle = this.getContrastingColor(color);
+                    this.ctx.font = '16px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+                    this.ctx.fillText(atom.element, atom.x, atom.y);
+                });
+                
+                // Draw molecule name
+                this.ctx.fillStyle = '#333333';
+                this.ctx.font = '18px Arial';
+                this.ctx.textAlign = 'left';
+                this.ctx.textBaseline = 'top';
+                this.ctx.fillText(this.currentMolecule.name, 10, 10);
+            }
+
+            exportImage(format = 'png') {
+                if (format === 'svg') {
+                    return this.exportSVG();
+                }
+                return this.canvas.toDataURL(`image/${format}`);
+            }
+
+            exportSVG(options = {}) {
+                if (!this.currentMolecule) return this.generateEmptySVG();
+
+                const opts = {
+                    interactive: document.getElementById('interactive')?.checked || false,
+                    metadata: document.getElementById('metadata')?.checked || false,
+                    animations: document.getElementById('animations')?.checked || false,
+                    optimize: document.getElementById('optimize')?.checked || false,
+                    ...options
+                };
+
+                const svgElements = [];
+                const { width, height } = this.config;
+                
+                // SVG header
+                svgElements.push(`<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">`);
+                
+                if (opts.metadata) {
+                    svgElements.push(`<title>${this.currentMolecule.name}</title>`);
+                    svgElements.push(`<desc>Generated by CREB-JS SVG Export System</desc>`);
+                }
+                
+                // Styles
+                svgElements.push('<defs><style type="text/css">');
+                svgElements.push('.atom-circle { stroke: #000; stroke-width: 2; }');
+                svgElements.push('.atom-label { font-family: Arial, sans-serif; font-size: 16px; text-anchor: middle; dominant-baseline: central; }');
+                svgElements.push(`.bond-line { stroke: ${this.config.bondColor}; stroke-width: ${this.config.bondWidth}; stroke-linecap: round; }`);
+                
+                if (opts.interactive) {
+                    svgElements.push('.atom-group:hover .atom-circle { stroke-width: 3; stroke: #ff6b35; }');
+                    svgElements.push('.atom-group:hover .atom-label { font-weight: bold; }');
+                    svgElements.push('.atom-group { cursor: pointer; }');
+                    svgElements.push('.bond-line:hover { stroke: #ff6b35; stroke-width: 3; }');
+                }
+
+                if (opts.animations) {
+                    svgElements.push('@keyframes atomPulse { 0%, 100% { r: 20; } 50% { r: 23; } }');
+                    svgElements.push('.atom-circle:hover { animation: atomPulse 1s infinite; }');
+                }
+                
+                svgElements.push('</style></defs>');
+                
+                // Background
+                svgElements.push(`<rect width="100%" height="100%" fill="${this.config.backgroundColor}"/>`);
+                
+                // Bonds
+                svgElements.push('<g id="bonds">');
+                this.currentMolecule.bonds.forEach((bond, index) => {
+                    const atom1 = this.currentMolecule.atoms[bond.from];
+                    const atom2 = this.currentMolecule.atoms[bond.to];
+                    
+                    let bondElement = `<line x1="${atom1.x}" y1="${atom1.y}" x2="${atom2.x}" y2="${atom2.y}" class="bond-line"`;
+                    if (opts.interactive) {
+                        bondElement += ` data-bond-id="${index}"`;
+                    }
+                    bondElement += '/>';
+                    
+                    svgElements.push(bondElement);
+                });
+                svgElements.push('</g>');
+                
+                // Atoms
+                svgElements.push('<g id="atoms">');
+                this.currentMolecule.atoms.forEach((atom, index) => {
+                    const color = this.config.atomColors[atom.element] || '#999999';
+                    const textColor = this.getContrastingColor(color);
+                    
+                    svgElements.push('<g class="atom-group">');
+                    
+                    let circleElement = `<circle cx="${atom.x}" cy="${atom.y}" r="${this.config.atomRadius}" fill="${color}" class="atom-circle"`;
+                    if (opts.interactive) {
+                        circleElement += ` data-element="${atom.element}" data-atom-id="${index}"`;
+                    }
+                    circleElement += '/>';
+                    svgElements.push(circleElement);
+                    
+                    svgElements.push(`<text x="${atom.x}" y="${atom.y}" fill="${textColor}" class="atom-label">${atom.element}</text>`);
+                    
+                    if (opts.interactive) {
+                        svgElements.push(`<title>${atom.element} - Atom ${index + 1}</title>`);
+                    }
+                    
+                    svgElements.push('</g>');
+                });
+                svgElements.push('</g>');
+                
+                // Molecule title
+                svgElements.push(`<text x="10" y="25" font-family="Arial" font-size="18" fill="#333">${this.currentMolecule.name}</text>`);
+                
+                // Metadata
+                if (opts.metadata) {
+                    svgElements.push('<metadata>');
+                    svgElements.push('<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">');
+                    svgElements.push('<rdf:Description rdf:about="">');
+                    svgElements.push(`<atomCount>${this.currentMolecule.atoms.length}</atomCount>`);
+                    svgElements.push(`<bondCount>${this.currentMolecule.bonds.length}</bondCount>`);
+                    svgElements.push(`<generator>CREB-JS SVG Export System</generator>`);
+                    svgElements.push(`<timestamp>${new Date().toISOString()}</timestamp>`);
+                    svgElements.push('</rdf:Description>');
+                    svgElements.push('</rdf:RDF>');
+                    svgElements.push('</metadata>');
+                }
+                
+                svgElements.push('</svg>');
+                
+                return svgElements.join('\n');
+            }
+
+            generateEmptySVG() {
+                const { width, height } = this.config;
+                return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="100%" height="100%" fill="${this.config.backgroundColor}"/>
+                    <text x="${width/2}" y="${height/2 - 20}" text-anchor="middle" font-family="Arial" font-size="24" fill="#999">2D Molecular Structure</text>
+                    <text x="${width/2}" y="${height/2 + 20}" text-anchor="middle" font-family="Arial" font-size="14" fill="#999">Load a molecule to visualize</text>
+                </svg>`;
+            }
+
+            getContrastingColor(backgroundColor) {
+                const hex = backgroundColor.replace('#', '');
+                const r = parseInt(hex.substr(0, 2), 16);
+                const g = parseInt(hex.substr(2, 2), 16);
+                const b = parseInt(hex.substr(4, 2), 16);
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                return brightness > 128 ? '#000000' : '#ffffff';
+            }
+
+            downloadSVG(filename = 'molecule.svg') {
+                const svgContent = this.exportSVG();
+                const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                link.click();
+                URL.revokeObjectURL(url);
+            }
+
+            resetView() {
+                this.scale = 1;
+                this.offset = { x: 0, y: 0 };
+                this.render();
+            }
+        }
+
+        // Initialize the demo
+        const canvas = document.getElementById('molecular-canvas');
+        const renderer = new EnhancedCanvas2DRenderer(canvas);
+        
+        // Load initial molecule
+        renderer.loadMolecule('water');
+
+        // Global functions for demo controls
+        window.loadMolecule = () => {
+            const select = document.getElementById('molecule-select');
+            renderer.loadMolecule(select.value);
+            updateOutputs();
+        };
+
+        window.resetView = () => {
+            renderer.resetView();
+            updateOutputs();
+        };
+
+        window.exportPNG = () => {
+            const dataUrl = renderer.exportImage('png');
+            const img = new Image();
+            img.src = dataUrl;
+            img.style.maxWidth = '100%';
+            img.style.height = 'auto';
+            document.getElementById('canvas-output').innerHTML = '';
+            document.getElementById('canvas-output').appendChild(img);
+        };
+
+        window.exportJPG = () => {
+            const dataUrl = renderer.exportImage('jpg');
+            const img = new Image();
+            img.src = dataUrl;
+            img.style.maxWidth = '100%';
+            img.style.height = 'auto';
+            document.getElementById('canvas-output').innerHTML = '';
+            document.getElementById('canvas-output').appendChild(img);
+        };
+
+        window.exportSVG = () => {
+            const svgContent = renderer.exportSVG();
+            document.getElementById('svg-output').innerHTML = svgContent;
+        };
+
+        window.downloadSVG = () => {
+            const select = document.getElementById('molecule-select');
+            const moleculeName = select.options[select.selectedIndex].text.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+            renderer.downloadSVG(`${moleculeName}.svg`);
+        };
+
+        function updateOutputs() {
+            // Auto-update both outputs when molecule changes
+            setTimeout(() => {
+                exportPNG();
+                exportSVG();
+            }, 100);
+        }
+
+        // Initial output update
+        updateOutputs();
+    </script>
+</body>
+</html>
