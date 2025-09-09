@@ -271,6 +271,13 @@ export class Mol3DWrapper {
   }
 
   /**
+   * Get the 3Dmol viewer instance
+   */
+  getViewer(): any {
+    return this.viewer;
+  }
+
+  /**
    * Add molecule to the scene
    */
   async addMolecule(

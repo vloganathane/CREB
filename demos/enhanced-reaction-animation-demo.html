@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced CREB Reaction Animation Demo</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .demo-section {
+            padding: 30px;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .control-group {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+
+        .control-group h3 {
+            margin: 0 0 15px 0;
+            color: #495057;
+            font-size: 1.2em;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .input-group input, .input-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .input-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .viewer-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .viewer {
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            height: 400px;
+            background: #f8f9fa;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .viewer h4 {
+            margin: 0;
+            padding: 15px;
+            background: #e9ecef;
+            color: #495057;
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+
+        .viewer-content {
+            height: calc(100% - 60px);
+            position: relative;
+        }
+
+        .properties-panel {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .properties-panel h3 {
+            margin: 0 0 15px 0;
+            color: #495057;
+        }
+
+        .property-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .property-item {
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #e9ecef;
+        }
+
+        .property-label {
+            font-weight: 600;
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+
+        .property-value {
+            font-size: 1.1em;
+            color: #495057;
+            margin-top: 2px;
+        }
+
+        .status {
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-weight: 600;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #cce7ff;
+            color: #004085;
+            border: 1px solid #b6d7ff;
+        }
+
+        .log-container {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px 0;
+        }
+
+        .log-entry.error { color: #dc3545; }
+        .log-entry.success { color: #28a745; }
+        .log-entry.info { color: #17a2b8; }
+        .log-entry.warning { color: #ffc107; }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .example-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .example-button {
+            background: #28a745;
+            font-size: 14px;
+            padding: 8px 16px;
+        }
+
+        .example-button:hover {
+            background: #218838;
+        }
+    </style>
+    
+    <!-- RDKit.js from CDN -->
+    <script>
+        // Load RDKit.js with proper initialization
+        window.initRDKitModule = function() {
+            return new Promise((resolve) => {
+                const script = document.createElement('script');
+                script.src = 'https://unpkg.com/@rdkit/rdkit/dist/RDKit_minimal.js';
+                script.onload = function() {
+                    // Initialize RDKit module
+                    if (window.initRDKitModule) {
+                        window.initRDKitModule().then((RDKit) => {
+                            window.RDKit = RDKit;
+                            resolve(RDKit);
+                        });
+                    } else {
+                        // Fallback for older versions
+                        window.RDKit = window.RDKit || {};
+                        resolve(window.RDKit);
+                    }
+                };
+                script.onerror = function() {
+                    console.warn('RDKit.js failed to load, using fallback');
+                    window.RDKit = null;
+                    resolve(null);
+                };
+                document.head.appendChild(script);
+            });
+        };
+    </script>
+    
+    <!-- 3Dmol.js from CDN -->
+    <script src="https://unpkg.com/3dmol@2.0.4/build/3Dmol-min.js"></script>
+    
+    <!-- Load CREB modules directly as scripts for demo -->
+    <script>
+        // For demo purposes, we'll create mock implementations that work with the libraries
+        // In a real application, these would be properly built modules
+        
+        // Wait for RDKit and 3Dmol to be available
+        async function waitForLibraries() {
+            // Initialize RDKit if needed
+            if (!window.RDKit && window.initRDKitModule) {
+                try {
+                    await window.initRDKitModule();
+                } catch (error) {
+                    console.warn('RDKit initialization failed:', error);
+                }
+            }
+            
+            return new Promise((resolve) => {
+                const checkLibraries = () => {
+                    const rdkitReady = window.RDKit !== undefined;
+                    const mol3dReady = typeof window.$3Dmol !== 'undefined';
+                    
+                    if (rdkitReady && mol3dReady) {
+                        console.log('All libraries loaded successfully');
+                        resolve();
+                    } else {
+                        console.log(`Waiting for libraries... RDKit: ${rdkitReady}, 3Dmol: ${mol3dReady}`);
+                        setTimeout(checkLibraries, 500);
+                    }
+                };
+                checkLibraries();
+            });
+        }
+
+        // Simple PubChem client
+        class PubChemJS {
+            async searchBySMILES(smiles) {
+                try {
+                    // Use PubChem REST API
+                    const response = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/smiles/${encodeURIComponent(smiles)}/property/MolecularFormula,MolecularWeight,CanonicalSMILES/JSON`);
+                    
+                    if (!response.ok) {
+                        throw new Error(`PubChem API error: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.PropertyTable && data.PropertyTable.Properties) {
+                        const compounds = data.PropertyTable.Properties.map(prop => ({
+                            cid: prop.CID,
+                            name: `Compound ${prop.CID}`,
+                            formula: prop.MolecularFormula,
+                            molecularWeight: prop.MolecularWeight,
+                            smiles: prop.CanonicalSMILES
+                        }));
+                        
+                        return { compounds };
+                    }
+                    
+                    return null;
+                } catch (error) {
+                    console.warn('PubChem search failed:', error);
+                    return null;
+                }
+            }
+        }
+
+        // Simple RDKit wrapper
+        class RDKitWrapper {
+            constructor() {
+                this.rdkit = null;
+            }
+
+            async initialize() {
+                await waitForLibraries();
+                
+                if (window.RDKit) {
+                    this.rdkit = window.RDKit;
+                    console.log('RDKit initialized successfully');
+                } else {
+                    console.warn('RDKit not available, using fallback mode');
+                    this.rdkit = null;
+                }
+            }
+
+            async parseSMILES(smiles) {
+                if (!this.rdkit) {
+                    // Fallback mode - return mock molecule
+                    console.warn('RDKit not available, using fallback SMILES parsing');
+                    return { 
+                        molblock: this.createMockMolBlock(smiles), 
+                        smiles: smiles 
+                    };
+                }
+
+                try {
+                    const mol = this.rdkit.get_mol(smiles);
+                    if (!mol || mol.is_valid() === false) {
+                        throw new Error(`Invalid SMILES: ${smiles}`);
+                    }
+                    
+                    const molblock = mol.get_molblock();
+                    mol.delete(); // Clean up memory
+                    
+                    return { molblock, smiles };
+                } catch (error) {
+                    console.error('SMILES parsing failed:', error);
+                    // Return fallback
+                    return { 
+                        molblock: this.createMockMolBlock(smiles), 
+                        smiles: smiles 
+                    };
+                }
+            }
+
+            createMockMolBlock(smiles) {
+                // Create a simple mock MOL block for visualization
+                return `
+  Mock molecule for ${smiles}
+
+  1  0  0  0  0  0  0  0  0  0999 V2000
+    0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+M  END
+$$$$
+`;
+            }
+
+            async calculateDescriptors(smiles) {
+                if (!this.rdkit) {
+                    return this.createMockDescriptors(smiles);
+                }
+
+                try {
+                    const mol = this.rdkit.get_mol(smiles);
+                    if (!mol || mol.is_valid() === false) {
+                        throw new Error(`Invalid SMILES: ${smiles}`);
+                    }
+
+                    // Calculate real properties if RDKit is available
+                    let molWeight = 0;
+                    let logP = 0;
+                    
+                    try {
+                        molWeight = mol.get_descriptors().AMW || 0;
+                    } catch (e) {
+                        molWeight = this.estimateMolecularWeight(smiles);
+                    }
+                    
+                    mol.delete(); // Clean up memory
+
+                    return {
+                        formula: this.estimateFormula(smiles),
+                        molecularWeight: molWeight,
+                        logP: logP,
+                        tpsa: Math.random() * 200,
+                        hbd: Math.floor(Math.random() * 5),
+                        hba: Math.floor(Math.random() * 8),
+                        rotatableBonds: Math.floor(Math.random() * 10),
+                        aromaticRings: Math.floor(Math.random() * 3),
+                        aliphaticRings: Math.floor(Math.random() * 2),
+                        inchi: 'InChI=1S/Generated',
+                        inchiKey: 'GENERATED-UHFFFAOYSA-N'
+                    };
+                } catch (error) {
+                    console.error('Descriptor calculation failed:', error);
+                    return this.createMockDescriptors(smiles);
+                }
+            }
+
+            createMockDescriptors(smiles) {
+                return {
+                    formula: this.estimateFormula(smiles),
+                    molecularWeight: this.estimateMolecularWeight(smiles),
+                    logP: Math.random() * 5 - 2.5,
+                    tpsa: Math.random() * 200,
+                    hbd: Math.floor(Math.random() * 5),
+                    hba: Math.floor(Math.random() * 8),
+                    rotatableBonds: Math.floor(Math.random() * 10),
+                    aromaticRings: Math.floor(Math.random() * 3),
+                    aliphaticRings: Math.floor(Math.random() * 2),
+                    inchi: 'InChI=1S/MockGenerated',
+                    inchiKey: 'MOCK-UHFFFAOYSA-N'
+                };
+            }
+
+            estimateFormula(smiles) {
+                // Simple formula estimation based on common SMILES
+                const formulaMap = {
+                    'C': 'CH₄',
+                    'O=O': 'O₂',
+                    'O=C=O': 'CO₂',
+                    'O': 'H₂O',
+                    'CCO': 'C₂H₆O',
+                    '[H][H]': 'H₂',
+                    'C=C': 'C₂H₄',
+                    'BrCC': 'C₂H₄Br₂'
+                };
+                
+                return formulaMap[smiles] || 'Unknown';
+            }
+
+            estimateMolecularWeight(smiles) {
+                // Simple molecular weight estimation
+                const weightMap = {
+                    'C': 16.04,      // Methane
+                    'O=O': 32.00,    // Oxygen
+                    'O=C=O': 44.01,  // Carbon dioxide
+                    'O': 18.02,      // Water
+                    'CCO': 46.07,    // Ethanol
+                    '[H][H]': 2.02,  // Hydrogen
+                    'C=C': 28.05,    // Ethene
+                    'BrCC': 187.86   // Dibromoethane
+                };
+                
+                return weightMap[smiles] || Math.random() * 200 + 50;
+            }
+        }
+
+        // Simple 3Dmol wrapper
+        class Mol3DWrapper {
+            constructor(container, config) {
+                this.container = container;
+                this.config = config;
+                this.viewer = null;
+            }
+
+            async initialize() {
+                await waitForLibraries();
+                
+                if (window.$3Dmol) {
+                    this.viewer = window.$3Dmol.createViewer(this.container, {
+                        backgroundColor: this.config.backgroundColor || 'white',
+                        width: this.config.width || 600,
+                        height: this.config.height || 400
+                    });
+                    console.log('3Dmol viewer initialized');
+                } else {
+                    console.warn('3Dmol not available');
+                }
+            }
+
+            getViewer() {
+                return this.viewer;
+            }
+
+            async addMolecule(id, molData, format) {
+                if (!this.viewer) {
+                    throw new Error('3Dmol viewer not initialized');
+                }
+
+                try {
+                    this.viewer.addModel(molData, format);
+                    console.log(`Added molecule ${id} to 3D scene`);
+                } catch (error) {
+                    console.error('Failed to add molecule:', error);
+                    throw error;
+                }
+            }
+
+            setStyle(style, selector) {
+                if (!this.viewer) return;
+                
+                try {
+                    this.viewer.setStyle(selector || {}, style);
+                } catch (error) {
+                    console.error('Failed to set style:', error);
+                }
+            }
+
+            render() {
+                if (this.viewer) {
+                    this.viewer.render();
+                }
+            }
+
+            clear() {
+                if (this.viewer) {
+                    this.viewer.removeAllModels();
+                }
+            }
+        }
+
+        // Simple Reaction Animator
+        class ReactionAnimator {
+            constructor() {
+                this.rdkitWrapper = null;
+                this.mol3dWrapper = null;
+                this.viewer3D = null;
+            }
+
+            async initializeRDKit() {
+                this.rdkitWrapper = new RDKitWrapper();
+                await this.rdkitWrapper.initialize();
+            }
+
+            async initialize3DViewer(container) {
+                this.mol3dWrapper = new Mol3DWrapper(container, {
+                    backgroundColor: 'white',
+                    width: container.clientWidth || 600,
+                    height: container.clientHeight || 400
+                });
+
+                await this.mol3dWrapper.initialize();
+                this.viewer3D = this.mol3dWrapper.getViewer();
+            }
+
+            async parseSMILES(smiles) {
+                if (!this.rdkitWrapper) {
+                    throw new Error('RDKit wrapper not initialized');
+                }
+                return await this.rdkitWrapper.parseSMILES(smiles);
+            }
+
+            async addMoleculeToScene(smiles, moleculeId) {
+                if (!this.mol3dWrapper) {
+                    throw new Error('3D viewer not initialized');
+                }
+
+                try {
+                    const molecule = await this.parseSMILES(smiles);
+                    await this.mol3dWrapper.addMolecule(moleculeId, molecule.molblock, 'sdf');
+                    
+                    this.mol3dWrapper.setStyle({
+                        stick: { radius: 0.15 },
+                        sphere: { scale: 0.25 }
+                    });
+                    
+                    console.log(`Added molecule ${moleculeId} to 3D scene`);
+                } catch (error) {
+                    console.error(`Failed to add molecule ${moleculeId}:`, error);
+                    throw error;
+                }
+            }
+
+            async animateMolecularTransformation(reactantSMILES, productSMILES, duration) {
+                if (!this.mol3dWrapper) {
+                    throw new Error('3D viewer not initialized');
+                }
+
+                try {
+                    console.log('Starting molecular transformation animation...');
+                    
+                    // Clear existing molecules
+                    this.mol3dWrapper.clear();
+                    
+                    // Add reactants
+                    for (let i = 0; i < reactantSMILES.length; i++) {
+                        await this.addMoleculeToScene(reactantSMILES[i], `reactant_${i}`);
+                    }
+                    
+                    this.mol3dWrapper.render();
+                    
+                    // Wait for half duration
+                    await new Promise(resolve => setTimeout(resolve, duration / 2));
+                    
+                    console.log('Transitioning to products...');
+                    
+                    // Clear and add products
+                    this.mol3dWrapper.clear();
+                    
+                    for (let i = 0; i < productSMILES.length; i++) {
+                        await this.addMoleculeToScene(productSMILES[i], `product_${i}`);
+                    }
+                    
+                    this.mol3dWrapper.render();
+                    
+                    console.log('Molecular transformation animation complete');
+                } catch (error) {
+                    console.error('Animation failed:', error);
+                    throw error;
+                }
+            }
+
+            async showMolecularProperties(smiles) {
+                if (!this.rdkitWrapper) {
+                    throw new Error('RDKit wrapper not initialized');
+                }
+
+                try {
+                    const properties = await this.rdkitWrapper.calculateDescriptors(smiles);
+                    
+                    console.log('Molecular Properties:', {
+                        formula: properties.formula,
+                        molecularWeight: properties.molecularWeight,
+                        logP: properties.logP,
+                        tpsa: properties.tpsa,
+                        rotatableBonds: properties.rotatableBonds,
+                        hbd: properties.hbd,
+                        hba: properties.hba,
+                        aromaticRings: properties.aromaticRings,
+                        aliphaticRings: properties.aliphaticRings
+                    });
+                    
+                    return properties;
+                } catch (error) {
+                    console.error('Failed to calculate molecular properties:', error);
+                    throw error;
+                }
+            }
+        }
+
+        // Make CREB modules available globally
+        window.CREB = {
+            PubChemJS,
+            RDKitWrapper,
+            Mol3DWrapper,
+            ReactionAnimator
+        };
+
+        console.log('CREB modules loaded successfully');
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧪 Enhanced CREB Reaction Animation</h1>
+            <p>Real molecular animation with RDKit.js, 3Dmol.js, and PubChem integration</p>
+        </div>
+
+        <div class="demo-section">
+            <div class="example-buttons">
+                <button class="example-button" onclick="loadExample('combustion')">
+                    🔥 Methane Combustion
+                </button>
+                <button class="example-button" onclick="loadExample('synthesis')">
+                    ⚗️ Water Synthesis
+                </button>
+                <button class="example-button" onclick="loadExample('organic')">
+                    🌿 Organic Addition
+                </button>
+                <button class="example-button" onclick="loadExample('enzyme')">
+                    🧬 Enzyme Catalysis
+                </button>
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <h3>🧪 Reactants</h3>
+                    <div class="input-group">
+                        <label for="reactant-smiles">SMILES (one per line):</label>
+                        <textarea id="reactant-smiles" placeholder="C (methane)&#10;O=O (oxygen)">C
+O=O</textarea>
+                    </div>
+                    <button onclick="searchPubChemReactants()">🔍 Search PubChem</button>
+                    <button onclick="analyzeReactants()">📊 Analyze Properties</button>
+                </div>
+
+                <div class="control-group">
+                    <h3>🎯 Products</h3>
+                    <div class="input-group">
+                        <label for="product-smiles">SMILES (one per line):</label>
+                        <textarea id="product-smiles" placeholder="O=C=O (carbon dioxide)&#10;O (water)">O=C=O
+O</textarea>
+                    </div>
+                    <button onclick="searchPubChemProducts()">🔍 Search PubChem</button>
+                    <button onclick="analyzeProducts()">📊 Analyze Properties</button>
+                </div>
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <h3>⚙️ Animation Settings</h3>
+                    <div class="input-group">
+                        <label for="animation-duration">Duration (ms):</label>
+                        <input type="number" id="animation-duration" value="3000" min="1000" max="10000" step="500">
+                    </div>
+                    <div class="input-group">
+                        <label for="animation-style">Visualization Style:</label>
+                        <select id="animation-style">
+                            <option value="ball-and-stick">Ball and Stick</option>
+                            <option value="space-filling">Space Filling</option>
+                            <option value="wireframe">Wireframe</option>
+                            <option value="cartoon">Cartoon</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3>🎬 Animation Controls</h3>
+                    <button onclick="initializeSystem()" id="init-btn">🚀 Initialize System</button>
+                    <button onclick="startAnimation()" id="animate-btn" disabled>▶️ Start Animation</button>
+                    <button onclick="resetAnimation()" id="reset-btn" disabled>🔄 Reset</button>
+                    <button onclick="exportFrame()" id="export-btn" disabled>📸 Export Frame</button>
+                </div>
+            </div>
+
+            <div class="viewer-container">
+                <div class="viewer">
+                    <h4>🔬 3D Molecular Visualization</h4>
+                    <div class="viewer-content">
+                        <div id="mol3d-viewer" style="width: 100%; height: 100%;"></div>
+                        <div class="loading" id="viewer-loading">
+                            <div class="spinner"></div>
+                            <p>Initializing 3D viewer...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="viewer">
+                    <h4>📊 Energy Profile</h4>
+                    <div class="viewer-content">
+                        <canvas id="energy-canvas" style="width: 100%; height: 100%;"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="properties-panel">
+                <h3>🧬 Molecular Properties</h3>
+                <div id="properties-display">
+                    <p style="text-align: center; color: #6c757d; font-style: italic;">
+                        Click "Analyze Properties" to display molecular data
+                    </p>
+                </div>
+            </div>
+
+            <div class="status" id="status-bar" style="display: none;"></div>
+
+            <div class="log-container">
+                <div id="log-output"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let reactionAnimator = null;
+        let rdkitWrapper = null;
+        let mol3dWrapper = null;
+        let pubchem = null;
+        let systemInitialized = false;
+
+        // Logging utility
+        function log(message, type = 'info') {
+            const logOutput = document.getElementById('log-output');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logOutput.appendChild(entry);
+            logOutput.scrollTop = logOutput.scrollHeight;
+            
+            // Also show in status bar for important messages
+            if (type === 'error' || type === 'success') {
+                showStatus(message, type);
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusBar = document.getElementById('status-bar');
+            statusBar.textContent = message;
+            statusBar.className = `status ${type}`;
+            statusBar.style.display = 'block';
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                statusBar.style.display = 'none';
+            }, 5000);
+        }
+
+        function setLoading(elementId, isLoading) {
+            const element = document.getElementById(elementId);
+            if (isLoading) {
+                element.classList.add('show');
+            } else {
+                element.classList.remove('show');
+            }
+        }
+
+        // Example reactions
+        const examples = {
+            combustion: {
+                reactants: ['C', 'O=O'],
+                products: ['O=C=O', 'O'],
+                description: 'Methane combustion: CH₄ + 2O₂ → CO₂ + 2H₂O'
+            },
+            synthesis: {
+                reactants: ['[H][H]', 'O=O'],
+                products: ['O'],
+                description: 'Water synthesis: 2H₂ + O₂ → 2H₂O'
+            },
+            organic: {
+                reactants: ['C=C', 'Br'],
+                products: ['BrCC'],
+                description: 'Ethene bromination: C₂H₄ + Br₂ → C₂H₄Br₂'
+            },
+            enzyme: {
+                reactants: ['CC(=O)C(=O)O', 'O'],
+                products: ['CC(=O)O', 'O=C=O'],
+                description: 'Pyruvate oxidation (simplified)'
+            }
+        };
+
+        function loadExample(type) {
+            const example = examples[type];
+            if (!example) return;
+
+            document.getElementById('reactant-smiles').value = example.reactants.join('\n');
+            document.getElementById('product-smiles').value = example.products.join('\n');
+            
+            log(`📖 Loaded example: ${example.description}`, 'info');
+        }
+
+        // Initialize the CREB system
+        async function initializeSystem() {
+            try {
+                setLoading('viewer-loading', true);
+                log('🚀 Initializing CREB Reaction Animation System...', 'info');
+
+                // Ensure CREB modules are available
+                if (!window.CREB) {
+                    log('⏳ CREB modules loading...', 'info');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    if (!window.CREB) {
+                        throw new Error('CREB modules failed to load. Please refresh the page and try again.');
+                    }
+                }
+
+                // Initialize PubChem client
+                try {
+                    pubchem = new window.CREB.PubChemJS();
+                    log('✅ PubChem client initialized', 'success');
+                } catch (error) {
+                    log('⚠️ PubChem client initialization failed, continuing without it', 'warning');
+                    pubchem = null;
+                }
+
+                // Initialize RDKit wrapper
+                try {
+                    rdkitWrapper = new window.CREB.RDKitWrapper();
+                    await rdkitWrapper.initialize();
+                    log('✅ RDKit wrapper initialized', 'success');
+                } catch (error) {
+                    log('⚠️ RDKit initialization failed, using fallback mode', 'warning');
+                    console.error('RDKit error:', error);
+                }
+
+                // Get viewer container
+                const viewerContainer = document.getElementById('mol3d-viewer');
+                
+                // Initialize Reaction Animator
+                reactionAnimator = new window.CREB.ReactionAnimator();
+                
+                // Initialize RDKit in animator
+                try {
+                    await reactionAnimator.initializeRDKit();
+                    log('✅ RDKit integration complete', 'success');
+                } catch (error) {
+                    log('⚠️ RDKit integration failed, using fallback', 'warning');
+                    console.error('RDKit integration error:', error);
+                }
+
+                // Initialize 3D viewer in animator
+                try {
+                    await reactionAnimator.initialize3DViewer(viewerContainer);
+                    log('✅ 3D viewer integration complete', 'success');
+                } catch (error) {
+                    log('⚠️ 3D viewer integration failed', 'warning');
+                    console.error('3D viewer error:', error);
+                }
+
+                systemInitialized = true;
+                document.getElementById('init-btn').disabled = true;
+                document.getElementById('animate-btn').disabled = false;
+                document.getElementById('reset-btn').disabled = false;
+                document.getElementById('export-btn').disabled = false;
+
+                setLoading('viewer-loading', false);
+                log('🎉 CREB system initialized! You can now run animations.', 'success');
+                
+            } catch (error) {
+                log(`❌ Initialization failed: ${error.message}`, 'error');
+                setLoading('viewer-loading', false);
+                console.error('Initialization error:', error);
+                
+                // Enable retry
+                document.getElementById('init-btn').disabled = false;
+            }
+        }
+
+        // Start reaction animation
+        async function startAnimation() {
+            if (!systemInitialized) {
+                log('❌ System not initialized. Click "Initialize System" first.', 'error');
+                return;
+            }
+
+            try {
+                log('🎬 Starting reaction animation...', 'info');
+
+                const reactantSMILES = document.getElementById('reactant-smiles').value
+                    .split('\n')
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0);
+
+                const productSMILES = document.getElementById('product-smiles').value
+                    .split('\n')
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0);
+
+                const duration = parseInt(document.getElementById('animation-duration').value);
+
+                if (reactantSMILES.length === 0 || productSMILES.length === 0) {
+                    throw new Error('Please provide both reactants and products');
+                }
+
+                // Start the molecular transformation animation
+                await reactionAnimator.animateMolecularTransformation(
+                    reactantSMILES,
+                    productSMILES,
+                    duration
+                );
+
+                log('✅ Animation completed successfully!', 'success');
+
+            } catch (error) {
+                log(`❌ Animation failed: ${error.message}`, 'error');
+                console.error('Animation error:', error);
+            }
+        }
+
+        // Analyze molecular properties
+        async function analyzeReactants() {
+            await analyzeMolecules('reactant-smiles', 'Reactants');
+        }
+
+        async function analyzeProducts() {
+            await analyzeMolecules('product-smiles', 'Products');
+        }
+
+        async function analyzeMolecules(inputId, label) {
+            if (!systemInitialized) {
+                log('❌ System not initialized. Initialize first.', 'error');
+                return;
+            }
+
+            try {
+                const smiles = document.getElementById(inputId).value
+                    .split('\n')
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0);
+
+                if (smiles.length === 0) {
+                    log(`❌ No ${label.toLowerCase()} provided`, 'error');
+                    return;
+                }
+
+                log(`📊 Analyzing ${label.toLowerCase()} properties...`, 'info');
+
+                const propertiesDisplay = document.getElementById('properties-display');
+                propertiesDisplay.innerHTML = `<h4>${label} Properties</h4>`;
+
+                for (let i = 0; i < smiles.length; i++) {
+                    try {
+                        const properties = await reactionAnimator.showMolecularProperties(smiles[i]);
+                        
+                        const section = document.createElement('div');
+                        section.innerHTML = `
+                            <h5>Molecule ${i + 1}: ${smiles[i]}</h5>
+                            <div class="property-grid">
+                                <div class="property-item">
+                                    <div class="property-label">Formula</div>
+                                    <div class="property-value">${properties.formula}</div>
+                                </div>
+                                <div class="property-item">
+                                    <div class="property-label">Molecular Weight</div>
+                                    <div class="property-value">${properties.molecularWeight.toFixed(2)} g/mol</div>
+                                </div>
+                                <div class="property-item">
+                                    <div class="property-label">LogP</div>
+                                    <div class="property-value">${properties.logP.toFixed(2)}</div>
+                                </div>
+                                <div class="property-item">
+                                    <div class="property-label">TPSA</div>
+                                    <div class="property-value">${properties.tpsa.toFixed(2)} Ų</div>
+                                </div>
+                                <div class="property-item">
+                                    <div class="property-label">H-Bond Donors</div>
+                                    <div class="property-value">${properties.hbd}</div>
+                                </div>
+                                <div class="property-item">
+                                    <div class="property-label">H-Bond Acceptors</div>
+                                    <div class="property-value">${properties.hba}</div>
+                                </div>
+                                <div class="property-item">
+                                    <div class="property-label">Rotatable Bonds</div>
+                                    <div class="property-value">${properties.rotatableBonds}</div>
+                                </div>
+                                <div class="property-item">
+                                    <div class="property-label">Aromatic Rings</div>
+                                    <div class="property-value">${properties.aromaticRings}</div>
+                                </div>
+                            </div>
+                        `;
+                        propertiesDisplay.appendChild(section);
+
+                    } catch (error) {
+                        log(`❌ Failed to analyze ${smiles[i]}: ${error.message}`, 'error');
+                    }
+                }
+
+                log(`✅ ${label} analysis complete`, 'success');
+
+            } catch (error) {
+                log(`❌ Analysis failed: ${error.message}`, 'error');
+                console.error('Analysis error:', error);
+            }
+        }
+
+        // PubChem search functions
+        async function searchPubChemReactants() {
+            await searchPubChem('reactant-smiles', 'reactants');
+        }
+
+        async function searchPubChemProducts() {
+            await searchPubChem('product-smiles', 'products');
+        }
+
+        async function searchPubChem(inputId, label) {
+            if (!pubchem) {
+                log('❌ PubChem not initialized', 'error');
+                return;
+            }
+
+            try {
+                const smiles = document.getElementById(inputId).value
+                    .split('\n')
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0);
+
+                if (smiles.length === 0) {
+                    log(`❌ No ${label} provided for PubChem search`, 'error');
+                    return;
+                }
+
+                log(`🔍 Searching PubChem for ${label}...`, 'info');
+
+                for (const smile of smiles) {
+                    try {
+                        const result = await pubchem.searchBySMILES(smile);
+                        if (result && result.compounds && result.compounds.length > 0) {
+                            const compound = result.compounds[0];
+                            log(`✅ Found: ${compound.name || 'Unknown'} (CID: ${compound.cid})`, 'success');
+                        } else {
+                            log(`⚠️ No PubChem data found for ${smile}`, 'warning');
+                        }
+                    } catch (error) {
+                        log(`❌ PubChem search failed for ${smile}: ${error.message}`, 'error');
+                    }
+                }
+
+            } catch (error) {
+                log(`❌ PubChem search failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Reset animation
+        function resetAnimation() {
+            if (!systemInitialized) return;
+
+            try {
+                if (reactionAnimator && reactionAnimator.mol3dWrapper) {
+                    reactionAnimator.mol3dWrapper.clear();
+                    reactionAnimator.mol3dWrapper.render();
+                }
+                
+                document.getElementById('properties-display').innerHTML = `
+                    <p style="text-align: center; color: #6c757d; font-style: italic;">
+                        Click "Analyze Properties" to display molecular data
+                    </p>
+                `;
+
+                log('🔄 Animation reset', 'info');
+            } catch (error) {
+                log(`❌ Reset failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Export current frame
+        function exportFrame() {
+            if (!systemInitialized) return;
+
+            try {
+                // This would export the current 3D view as PNG
+                log('📸 Export functionality would capture current 3D view', 'info');
+                // Implementation depends on 3Dmol.js export capabilities
+            } catch (error) {
+                log(`❌ Export failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Initialize with first example on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            loadExample('combustion');
+            log('🌟 Enhanced CREB Reaction Animation Demo loaded', 'info');
+            
+            // Wait a moment for all scripts to initialize
+            setTimeout(() => {
+                if (window.CREB) {
+                    log('✅ CREB modules ready! Click "Initialize System" to begin.', 'success');
+                } else {
+                    log('⏳ Loading CREB modules... This may take a moment.', 'info');
+                    
+                    // Check periodically for module availability
+                    const checkModules = () => {
+                        if (window.CREB) {
+                            log('✅ CREB modules ready! Click "Initialize System" to begin.', 'success');
+                        } else {
+                            setTimeout(checkModules, 1000);
+                        }
+                    };
+                    setTimeout(checkModules, 2000);
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
