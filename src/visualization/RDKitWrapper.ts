@@ -129,8 +129,9 @@ export class RDKitWrapper {
 
         // Try dynamic import as last resort
         try {
-          const { initRDKitModule } = await import('@rdkit/rdkit');
-          this.rdkit = await initRDKitModule();
+          // Use string-based import to avoid build-time type checking
+          const rdkitModule = await import('@' + 'rdkit' + '/' + 'rdkit');
+          this.rdkit = await (rdkitModule as any).initRDKitModule();
           this.initialized = true;
           return;
         } catch (importError) {

@@ -10,20 +10,20 @@ export * from './visualization';
 // Enhanced TypeScript Support (NEW) - Selective exports to avoid conflicts
 export {
   // Branded Types
-  type ChemicalFormula,
-  type ElementSymbol,
-  type BalancedEquationString,
-  type SMILESNotation,
-  type InChINotation,
-  type CASNumber,
+  ChemicalFormula,
+  ElementSymbol,
+  BalancedEquationString,
+  SMILESNotation,
+  InChINotation,
+  CASNumber,
   
   // Advanced Types
-  type ValidElement,
-  type TypedElementCount,
-  type TypedCompound,
-  type TypedReaction,
-  type ReactionType,
-  type PhaseState,
+  ValidElement,
+  TypedElementCount,
+  TypedCompound,
+  TypedReaction,
+  ReactionType,
+  PhaseState,
   
   // Type Guards
   isChemicalFormula,
@@ -45,13 +45,13 @@ export { EnhancedBalancer } from './enhancedBalancerSimple';
 // Enhanced PubChem-integrated classes (Phase 2)
 export { 
   EnhancedChemicalEquationBalancer,
-  type EnhancedBalancedEquation,
-  type CompoundInfo 
+  EnhancedBalancedEquation,
+  CompoundInfo 
 } from './enhancedBalancer';
 export { 
   EnhancedStoichiometry,
-  type EnhancedStoichiometryResult,
-  type ReactionAnalysis 
+  EnhancedStoichiometryResult,
+  ReactionAnalysis 
 } from './enhancedStoichiometry';
 
 // Thermodynamics module (Phase 2 - Advanced Chemistry)
@@ -61,15 +61,15 @@ export {
   EnergyProfileGenerator,
   createEnergyProfile,
   exportEnergyProfile,
-  type ThermodynamicsResult,
-  type ReactionConditions,
-  type ThermodynamicProperties,
-  type TemperatureProfile,
-  type EnergyProfile,
-  type EnergyProfilePoint,
-  type TransitionState,
-  type ReactionCoordinate,
-  type BondChange
+  ThermodynamicsResult,
+  ReactionConditions,
+  ThermodynamicProperties,
+  TemperatureProfile,
+  EnergyProfile,
+  EnergyProfilePoint,
+  TransitionState,
+  ReactionCoordinate,
+  BondChange
 } from './thermodynamics';
 
 // Advanced Kinetics & Analytics Module (Phase 2 - v1.5.0)
@@ -78,23 +78,23 @@ export {
   MechanismAnalyzer,
   ReactionSafetyAnalyzer,
   AdvancedKineticsAnalyzer,
-  type ArrheniusData,
-  type KineticsResult,
-  type CatalystData,
-  type MechanismStep,
-  type MechanismAnalysis,
-  type PathwayComparison,
-  type SafetyData,
-  type ToxicityData,
-  type ReactivityData,
-  type ReactionSafetyAssessment,
-  type ThermalHazard,
-  type ChemicalHazard,
-  type PhysicalHazard,
-  type EnvironmentalHazard,
-  type SafetyRecommendation,
-  type ReactionClass,
-  type RateLawType
+  ArrheniusData,
+  KineticsResult,
+  CatalystData,
+  MechanismStep,
+  MechanismAnalysis,
+  PathwayComparison,
+  SafetyData,
+  ToxicityData,
+  ReactivityData,
+  ReactionSafetyAssessment,
+  ThermalHazard,
+  ChemicalHazard,
+  PhysicalHazard,
+  EnvironmentalHazard,
+  SafetyRecommendation,
+  ReactionClass,
+  RateLawType
 } from './kinetics';
 
 // Enhanced Data Integration Module (Phase 2 - v1.6.0)
@@ -102,18 +102,18 @@ export {
   ChemicalDatabaseManager,
   NISTWebBookIntegration,
   DataValidationService,
-  type CompoundDatabase,
-  type ExtendedThermodynamicProperties,
-  type PhysicalProperties,
-  type SafetyProperties,
-  type DatabaseSource,
-  type DatabaseQuery,
-  type DataImportResult,
-  type DataExportOptions,
-  type ValidationResult,
-  type ValidationError,
-  type ValidationWarning,
-  type DatabaseProvider
+  CompoundDatabase,
+  ExtendedThermodynamicProperties,
+  PhysicalProperties,
+  SafetyProperties,
+  DatabaseSource,
+  DatabaseQuery,
+  DataImportResult,
+  DataExportOptions,
+  ValidationResult,
+  ValidationError,
+  ValidationWarning,
+  DatabaseProvider
 } from './data';
 
 // Advanced Validation Pipeline (VP-001) - v1.7.0
@@ -130,15 +130,15 @@ export {
   createValidator,
   createCompositeValidator,
   createChemistryValidator,
-  type IValidator,
-  type ICompositeValidator,
-  type ValidationRule,
-  type ValidationContext,
-  type ValidationPipelineConfig,
-  type ValidationMetrics,
-  type ValidationEvents,
-  type RuleResult,
-  type ValidationSeverity
+  IValidator,
+  ICompositeValidator,
+  ValidationRule,
+  ValidationContext,
+  ValidationPipelineConfig,
+  ValidationMetrics,
+  ValidationEvents,
+  RuleResult,
+  ValidationSeverity
 } from './data';
 
 // Dependency Injection Container (v1.6.0 - Architecture Improvement)
@@ -150,13 +150,13 @@ export {
   MaxDepthExceededError,
   createToken,
   container,
-  type ServiceToken,
-  type ServiceFactory,
-  type Constructor,
-  type ServiceRegistration,
-  type ContainerOptions,
-  type ContainerMetrics,
-  type IDisposable
+  ServiceToken,
+  ServiceFactory,
+  Constructor,
+  ServiceRegistration,
+  ContainerOptions,
+  ContainerMetrics,
+  IDisposable
 } from './core/Container';
 
 export {
@@ -168,8 +168,8 @@ export {
   getInjectableMetadata,
   isInjectable,
   getDependencyTokens,
-  type InjectableMetadata,
-  type InjectableOptions,
+  InjectableMetadata,
+  InjectableOptions,
   INJECTABLE_METADATA_KEY
 } from './core/decorators/Injectable';
 
@@ -203,8 +203,8 @@ export {
   ErrorUtils,
   ErrorCategory,
   ErrorSeverity,
-  type ErrorContext,
-  type ErrorMetadata
+  ErrorContext,
+  ErrorMetadata
 } from './core/errors/CREBError';
 
 export {
@@ -213,8 +213,8 @@ export {
   circuitBreakerManager,
   WithCircuitBreaker,
   CircuitBreakerState,
-  type CircuitBreakerConfig,
-  type CircuitBreakerMetrics
+  CircuitBreakerConfig,
+  CircuitBreakerMetrics
 } from './core/resilience/CircuitBreaker';
 
 export {
@@ -224,9 +224,9 @@ export {
   WithRetry,
   createRetryPolicy,
   RetryStrategy,
-  type RetryConfig,
-  type RetryMetrics,
-  type RetryResult
+  RetryConfig,
+  RetryMetrics,
+  RetryResult
 } from './core/resilience/RetryPolicy';
 
 export {
@@ -248,16 +248,16 @@ export {
 } from './config/ConfigManager';
 
 export {
-  type CREBConfig,
-  type PartialCREBConfig,
-  type CacheConfig,
-  type PerformanceConfig,
-  type DataConfig,
-  type LoggingConfig,
-  type ConfigValidationResult,
-  type ConfigChangeEvent,
-  type ConfigPath,
-  type ConfigValueType,
+  CREBConfig,
+  PartialCREBConfig,
+  CacheConfig,
+  PerformanceConfig,
+  DataConfig,
+  LoggingConfig,
+  ConfigValidationResult,
+  ConfigChangeEvent,
+  ConfigPath,
+  ConfigValueType,
   isCREBConfig
 } from './config/types';
 
@@ -279,19 +279,19 @@ export {
 } from './performance/cache/CacheIntegration';
 
 export {
-  type AdvancedCacheConfig,
-  type CacheEntry,
-  type CacheResult,
-  type CacheEventListener,
-  type CacheEvent,
-  type CacheMetrics,
-  type CacheStats,
-  type EvictionStrategy,
-  type CacheEventType,
-  type EvictionPolicy,
-  type IAdvancedCache,
-  type CacheFactoryConfig,
-  type MultiLevelCacheConfig
+  AdvancedCacheConfig,
+  CacheEntry,
+  CacheResult,
+  CacheEventListener,
+  CacheEvent,
+  CacheMetrics,
+  CacheStats,
+  EvictionStrategy,
+  CacheEventType,
+  EvictionPolicy,
+  IAdvancedCache,
+  CacheFactoryConfig,
+  MultiLevelCacheConfig
 } from './performance/cache/types';
 
 export {
@@ -317,27 +317,27 @@ export {
 } from './performance/workers';
 
 export {
-  type WorkerTask,
-  type TaskResult,
-  type WorkerPoolConfig,
-  type WorkerPoolMetrics,
-  type WorkerHealthMetrics,
-  type TaskPriority,
-  type TaskStatus,
-  type WorkerStatus,
-  type CalculationType,
-  type WorkerError,
-  type WorkerInstance,
-  type TaskExecution,
-  type QueueStats,
-  type PerformanceBenchmark,
-  type EquationBalancingTask,
-  type ThermodynamicsTask,
-  type BatchAnalysisTask,
-  type MatrixSolvingTask,
-  type RecoveryConfig,
-  type WorkerId,
-  type TaskId,
+  WorkerTask,
+  TaskResult,
+  WorkerPoolConfig,
+  WorkerPoolMetrics,
+  WorkerHealthMetrics,
+  TaskPriority,
+  TaskStatus,
+  WorkerStatus,
+  CalculationType,
+  WorkerError,
+  WorkerInstance,
+  TaskExecution,
+  QueueStats,
+  PerformanceBenchmark,
+  EquationBalancingTask,
+  ThermodynamicsTask,
+  BatchAnalysisTask,
+  MatrixSolvingTask,
+  RecoveryConfig,
+  WorkerId,
+  TaskId,
   createWorkerId,
   createTaskId
 } from './performance/workers/types';
@@ -345,7 +345,7 @@ export {
 // Plugin System (v1.7.0)
 export {
   PluginManager,
-  type PluginManagerConfig
+  PluginManagerConfig
 } from './plugins/PluginManager';
 
 export {
@@ -360,30 +360,30 @@ export {
 } from './plugins/APIContext';
 
 export {
-  type Plugin,
-  type PluginMetadata,
-  type PluginConfig,
-  type PluginState,
-  type PluginContext,
-  type PluginPermission,
-  type PluginPriority,
-  type PluginAPIVersion,
-  type PluginExtensionPoint,
-  type PluginResult,
-  type PluginHealthStatus,
-  type PluginManifest,
-  type PluginFactory,
-  type PluginAPIContext,
-  type PluginServiceRegistry,
-  type PluginEventSystem,
-  type PluginStorage,
-  type PluginHttpClient,
-  type PluginUtilities,
-  type PluginLogger,
-  type PluginError,
-  type PluginManagerEvents,
-  type PluginDiscoverySource,
-  type PluginMarketplaceEntry,
+  Plugin,
+  PluginMetadata,
+  PluginConfig,
+  PluginState,
+  PluginContext,
+  PluginPermission,
+  PluginPriority,
+  PluginAPIVersion,
+  PluginExtensionPoint,
+  PluginResult,
+  PluginHealthStatus,
+  PluginManifest,
+  PluginFactory,
+  PluginAPIContext,
+  PluginServiceRegistry,
+  PluginEventSystem,
+  PluginStorage,
+  PluginHttpClient,
+  PluginUtilities,
+  PluginLogger,
+  PluginError,
+  PluginManagerEvents,
+  PluginDiscoverySource,
+  PluginMarketplaceEntry,
   PluginContext as PluginContextEnum,
   PluginPermission as PluginPermissionEnum,
   PluginPriority as PluginPriorityEnum,
@@ -442,26 +442,26 @@ export {
   withContext,
   
   // Telemetry Types
-  type LogLevel,
-  type LogEntry,
-  type LogContext,
-  type LoggerConfig,
-  type LogDestination,
-  type LogFormatter,
-  type LogFilter,
-  type CorrelationId,
-  type ErrorInfo,
-  type PerformanceMetrics,
-  type Metric,
-  type MetricType,
-  type MetricCollector,
-  type ContextProvider,
-  type TelemetryEvents,
-  type ILogger,
-  type TelemetryConfig,
-  type MetricStats,
-  type ContextTrace,
-  type Timestamp,
+  LogLevel,
+  LogEntry,
+  LogContext,
+  LoggerConfig,
+  LogDestination,
+  LogFormatter,
+  LogFilter,
+  CorrelationId,
+  ErrorInfo,
+  PerformanceMetrics,
+  Metric,
+  MetricType,
+  MetricCollector,
+  ContextProvider,
+  TelemetryEvents,
+  ILogger,
+  TelemetryConfig,
+  MetricStats,
+  ContextTrace,
+  Timestamp,
   
   // Utility Functions
   createCorrelationId,

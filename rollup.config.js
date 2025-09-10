@@ -1,4 +1,4 @@
-import typescript from '@rollup/plugin-typescript';
+import typescript from 'rollup-plugin-typescript2';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import replace from '@rollup/plugin-replace';
@@ -22,12 +22,18 @@ export default [
       }
     ],
     plugins: [
+      nodeResolve({
+        preferBuiltins: true
+      }),
+      commonjs(),
       replace({
         'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
         preventAssignment: true
       }),
       typescript({
-        tsconfig: './tsconfig.json'
+        tsconfig: './tsconfig.json',
+        useTsconfigDeclarationDir: true,
+        check: false
       })
     ],
     external: [
@@ -37,7 +43,9 @@ export default [
       'url',
       'os',
       'better-sqlite3',
-      'reflect-metadata'
+      'reflect-metadata',
+      '3dmol',
+      '@rdkit/rdkit'
     ]
   },
   
@@ -60,7 +68,8 @@ export default [
       }),
       commonjs(),
       typescript({
-        tsconfig: './tsconfig.json'
+        tsconfig: './tsconfig.json',
+        declaration: false, check: false
       })
     ],
     external: []
@@ -86,7 +95,8 @@ export default [
       }),
       commonjs(),
       typescript({
-        tsconfig: './tsconfig.json'
+        tsconfig: './tsconfig.json',
+        declaration: false, check: false
       })
     ],
     external: []

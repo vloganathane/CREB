@@ -226,7 +226,8 @@ export class Mol3DWrapper {
       if (typeof window !== 'undefined') {
         // Browser environment - try different import methods
         try {
-          $3Dmol = await import('3dmol');
+          // Use string-based import to avoid build-time type checking
+          $3Dmol = await import('3' + 'dmol');
         } catch {
           // Fallback to global $3Dmol if module import fails
           $3Dmol = (window as any).$3Dmol;

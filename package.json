@@ -18,7 +18,7 @@
         "default": "./dist/index.esm.js"
       },
       "require": {
-        "types": "./dist/index.d.ts", 
+        "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
       }
     }
@@ -64,6 +64,7 @@
     "@types/jest": "^29.5.12",
     "jest": "^29.7.0",
     "rollup": "^4.12.0",
+    "rollup-plugin-typescript2": "^0.36.0",
     "ts-jest": "^29.1.2",
     "tslib": "^2.8.1",
     "typescript": "^5.3.3"
@@ -74,11 +75,7 @@
   },
   "optionalDependencies": {
     "@rdkit/rdkit": "^2023.9.2",
-    "3dmol": "^2.1.0"
-  },
-  "peerDependencies": {
-    "@rdkit/rdkit": "^2023.9.2",
-    "3dmol": "^2.1.0"
+    "3dmol": "^2.5.2"
   },
   "peerDependenciesMeta": {
     "@rdkit/rdkit": {
