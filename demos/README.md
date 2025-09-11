@@ -1,4 +1,17 @@
-# CREB Molecular Visualization Demos
+# CREB### 🤖 **[LATEST] AI-Enhanced Molecular Viewer - Phase 3 Demo** 🚀  
+**[ai-enhanced-molecular-viewer.html](ai-enhanced-molecular-viewer.html)** - **🌟 PHASE 3 FOUNDATION COMPLETE**
+
+**Experience next-generation chemical animation with AI and advanced physics!**
+- 🤖 **AI Reaction Classification**: TensorFlow.js machine learning for intelligent reaction analysis
+- ⚡ **Advanced Physics Engine**: Cannon.js molecular dynamics with realistic force calculations
+- 🧠 **Intelligent Caching**: Multi-level caching with IndexedDB persistence and performance analytics
+- 🎯 **Parameter Optimization**: AI-driven animation tuning based on reaction characteristics
+- 📊 **Real-time Analytics**: Live performance monitoring and intelligent system feedback
+
+**📖 [Complete Phase 3 Documentation](AI_ENHANCED_MOLECULAR_VIEWER_GUIDE.md)**
+
+### 🎬 **Animated Molecular Viewer - Phase 2 Demo** 🎬  
+**[animated-molecular-viewer.html](animated-molecular-viewer.html)** - **✅ PHASE 2 COMPLETE**olecular Visualization Demos
 
 This directory contains interactive demonstrations of the CREB molecular visualization system, showcasing the complete equation-to-animation pipeline with real molecular data.
 

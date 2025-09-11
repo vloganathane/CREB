@@ -7,6 +7,9 @@
 
 import { gsap } from 'gsap';
 import * as THREE from 'three';
+import { ReactionClassifier } from '../ai/ReactionClassifier';
+import { MolecularPhysicsEngine } from '../physics/MolecularPhysicsEngine';
+import { IntelligentCacheManager } from '../caching/IntelligentCacheManager';
 
 export interface AnimationConfig {
   duration: number;
@@ -77,11 +80,16 @@ export interface AtomMovement {
 }
 
 export class ReactionAnimationEngine {
-  private scene: THREE.Scene;
-  private camera: THREE.PerspectiveCamera;
-  private renderer: THREE.WebGLRenderer;
-  private timeline: gsap.core.Timeline;
+  private scene!: THREE.Scene;
+  private camera!: THREE.PerspectiveCamera;
+  private renderer!: THREE.WebGLRenderer;
+  private timeline!: gsap.core.Timeline;
   private config: AnimationConfig;
+  
+  // Phase 3: AI and Physics Integration
+  private aiClassifier: ReactionClassifier;
+  private physicsEngine: MolecularPhysicsEngine;
+  private cacheManager: IntelligentCacheManager;
   
   // Animation state
   private isPlaying: boolean = false;
@@ -110,6 +118,11 @@ export class ReactionAnimationEngine {
       audioEnabled: false,
       ...config
     };
+
+    // Initialize Phase 3 systems
+    this.aiClassifier = new ReactionClassifier();
+    this.physicsEngine = new MolecularPhysicsEngine();
+    this.cacheManager = new IntelligentCacheManager();
 
     this.initializeThreeJS(container);
     this.initializeGSAP();
@@ -179,6 +192,92 @@ export class ReactionAnimationEngine {
       onUpdate: () => this.onTimelineUpdate(),
       onComplete: () => this.onAnimationComplete()
     });
+  }
+
+  /**
+   * Phase 3: AI-Enhanced Animation Creation
+   * Uses machine learning to optimize animation parameters
+   */
+  async createAIEnhancedAnimation(
+    reactants: MolecularData[],
+    products: MolecularData[],
+    reactionEquation: string
+  ): Promise<void> {
+    try {
+      // Step 1: Use AI to classify reaction type and predict optimal parameters
+      const reactionType = await this.aiClassifier.classifyReaction(reactionEquation);
+      const optimizedParams = await this.aiClassifier.optimizeAnimationParameters(
+        reactionType,
+        reactants,
+        products
+      );
+
+      // Step 2: Check intelligent cache for similar animations
+      const cacheKey = `animation:${reactionEquation}:${JSON.stringify(optimizedParams)}`;
+      const cachedAnimation = await this.cacheManager.get(cacheKey);
+      
+      if (cachedAnimation && Array.isArray(cachedAnimation)) {
+        this.animationData = cachedAnimation as AnimationFrame[];
+        this.totalFrames = cachedAnimation.length;
+        return;
+      }
+
+      // Step 3: Use physics engine for realistic molecular dynamics
+      const physicsConfig = {
+        enableCollision: reactionType.characteristics.hasEnergyRelease || reactionType.characteristics.hasGasProduction,
+        temperature: optimizedParams.temperature || 298,
+        pressure: optimizedParams.pressure || 1,
+        solvent: optimizedParams.solvent || 'vacuum'
+      };
+
+      this.physicsEngine.configure(physicsConfig);
+
+      // Step 4: Generate physics-based animation frames
+      const transitions = this.generateMolecularTransitions(reactants, products, reactionType);
+      const animationFrames = await this.physicsEngine.simulateReactionPathway(
+        transitions,
+        optimizedParams.duration || this.config.duration
+      );
+
+      // Step 5: Cache the generated animation
+      await this.cacheManager.set(cacheKey, animationFrames);
+
+      this.animationData = animationFrames;
+      this.totalFrames = animationFrames.length;
+
+    } catch (error) {
+      console.error('AI-enhanced animation creation failed:', error);
+      // Fallback to traditional animation
+      await this.createReactionAnimation(reactants, products);
+    }
+  }
+
+  /**
+   * Generate molecular transitions based on AI classification
+   */
+  private generateMolecularTransitions(
+    reactants: MolecularData[],
+    products: MolecularData[],
+    reactionType: any
+  ): MolecularTransition[] {
+    const transitions: MolecularTransition[] = [];
+
+    // Generate transitions based on reaction mechanism
+    switch (reactionType.mechanism) {
+      case 'substitution':
+        transitions.push(...this.generateSubstitutionTransitions(reactants, products));
+        break;
+      case 'addition':
+        transitions.push(...this.generateAdditionTransitions(reactants, products));
+        break;
+      case 'elimination':
+        transitions.push(...this.generateEliminationTransitions(reactants, products));
+        break;
+      default:
+        transitions.push(...this.generateGenericTransitions(reactants, products));
+    }
+
+    return transitions;
   }
 
   /**
@@ -910,6 +1009,90 @@ export class ReactionAnimationEngine {
     
     this.atomMeshes.clear();
     this.bondMeshes.clear();
+  }
+
+  /**
+   * Generate substitution reaction transitions
+   */
+  private generateSubstitutionTransitions(
+    reactants: MolecularData[],
+    products: MolecularData[]
+  ): MolecularTransition[] {
+    const transitions: MolecularTransition[] = [];
+    
+    for (let i = 0; i < Math.min(reactants.length, products.length); i++) {
+      transitions.push({
+        startStructure: reactants[i],
+        endStructure: products[i],
+        transitionType: 'rearrangement',
+        energyBarrier: 25.0, // kcal/mol typical for substitution
+      });
+    }
+    
+    return transitions;
+  }
+
+  /**
+   * Generate addition reaction transitions
+   */
+  private generateAdditionTransitions(
+    reactants: MolecularData[],
+    products: MolecularData[]
+  ): MolecularTransition[] {
+    const transitions: MolecularTransition[] = [];
+    
+    for (let i = 0; i < Math.min(reactants.length, products.length); i++) {
+      transitions.push({
+        startStructure: reactants[i],
+        endStructure: products[i],
+        transitionType: 'formation',
+        energyBarrier: 15.0, // kcal/mol typical for addition
+      });
+    }
+    
+    return transitions;
+  }
+
+  /**
+   * Generate elimination reaction transitions
+   */
+  private generateEliminationTransitions(
+    reactants: MolecularData[],
+    products: MolecularData[]
+  ): MolecularTransition[] {
+    const transitions: MolecularTransition[] = [];
+    
+    for (let i = 0; i < Math.min(reactants.length, products.length); i++) {
+      transitions.push({
+        startStructure: reactants[i],
+        endStructure: products[i],
+        transitionType: 'breaking',
+        energyBarrier: 30.0, // kcal/mol typical for elimination
+      });
+    }
+    
+    return transitions;
+  }
+
+  /**
+   * Generate generic reaction transitions
+   */
+  private generateGenericTransitions(
+    reactants: MolecularData[],
+    products: MolecularData[]
+  ): MolecularTransition[] {
+    const transitions: MolecularTransition[] = [];
+    
+    for (let i = 0; i < Math.min(reactants.length, products.length); i++) {
+      transitions.push({
+        startStructure: reactants[i],
+        endStructure: products[i],
+        transitionType: 'rearrangement',
+        energyBarrier: 20.0, // kcal/mol generic barrier
+      });
+    }
+    
+    return transitions;
   }
 
   /**

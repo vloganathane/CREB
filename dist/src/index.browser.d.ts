@@ -3,8 +3,13 @@
  * This file exclu// Reaction Animation System (browser-compatible)
 export { ReactionAnimator } from './visualization/ReactionAnimation';
 
-// Phase 2: Advanced Animation Engine (browser-compatible)
+// Phase 2: Advanced Animation Engine (NEW)
 export { ReactionAnimationEngine } from './animation/ReactionAnimationEngine';
+
+// Phase 3: AI and Physics Integration (NEW)
+export { ReactionClassifier } from './ai/ReactionClassifier';
+export { MolecularPhysicsEngine } from './physics/MolecularPhysicsEngine';
+export { IntelligentCacheManager } from './caching/IntelligentCacheManager';
 
 // 3D Visualization System (browser-compatible)
 export { Mol3DWrapper } from './visualization/Mol3DWrapper';

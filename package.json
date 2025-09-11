@@ -70,11 +70,15 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
+    "@tensorflow/tfjs": "^4.22.0",
     "@types/three": "^0.180.0",
     "better-sqlite3": "^12.2.0",
+    "cannon-es": "^0.20.0",
     "gsap": "^3.13.0",
+    "idb": "^8.0.3",
     "reflect-metadata": "^0.2.2",
-    "three": "^0.180.0"
+    "three": "^0.180.0",
+    "web-vitals": "^5.1.0"
   },
   "optionalDependencies": {
     "@rdkit/rdkit": "^2023.9.2",

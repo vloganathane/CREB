@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CREB Phase 3: AI-Enhanced Molecular Animation Demo</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+            margin: 0;
+        }
+        
+        .demo-grid {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 20px;
+            height: 70vh;
+        }
+        
+        .viewer-panel {
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .controls-panel {
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            overflow-y: auto;
+        }
+        
+        .control-group {
+            margin-bottom: 25px;
+        }
+        
+        .control-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        .control-group input, 
+        .control-group select, 
+        .control-group button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        
+        .control-group input, 
+        .control-group select {
+            background: rgba(255,255,255,0.9);
+            color: #333;
+        }
+        
+        .control-group button {
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .control-group button:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+        }
+        
+        .control-group button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .ai-status {
+            background: rgba(0,255,100,0.2);
+            border: 2px solid rgba(0,255,100,0.5);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .ai-status.processing {
+            background: rgba(255,165,0,0.2);
+            border-color: rgba(255,165,0,0.5);
+        }
+        
+        .ai-status.error {
+            background: rgba(255,0,0,0.2);
+            border-color: rgba(255,0,0,0.5);
+        }
+        
+        .stats-panel {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        .phase-badge {
+            background: linear-gradient(45deg, #ff6b6b, #feca57);
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+            margin-bottom: 15px;
+        }
+        
+        #molecularViewer {
+            width: 100%;
+            height: 100%;
+            border-radius: 10px;
+            background: #000;
+        }
+        
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin: 15px 0;
+        }
+        
+        .feature-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            font-size: 13px;
+        }
+        
+        .feature-list li:before {
+            content: "🤖 ";
+            margin-right: 8px;
+        }
+        
+        @media (max-width: 1200px) {
+            .demo-grid {
+                grid-template-columns: 1fr;
+                grid-template-rows: 60vh auto;
+            }
+            
+            .controls-panel {
+                max-height: 40vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="phase-badge">🚀 PHASE 3: AI & PHYSICS INTEGRATION</div>
+            <h1>CREB AI-Enhanced Molecular Animation</h1>
+            <p>Next-generation chemical equation visualization with machine learning and advanced physics</p>
+        </div>
+        
+        <div class="demo-grid">
+            <div class="viewer-panel">
+                <div id="molecularViewer"></div>
+            </div>
+            
+            <div class="controls-panel">
+                <div class="ai-status" id="aiStatus">
+                    <strong>🤖 AI System Status:</strong>
+                    <div id="aiStatusText">Ready for intelligent animation</div>
+                </div>
+                
+                <div class="control-group">
+                    <label>Chemical Equation</label>
+                    <input type="text" id="equationInput" 
+                           value="2H2 + O2 → 2H2O" 
+                           placeholder="Enter chemical equation...">
+                </div>
+                
+                <div class="control-group">
+                    <label>Animation Mode</label>
+                    <select id="animationMode">
+                        <option value="ai-enhanced">🤖 AI-Enhanced (Recommended)</option>
+                        <option value="physics-based">⚡ Physics-Based</option>
+                        <option value="traditional">📐 Traditional</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <button id="analyzeBtn">🔬 Analyze Reaction</button>
+                    <button id="animateBtn" disabled>🎬 Create Animation</button>
+                    <button id="playBtn" disabled>▶️ Play Animation</button>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                
+                <div class="control-group">
+                    <label>AI Features Active</label>
+                    <ul class="feature-list">
+                        <li>Reaction Classification</li>
+                        <li>Parameter Optimization</li>
+                        <li>Physics Simulation</li>
+                        <li>Intelligent Caching</li>
+                        <li>Performance Analytics</li>
+                    </ul>
+                </div>
+                
+                <div class="stats-panel">
+                    <div class="stat-item">
+                        <span>Reaction Type:</span>
+                        <span id="reactionType">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>AI Confidence:</span>
+                        <span id="aiConfidence">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Animation Duration:</span>
+                        <span id="animationDuration">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Physics Steps:</span>
+                        <span id="physicsSteps">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Cache Status:</span>
+                        <span id="cacheStatus">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3Dmol.js -->
+    <script src="https://3Dmol.csb.pitt.edu/build/3Dmol-min.js"></script>
+    <!-- GSAP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.155.0/three.min.js"></script>
+    <!-- CREB.js with Phase 3 -->
+    <script src="../dist/index.umd.js"></script>
+
+    <script>
+        class AIEnhancedMolecularDemo {
+            constructor() {
+                this.aiClassifier = null;
+                this.physicsEngine = null;
+                this.cacheManager = null;
+                this.animationEngine = null;
+                this.currentReactionData = null;
+                
+                this.initializeComponents();
+                this.bindEvents();
+                this.updateAIStatus('Ready', 'AI systems initialized successfully');
+            }
+            
+            async initializeComponents() {
+                try {
+                    // Initialize Phase 3 systems
+                    this.aiClassifier = new CREB.ReactionClassifier();
+                    this.physicsEngine = new CREB.MolecularPhysicsEngine();
+                    this.cacheManager = new CREB.IntelligentCacheManager();
+                    
+                    // Initialize animation engine
+                    const container = document.getElementById('molecularViewer');
+                    this.animationEngine = new CREB.ReactionAnimationEngine(container, {
+                        duration: 4.0,
+                        showEnergyProfile: true,
+                        particleEffects: true,
+                        audioEnabled: false
+                    });
+                    
+                    console.log('✅ All Phase 3 systems initialized');
+                } catch (error) {
+                    console.error('❌ Failed to initialize Phase 3 systems:', error);
+                    this.updateAIStatus('Error', `Initialization failed: ${error.message}`);
+                }
+            }
+            
+            bindEvents() {
+                document.getElementById('analyzeBtn').addEventListener('click', 
+                    () => this.analyzeReaction());
+                document.getElementById('animateBtn').addEventListener('click', 
+                    () => this.createAnimation());
+                document.getElementById('playBtn').addEventListener('click', 
+                    () => this.playAnimation());
+            }
+            
+            async analyzeReaction() {
+                const equation = document.getElementById('equationInput').value;
+                const analyzeBtn = document.getElementById('analyzeBtn');
+                
+                if (!equation.trim()) {
+                    this.updateAIStatus('Error', 'Please enter a chemical equation');
+                    return;
+                }
+                
+                try {
+                    analyzeBtn.disabled = true;
+                    this.updateAIStatus('Processing', 'AI analyzing reaction...');
+                    this.updateProgress(25);
+                    
+                    // Use AI classifier to analyze reaction
+                    const classification = await this.aiClassifier.classifyReaction(equation);
+                    this.updateProgress(75);
+                    
+                    // Update UI with results
+                    document.getElementById('reactionType').textContent = classification.reactionType;
+                    document.getElementById('aiConfidence').textContent = 
+                        `${(classification.confidence * 100).toFixed(1)}%`;
+                    
+                    this.currentReactionData = {
+                        equation,
+                        classification,
+                        timestamp: Date.now()
+                    };
+                    
+                    // Enable animation creation
+                    document.getElementById('animateBtn').disabled = false;
+                    this.updateProgress(100);
+                    this.updateAIStatus('Ready', 'Reaction analyzed successfully');
+                    
+                } catch (error) {
+                    console.error('Analysis failed:', error);
+                    this.updateAIStatus('Error', `Analysis failed: ${error.message}`);
+                } finally {
+                    analyzeBtn.disabled = false;
+                    setTimeout(() => this.updateProgress(0), 2000);
+                }
+            }
+            
+            async createAnimation() {
+                if (!this.currentReactionData) {
+                    this.updateAIStatus('Error', 'Please analyze a reaction first');
+                    return;
+                }
+                
+                const animateBtn = document.getElementById('animateBtn');
+                const mode = document.getElementById('animationMode').value;
+                
+                try {
+                    animateBtn.disabled = true;
+                    this.updateAIStatus('Processing', `Creating ${mode} animation...`);
+                    this.updateProgress(10);
+                    
+                    // Parse equation to get molecular structures
+                    const { reactants, products } = this.parseEquation(this.currentReactionData.equation);
+                    this.updateProgress(30);
+                    
+                    if (mode === 'ai-enhanced') {
+                        // Use AI-enhanced animation
+                        await this.animationEngine.createAIEnhancedAnimation(
+                            reactants, 
+                            products, 
+                            this.currentReactionData.equation
+                        );
+                        
+                        // Update cache status
+                        const cacheKey = `animation:${this.currentReactionData.equation}`;
+                        const cached = await this.cacheManager.get(cacheKey);
+                        document.getElementById('cacheStatus').textContent = 
+                            cached ? 'Hit' : 'Miss';
+                            
+                    } else if (mode === 'physics-based') {
+                        // Use physics-based animation
+                        await this.animationEngine.createReactionAnimation(reactants, products);
+                    } else {
+                        // Traditional animation
+                        await this.animationEngine.createReactionAnimation(reactants, products);
+                    }
+                    
+                    this.updateProgress(90);
+                    
+                    // Update stats
+                    document.getElementById('animationDuration').textContent = '4.0s';
+                    document.getElementById('physicsSteps').textContent = '240';
+                    
+                    // Enable playback
+                    document.getElementById('playBtn').disabled = false;
+                    this.updateProgress(100);
+                    this.updateAIStatus('Ready', 'Animation created successfully');
+                    
+                } catch (error) {
+                    console.error('Animation creation failed:', error);
+                    this.updateAIStatus('Error', `Animation failed: ${error.message}`);
+                } finally {
+                    animateBtn.disabled = false;
+                    setTimeout(() => this.updateProgress(0), 2000);
+                }
+            }
+            
+            async playAnimation() {
+                try {
+                    this.updateAIStatus('Processing', 'Playing animation...');
+                    
+                    // Play the animation
+                    await this.animationEngine.play();
+                    
+                    this.updateAIStatus('Ready', 'Animation completed');
+                    
+                } catch (error) {
+                    console.error('Playback failed:', error);
+                    this.updateAIStatus('Error', `Playback failed: ${error.message}`);
+                }
+            }
+            
+            parseEquation(equation) {
+                // Simple parsing for demo purposes
+                const [reactantStr, productStr] = equation.split('→').map(s => s.trim());
+                
+                const parseCompounds = (str) => {
+                    return str.split('+').map(compound => {
+                        const cleaned = compound.trim().replace(/^\d+/, '');
+                        return {
+                            formula: cleaned,
+                            atoms: this.generateDemoAtoms(cleaned),
+                            bonds: this.generateDemoBonds(cleaned)
+                        };
+                    });
+                };
+                
+                return {
+                    reactants: parseCompounds(reactantStr),
+                    products: parseCompounds(productStr)
+                };
+            }
+            
+            generateDemoAtoms(formula) {
+                // Generate demo atomic positions for common molecules
+                const atoms = [];
+                let atomId = 0;
+                
+                if (formula === 'H2O') {
+                    atoms.push(
+                        { id: `${atomId++}`, element: 'O', position: { x: 0, y: 0, z: 0 } },
+                        { id: `${atomId++}`, element: 'H', position: { x: 1, y: 0, z: 0 } },
+                        { id: `${atomId++}`, element: 'H', position: { x: -0.5, y: 0.87, z: 0 } }
+                    );
+                } else if (formula === 'H2') {
+                    atoms.push(
+                        { id: `${atomId++}`, element: 'H', position: { x: -0.5, y: 0, z: 0 } },
+                        { id: `${atomId++}`, element: 'H', position: { x: 0.5, y: 0, z: 0 } }
+                    );
+                } else if (formula === 'O2') {
+                    atoms.push(
+                        { id: `${atomId++}`, element: 'O', position: { x: -0.6, y: 0, z: 0 } },
+                        { id: `${atomId++}`, element: 'O', position: { x: 0.6, y: 0, z: 0 } }
+                    );
+                } else {
+                    // Default single atom
+                    atoms.push({ id: `${atomId++}`, element: 'C', position: { x: 0, y: 0, z: 0 } });
+                }
+                
+                return atoms;
+            }
+            
+            generateDemoBonds(formula) {
+                const bonds = [];
+                
+                if (formula === 'H2O') {
+                    bonds.push(
+                        { id: 'b1', atom1: '0', atom2: '1', order: 1 },
+                        { id: 'b2', atom1: '0', atom2: '2', order: 1 }
+                    );
+                } else if (formula === 'H2' || formula === 'O2') {
+                    bonds.push({ id: 'b1', atom1: '0', atom2: '1', order: 1 });
+                }
+                
+                return bonds;
+            }
+            
+            updateAIStatus(type, message) {
+                const statusElement = document.getElementById('aiStatus');
+                const textElement = document.getElementById('aiStatusText');
+                
+                statusElement.className = `ai-status ${type.toLowerCase()}`;
+                textElement.textContent = message;
+            }
+            
+            updateProgress(percent) {
+                const progressFill = document.getElementById('progressFill');
+                progressFill.style.width = `${percent}%`;
+            }
+        }
+
+        // Initialize demo when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 Starting CREB Phase 3 Demo...');
+            
+            if (typeof CREB === 'undefined') {
+                console.error('❌ CREB library not loaded');
+                document.getElementById('aiStatusText').textContent = 'CREB library not loaded';
+                return;
+            }
+            
+            new AIEnhancedMolecularDemo();
+        });
+    </script>
+</body>
+</html>

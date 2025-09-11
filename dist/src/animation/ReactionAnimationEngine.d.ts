@@ -71,6 +71,9 @@ export declare class ReactionAnimationEngine {
     private renderer;
     private timeline;
     private config;
+    private aiClassifier;
+    private physicsEngine;
+    private cacheManager;
     private isPlaying;
     private currentFrame;
     private totalFrames;
@@ -86,6 +89,15 @@ export declare class ReactionAnimationEngine {
     private initializeThreeJS;
     private setupLighting;
     private initializeGSAP;
+    /**
+     * Phase 3: AI-Enhanced Animation Creation
+     * Uses machine learning to optimize animation parameters
+     */
+    createAIEnhancedAnimation(reactants: MolecularData[], products: MolecularData[], reactionEquation: string): Promise<void>;
+    /**
+     * Generate molecular transitions based on AI classification
+     */
+    private generateMolecularTransitions;
     /**
      * Create animated transition from reactants to products
      */
@@ -148,6 +160,22 @@ export declare class ReactionAnimationEngine {
     private startRenderLoop;
     private onWindowResize;
     private clearScene;
+    /**
+     * Generate substitution reaction transitions
+     */
+    private generateSubstitutionTransitions;
+    /**
+     * Generate addition reaction transitions
+     */
+    private generateAdditionTransitions;
+    /**
+     * Generate elimination reaction transitions
+     */
+    private generateEliminationTransitions;
+    /**
+     * Generate generic reaction transitions
+     */
+    private generateGenericTransitions;
     /**
      * Cleanup
      */
