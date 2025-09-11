@@ -13,6 +13,7 @@ export { EnhancedChemicalEquationBalancer, type EnhancedBalancedEquation, type C
 export { Canvas2DRenderer } from './visualization/Canvas2DRenderer';
 export { SVGRenderer } from './visualization/SVGRenderer';
 export { MolecularVisualization, type MolecularVisualizationConfig, type MolecularStyleOptions, type MoleculeVisualizationData } from './visualization/SimplifiedMolecularVisualization';
+export { ReactionAnimator } from './visualization/ReactionAnimation';
 import { MolecularVisualization as MolViz } from './visualization/SimplifiedMolecularVisualization';
 export type MoleculeForVisualization = {
     elements: string[];

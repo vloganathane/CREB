@@ -4,6 +4,7 @@ export { ElementCounter, EquationParser, calculateMolarWeight } from './utils';
 export * from './types';
 export * from './constants';
 export * from './visualization';
+export { ReactionAnimator } from './visualization/ReactionAnimation';
 export { ChemicalFormula, ElementSymbol, BalancedEquationString, SMILESNotation, InChINotation, CASNumber, ValidElement, TypedElementCount, TypedCompound, TypedReaction, ReactionType, PhaseState, isChemicalFormula, isElementSymbol, isBalancedEquation, parseFormula, createChemicalFormula, createElementSymbol, ChemicalFormulaError, EquationBalancingError } from './advancedTypes';
 export { EnhancedBalancer } from './enhancedBalancerSimple';
 export { EnhancedChemicalEquationBalancer, EnhancedBalancedEquation, CompoundInfo } from './enhancedBalancer';

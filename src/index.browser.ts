@@ -62,6 +62,9 @@ export {
   type MoleculeVisualizationData
 } from './visualization/SimplifiedMolecularVisualization';
 
+// Reaction Animation System (Browser-compatible)
+export { ReactionAnimator } from './visualization/ReactionAnimation';
+
 // Import the class for use in factory function
 import { MolecularVisualization as MolViz } from './visualization/SimplifiedMolecularVisualization';
 

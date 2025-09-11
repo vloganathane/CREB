@@ -148,7 +148,7 @@ export declare class ReactionAnimator {
      */
     parseSMILES(smiles: string): Promise<any>;
     /**
-     * Generate 3D coordinates for a molecule
+     * Generate 3D coordinates for a molecule using PubChem SDF data
      */
     generate3DCoordinates(molecule: any): Promise<any>;
     /**

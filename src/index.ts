@@ -7,6 +7,9 @@ export * from './constants';
 // Molecular Visualization System (NEW)
 export * from './visualization';
 
+// Reaction Animation System (NEW - Phase 0 Integration)
+export { ReactionAnimator } from './visualization/ReactionAnimation';
+
 // Enhanced TypeScript Support (NEW) - Selective exports to avoid conflicts
 export {
   // Branded Types

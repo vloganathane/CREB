@@ -13,6 +13,7 @@ import { EnergyProfile, EnergyProfilePoint, BondChange, TransitionState } from '
 import { BalancedEquation } from '../types';
 import { RDKitWrapper, RDKitMolecule } from './RDKitWrapper';
 import { Mol3DWrapper } from './Mol3DWrapper';
+import { PubChemIntegration } from './PubChemIntegration';
 
 export interface AnimationFrame {
   /** Frame number in animation sequence */
@@ -229,7 +230,7 @@ export class ReactionAnimator {
   }
 
   /**
-   * Generate 3D coordinates for a molecule
+   * Generate 3D coordinates for a molecule using PubChem SDF data
    */
   async generate3DCoordinates(molecule: any): Promise<any> {
     if (!this.rdkitWrapper) {
@@ -237,10 +238,44 @@ export class ReactionAnimator {
     }
 
     try {
-      // For now, return the molecule as-is
-      // TODO: Add actual 3D coordinate generation when RDKit supports it
-      console.warn('⚠️ 3D coordinate generation not yet implemented, using 2D molecule');
-      return molecule;
+      // If molecule has a CID, get real 3D structure from PubChem
+      if (molecule.cid) {
+        console.log(`🔬 Fetching real 3D structure from PubChem for CID: ${molecule.cid}`);
+        const pubchem = new PubChemIntegration();
+        const sdf3D = await pubchem.getCompound3DSDF(molecule.cid);
+        
+        if (sdf3D) {
+          console.log('✅ Retrieved real 3D SDF structure from PubChem');
+          return { molblock: sdf3D, format: 'sdf', source: 'PubChem_3D' };
+        }
+      }
+
+      // If molecule has SMILES, try to get PubChem data by name/SMILES lookup
+      if (molecule.smiles || molecule.name) {
+        console.log(`🔍 Looking up ${molecule.name || molecule.smiles} in PubChem`);
+        const pubchem = new PubChemIntegration();
+        
+        try {
+          const searchTerm = molecule.name || molecule.smiles;
+          const searchResult = await pubchem.searchCompounds(searchTerm, { searchType: 'name', limit: 1 });
+          
+          if (searchResult.success && searchResult.compounds.length > 0) {
+            const compound = searchResult.compounds[0];
+            const sdf3D = await pubchem.getCompound3DSDF(compound.cid);
+            if (sdf3D) {
+              console.log(`✅ Found PubChem 3D structure for ${searchTerm} (CID: ${compound.cid})`);
+              return { molblock: sdf3D, format: 'sdf', source: 'PubChem_3D' };
+            }
+          }
+        } catch (searchError) {
+          console.warn(`⚠️ PubChem lookup failed for ${molecule.name || molecule.smiles}:`, searchError);
+        }
+      }
+
+      // Fallback: use RDKit for basic 2D structure (but warn about it)
+      console.warn('⚠️ Using 2D fallback - no PubChem 3D data available');
+      return { molblock: molecule.molblock || '', format: 'mol', source: 'RDKit_2D' };
+      
     } catch (error) {
       console.error('❌ 3D coordinate generation failed:', error);
       throw error;
@@ -259,20 +294,26 @@ export class ReactionAnimator {
       // Parse SMILES with RDKit
       const molecule = await this.parseSMILES(smiles);
       
-      // Generate 3D coordinates (currently returns 2D)
+      // Generate 3D coordinates using PubChem integration
       const mol3D = await this.generate3DCoordinates(molecule);
       
-      // Get MOL block from RDKit molecule
+      // Get molecular data
       let molData: string;
+      let format: 'sdf' | 'pdb' | 'mol2' = 'sdf';
+      
       if (mol3D && mol3D.molblock) {
         molData = mol3D.molblock;
+        format = mol3D.format === 'sdf' ? 'sdf' : 'pdb'; // Use PDB as fallback format
+        console.log(`🔬 Using ${mol3D.source} data for ${moleculeId}`);
       } else {
-        // Fallback: create simple MOL format from SMILES
+        // Fallback: create simple MOL format from SMILES (convert to PDB format)
+        console.warn(`⚠️ No 3D data available for ${smiles}, using 2D fallback`);
         molData = await this.createMolBlockFromSMILES(smiles);
+        format = 'pdb';
       }
       
-      // Add to 3D scene
-      await this.mol3dWrapper.addMolecule(moleculeId, molData, 'sdf');
+      // Add to 3D scene with correct format
+      await this.mol3dWrapper.addMolecule(moleculeId, molData, format);
       
       // Apply default styling (fix setStyle signature)
       this.mol3dWrapper.setStyle({
