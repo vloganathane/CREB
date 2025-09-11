@@ -8449,7 +8449,12 @@ $$$$
     export { ReactionAnimator } from './visualization/ReactionAnimation';
 
     // Phase 2: Advanced Animation Engine (browser-compatible)
-    export { ReactionAnimationEngine } from './animation/ReactionAnimationEngine';s Node.js-specific functionality to ensure browser compatibility
+    export { ReactionAnimationEngine } from './animation/ReactionAnimationEngine';
+
+    // 3D Visualization System (browser-compatible)
+    export { Mol3DWrapper } from './visualization/Mol3DWrapper';
+    export { PubChemIntegration } from './visualization/PubChemIntegration';
+    export { RDKitWrapper } from './visualization/RDKitWrapper';s Node.js-specific functionality to ensure browser compatibility
      */
     // Core chemistry functionality (browser-compatible)
     function convertMoleculeToVisualization(molecule) {
