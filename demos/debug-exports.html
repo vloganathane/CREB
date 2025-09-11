@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple CREB Export Test</title>
+</head>
+<body>
+    <h1>CREB Export Debug</h1>
+    <div id="output"></div>
+    
+    <script src="../dist/index.umd.js"></script>
+    <script>
+        const output = document.getElementById('output');
+        
+        function log(msg) {
+            output.innerHTML += '<div>' + msg + '</div>';
+            console.log(msg);
+        }
+        
+        log('🔍 Testing CREB exports...');
+        
+        // Check if CREB exists
+        if (typeof CREB !== 'undefined') {
+            log('✅ CREB is defined');
+            log('📋 CREB keys: ' + Object.keys(CREB).join(', '));
+            
+            // Check specific exports
+            if (CREB.ChemicalEquationBalancer) {
+                log('✅ ChemicalEquationBalancer found');
+            } else {
+                log('❌ ChemicalEquationBalancer not found');
+            }
+            
+            if (CREB.ReactionAnimator) {
+                log('✅ ReactionAnimator found');
+                try {
+                    const animator = new CREB.ReactionAnimator();
+                    log('✅ ReactionAnimator instantiated successfully');
+                } catch (e) {
+                    log('❌ ReactionAnimator failed to instantiate: ' + e.message);
+                }
+            } else {
+                log('❌ ReactionAnimator not found');
+            }
+            
+        } else if (typeof window.CREB !== 'undefined') {
+            log('✅ window.CREB is defined');
+            log('📋 window.CREB keys: ' + Object.keys(window.CREB).join(', '));
+        } else {
+            log('❌ CREB not found at all');
+        }
+    </script>
+</body>
+</html>
