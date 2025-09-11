@@ -1,0 +1,180 @@
+/**
+ * CREB Phase 2: Animated Reaction Transition Engine
+ *
+ * This module provides smooth, physics-based animations between
+ * reactant and product molecular states using GSAP and Three.js.
+ */
+import * as THREE from 'three';
+export interface AnimationConfig {
+    duration: number;
+    easing: string;
+    showEnergyProfile: boolean;
+    showBondTransitions: boolean;
+    particleEffects: boolean;
+    audioEnabled: boolean;
+}
+export interface MolecularTransition {
+    startStructure: MolecularData;
+    endStructure: MolecularData;
+    transitionType: 'formation' | 'breaking' | 'rearrangement';
+    energyBarrier: number;
+    transitionState?: MolecularData;
+}
+export interface AnimationFrame {
+    timestamp: number;
+    molecularStates: MolecularState[];
+    energyLevel: number;
+    bondChanges: BondChange[];
+    atomMovements: AtomMovement[];
+}
+export interface MolecularState {
+    atoms: AtomState[];
+    bonds: BondState[];
+    overallCharge: number;
+    spinMultiplicity: number;
+}
+export interface AtomState {
+    id: string;
+    element: string;
+    position: THREE.Vector3;
+    charge: number;
+    hybridization: string;
+    color: string;
+    radius: number;
+}
+export interface BondState {
+    id: string;
+    atom1: string;
+    atom2: string;
+    order: number;
+    length: number;
+    strength: number;
+    color: string;
+}
+export interface BondChange {
+    type: 'formation' | 'breaking' | 'order_change';
+    bondId: string;
+    startOrder: number;
+    endOrder: number;
+    timeline: number[];
+}
+export interface AtomMovement {
+    atomId: string;
+    startPosition: THREE.Vector3;
+    endPosition: THREE.Vector3;
+    trajectory: THREE.Vector3[];
+    speed: number;
+}
+export declare class ReactionAnimationEngine {
+    private scene;
+    private camera;
+    private renderer;
+    private timeline;
+    private config;
+    private isPlaying;
+    private currentFrame;
+    private totalFrames;
+    private animationData;
+    private atomMeshes;
+    private bondMeshes;
+    private energyProfileMesh;
+    private particleSystem;
+    private onProgress?;
+    private onComplete?;
+    private onFrameUpdate?;
+    constructor(container: HTMLElement, config?: Partial<AnimationConfig>);
+    private initializeThreeJS;
+    private setupLighting;
+    private initializeGSAP;
+    /**
+     * Create animated transition from reactants to products
+     */
+    createReactionAnimation(reactants: MolecularData[], products: MolecularData[]): Promise<void>;
+    /**
+     * Calculate molecular transitions between reactants and products
+     */
+    private calculateMolecularTransitions;
+    private determineTransitionType;
+    private calculateEnergyBarrier;
+    private generateTransitionState;
+    /**
+     * Generate frame-by-frame animation data
+     */
+    private generateAnimationFrames;
+    private interpolateMolecularState;
+    private calculateFrameEnergy;
+    private calculateBondChanges;
+    private calculateAtomMovements;
+    private generateAtomTrajectory;
+    /**
+     * Build 3D molecular geometries for rendering
+     */
+    private buildMolecularGeometries;
+    private createAtomMesh;
+    private createBondMesh;
+    /**
+     * Create GSAP animation timeline
+     */
+    private createAnimationTimeline;
+    private animateMolecularTransition;
+    private animateBondTransitions;
+    /**
+     * Create energy profile visualization
+     */
+    private createEnergyProfileVisualization;
+    /**
+     * Create particle effects for bond breaking/formation
+     */
+    private createParticleEffects;
+    /**
+     * Animation control methods
+     */
+    play(): void;
+    pause(): void;
+    reset(): void;
+    setProgress(progress: number): void;
+    /**
+     * Event handling
+     */
+    onProgressUpdate(callback: (progress: number) => void): void;
+    onFrameChange(callback: (frame: AnimationFrame) => void): void;
+    /**
+     * Utility methods
+     */
+    private getAtomColor;
+    private getAtomRadius;
+    private getBondColor;
+    private onTimelineUpdate;
+    private startRenderLoop;
+    private onWindowResize;
+    private clearScene;
+    /**
+     * Cleanup
+     */
+    dispose(): void;
+}
+interface MolecularData {
+    atoms?: Array<{
+        id?: string;
+        element: string;
+        position: {
+            x: number;
+            y: number;
+            z: number;
+        };
+        charge?: number;
+        hybridization?: string;
+    }>;
+    bonds?: Array<{
+        id?: string;
+        atom1: string;
+        atom2: string;
+        order: number;
+        length?: number;
+        strength?: number;
+    }>;
+    charge?: number;
+    spinMultiplicity?: number;
+}
+export {};
+//# sourceMappingURL=ReactionAnimationEngine.d.ts.map

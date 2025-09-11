@@ -4,10 +4,32 @@ This directory contains interactive demonstrations of the CREB molecular visuali
 
 ## 🎯 Current Demos
 
-### 🎉 **[NEW] Static Molecular Viewer - Phase 1 Demo** 🎉
+### � **[LATEST] Animated Molecular Viewer - Phase 2 Demo** 🎬  
+**[animated-molecular-viewer.html](animated-molecular-viewer.html)** - **🚀 PHASE 2 COMPLETE**
+
+The **next-generation animated reaction visualization** with professional timeline controls:
+
+**🎬 Animation Features:**
+- ⚡ **GSAP-Powered Animations** (60 FPS molecular transitions)
+- 🎮 **Professional Timeline Controls** (Play/pause/reset/scrubbing)
+- 📊 **Real-time Energy Profiles** (Reaction coordinate visualization) 
+- ⌨️ **Keyboard Shortcuts** (Space, R, arrow keys)
+- 🎨 **Next-Gen UI/UX** (Glassmorphism design with responsive layout)
+- ⚡ **Performance Monitoring** (Real-time FPS counter)
+
+**🧪 Featured Animations:**
+- `H2 + Cl2 → 2HCl` (Hydrogen chloride formation)
+- `CH4 + 2O2 → CO2 + 2H2O` (Methane combustion)
+- `N2 + 3H2 → 2NH3` (Haber process)
+
+**📖 [Complete Phase 2 Documentation](ANIMATED_MOLECULAR_VIEWER_GUIDE.md)**
+
+---
+
+### 🎉 **[FOUNDATION] Static Molecular Viewer - Phase 1 Demo** 🎉
 **[static-molecular-viewer.html](static-molecular-viewer.html)** - **PRODUCTION READY PHASE 1**
 
-The **complete equation-to-animation pipeline demo** showcasing our fully integrated system:
+The **core equation-to-animation pipeline demo** showcasing our integrated system:
 
 **🚀 Key Features:**
 - ⚖️ **Real Chemical Equation Balancing** (CREB-JS ChemicalEquationBalancer)

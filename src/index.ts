@@ -10,6 +10,9 @@ export * from './visualization';
 // Reaction Animation System (NEW - Phase 0 Integration)
 export { ReactionAnimator } from './visualization/ReactionAnimation';
 
+// Phase 2: Advanced Animation Engine (NEW)
+export { ReactionAnimationEngine } from './animation/ReactionAnimationEngine';
+
 // Enhanced TypeScript Support (NEW) - Selective exports to avoid conflicts
 export {
   // Branded Types

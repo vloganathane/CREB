@@ -1,6 +1,10 @@
 /**
  * Browser-compatible CREB-JS entry point
- * This file excludes Node.js-specific functionality to ensure browser compatibility
+ * This file exclu// Reaction Animation System (browser-compatible)
+export { ReactionAnimator } from './visualization/ReactionAnimation';
+
+// Phase 2: Advanced Animation Engine (browser-compatible)
+export { ReactionAnimationEngine } from './animation/ReactionAnimationEngine';s Node.js-specific functionality to ensure browser compatibility
  */
 export { ChemicalEquationBalancer } from './balancer';
 export { Stoichiometry } from './stoichiometry';
