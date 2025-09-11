@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CREB Static Molecular Viewer - Phase 1 Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 20px 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: #4a5568;
+        }
+
+        .status-badge {
+            background: #48bb78;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .hero {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 16px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 32px;
+        }
+
+        .main-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .equation-input-section {
+            padding: 30px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .equation-input {
+            flex: 1;
+            padding: 16px 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 18px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            transition: all 0.3s ease;
+        }
+
+        .equation-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            padding: 16px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f7fafc;
+            color: #4a5568;
+            border: 2px solid #e2e8f0;
+        }
+
+        .btn-secondary:hover {
+            background: #edf2f7;
+        }
+
+        .molecule-grid {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 30px;
+            padding: 30px;
+            align-items: center;
+            min-height: 500px;
+        }
+
+        .molecule-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .molecule-viewer {
+            width: 100%;
+            height: 400px;
+            border: 2px solid #e2e8f0;
+            border-radius: 16px;
+            background: #000;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .molecule-info {
+            margin-top: 16px;
+            padding: 16px;
+            background: #f7fafc;
+            border-radius: 12px;
+            width: 100%;
+        }
+
+        .reaction-arrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            z-index: 10;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .status-panel {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .status-icon {
+            font-size: 20px;
+        }
+
+        .status-text {
+            flex: 1;
+        }
+
+        .status-label {
+            font-size: 12px;
+            color: #718096;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .status-value {
+            font-size: 14px;
+            color: #2d3748;
+            font-weight: 500;
+        }
+
+        .equation-display {
+            background: #f7fafc;
+            padding: 16px;
+            border-radius: 12px;
+            margin-top: 16px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 16px;
+            color: #2d3748;
+            text-align: center;
+            border: 2px solid #e2e8f0;
+        }
+
+        .molecule-list {
+            margin-top: 12px;
+        }
+
+        .molecule-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .molecule-name {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .molecule-cid {
+            font-size: 12px;
+            color: #718096;
+            font-family: 'Monaco', 'Consolas', monospace;
+        }
+
+        .example-equations {
+            margin-top: 20px;
+        }
+
+        .example-btn {
+            background: transparent;
+            border: 1px solid #e2e8f0;
+            color: #667eea;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            margin: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .example-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .error-message {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-top: 12px;
+            border: 1px solid #feb2b2;
+        }
+
+        .success-message {
+            background: #c6f6d5;
+            color: #22543d;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-top: 12px;
+            border: 1px solid #9ae6b4;
+        }
+
+        @media (max-width: 768px) {
+            .molecule-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .reaction-arrow {
+                transform: rotate(90deg);
+                font-size: 32px;
+            }
+
+            .hero h1 {
+                font-size: 2rem;
+            }
+
+            .header-content {
+                flex-direction: column;
+                gap: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">🧪 CREB Molecular Viewer</div>
+            <div class="status-badge" id="system-status">Loading...</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="hero">
+            <h1>Static Molecular Viewer</h1>
+            <p>Phase 1 Demo: Chemical Equation → 3D Molecular Visualization</p>
+        </div>
+
+        <div class="main-card">
+            <div class="equation-input-section">
+                <h3 style="margin-bottom: 20px; color: #2d3748;">Enter Chemical Equation</h3>
+                
+                <div class="input-group">
+                    <input 
+                        type="text" 
+                        class="equation-input" 
+                        id="equation-input"
+                        placeholder="e.g., CH4 + 2O2 = CO2 + 2H2O"
+                        value="CH4 + O2 = CO2 + H2O"
+                    >
+                    <button class="btn btn-primary" onclick="processEquation()">
+                        <span>🔬</span> Visualize
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearAll()">
+                        <span>🗑️</span> Clear
+                    </button>
+                </div>
+
+                <div class="example-equations">
+                    <div style="margin-bottom: 8px; font-size: 14px; color: #718096;">Quick Examples:</div>
+                    <button class="example-btn" onclick="loadExample('H2 + O2 = H2O')">Water Formation</button>
+                    <button class="example-btn" onclick="loadExample('CH4 + 2O2 = CO2 + 2H2O')">Methane Combustion</button>
+                    <button class="example-btn" onclick="loadExample('C6H12O6 + 6O2 = 6CO2 + 6H2O')">Glucose Combustion</button>
+                    <button class="example-btn" onclick="loadExample('2H2O2 = 2H2O + O2')">Hydrogen Peroxide</button>
+                    <button class="example-btn" onclick="loadExample('CaCO3 = CaO + CO2')">Limestone Decomposition</button>
+                </div>
+
+                <div id="equation-result"></div>
+            </div>
+
+            <div class="molecule-grid">
+                <div class="molecule-section">
+                    <h4 class="section-title">Reactants</h4>
+                    <div class="molecule-viewer" id="reactants-viewer">
+                        <div class="loading-overlay" style="display: none;" id="reactants-loading">
+                            <div class="spinner"></div>
+                            <div>Loading 3D structures...</div>
+                        </div>
+                    </div>
+                    <div class="molecule-info" id="reactants-info">
+                        <div style="text-align: center; color: #718096;">
+                            Enter an equation to view reactant molecules
+                        </div>
+                    </div>
+                </div>
+
+                <div class="reaction-arrow">
+                    →
+                </div>
+
+                <div class="molecule-section">
+                    <h4 class="section-title">Products</h4>
+                    <div class="molecule-viewer" id="products-viewer">
+                        <div class="loading-overlay" style="display: none;" id="products-loading">
+                            <div class="spinner"></div>
+                            <div>Loading 3D structures...</div>
+                        </div>
+                    </div>
+                    <div class="molecule-info" id="products-info">
+                        <div style="text-align: center; color: #718096;">
+                            Enter an equation to view product molecules
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="status-panel">
+                <div class="status-grid">
+                    <div class="status-item">
+                        <div class="status-icon">⚖️</div>
+                        <div class="status-text">
+                            <div class="status-label">Equation Balance</div>
+                            <div class="status-value" id="balance-status">Ready</div>
+                        </div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-icon">🔬</div>
+                        <div class="status-text">
+                            <div class="status-label">PubChem Lookup</div>
+                            <div class="status-value" id="pubchem-status">Ready</div>
+                        </div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-icon">🎬</div>
+                        <div class="status-text">
+                            <div class="status-label">3D Visualization</div>
+                            <div class="status-value" id="visualization-status">Ready</div>
+                        </div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-icon">📊</div>
+                        <div class="status-text">
+                            <div class="status-label">Molecules Loaded</div>
+                            <div class="status-value" id="molecules-count">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/3dmol@latest/build/3Dmol-min.js"></script>
+    <script src="../dist/index.umd.js"></script>
+
+    <script>
+        // Global state
+        let reactantsViewer = null;
+        let productsViewer = null;
+        let balancer = null;
+        let currentMolecules = { reactants: [], products: [] };
+        let loadedCount = 0;
+
+        // Molecule name mapping for better PubChem lookups
+        const moleculeNameMap = {
+            'H2O': 'water',
+            'CO2': 'carbon dioxide',
+            'H2': 'hydrogen gas',
+            'O2': 'oxygen gas',
+            'CH4': 'methane',
+            'C6H12O6': 'glucose',
+            'CaCO3': 'calcium carbonate',
+            'CaO': 'calcium oxide',
+            'H2O2': 'hydrogen peroxide',
+            'NH3': 'ammonia',
+            'HCl': 'hydrogen chloride',
+            'NaCl': 'sodium chloride',
+            'C2H6': 'ethane',
+            'C3H8': 'propane',
+            'C2H5OH': 'ethanol'
+        };
+
+        // Initialize the application
+        function init() {
+            log('🚀 Initializing CREB Static Molecular Viewer...');
+
+            try {
+                // Check CREB availability
+                const CREB_LIB = window.CREB || (typeof CREB !== 'undefined' ? CREB : null);
+                if (!CREB_LIB) {
+                    throw new Error('CREB library not loaded');
+                }
+
+                // Initialize balancer
+                if (CREB_LIB.ChemicalEquationBalancer) {
+                    balancer = new CREB_LIB.ChemicalEquationBalancer();
+                    log('✅ Chemical equation balancer ready');
+                } else {
+                    throw new Error('ChemicalEquationBalancer not available');
+                }
+
+                // Initialize 3D viewers
+                initViewers();
+
+                // Update system status
+                updateSystemStatus('✅ All Systems Ready', 'success');
+                log('🎉 CREB Static Molecular Viewer initialized successfully');
+
+            } catch (error) {
+                log(`❌ Initialization failed: ${error.message}`, 'error');
+                updateSystemStatus('❌ System Error', 'error');
+            }
+        }
+
+        function initViewers() {
+            try {
+                // Initialize reactants viewer
+                const reactantsEl = document.getElementById('reactants-viewer');
+                reactantsViewer = $3Dmol.createViewer(reactantsEl, {
+                    backgroundColor: 'black',
+                    antialias: true,
+                    width: '100%',
+                    height: '100%'
+                });
+
+                // Initialize products viewer
+                const productsEl = document.getElementById('products-viewer');
+                productsViewer = $3Dmol.createViewer(productsEl, {
+                    backgroundColor: 'black',
+                    antialias: true,
+                    width: '100%',
+                    height: '100%'
+                });
+
+                log('✅ 3D molecular viewers initialized');
+            } catch (error) {
+                log(`❌ Viewer initialization failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function processEquation() {
+            const equation = document.getElementById('equation-input').value.trim();
+            if (!equation) {
+                showError('Please enter a chemical equation');
+                return;
+            }
+
+            log(`🧪 Processing equation: ${equation}`);
+            clearResults();
+            loadedCount = 0;
+            updateMoleculeCount();
+
+            try {
+                // Step 1: Balance equation
+                updateStatus('balance-status', 'Balancing...');
+                const balanceResult = await balanceEquation(equation);
+                
+                if (!balanceResult) {
+                    throw new Error('Failed to balance equation');
+                }
+
+                // Step 2: Extract and load molecules
+                await loadMolecularStructures(balanceResult);
+
+                // Step 3: Update status
+                updateStatus('balance-status', 'Complete');
+                updateStatus('pubchem-status', 'Complete');
+                updateStatus('visualization-status', 'Complete');
+
+                log('🎉 Equation processing complete!');
+
+            } catch (error) {
+                log(`❌ Processing failed: ${error.message}`, 'error');
+                showError(`Processing failed: ${error.message}`);
+                resetStatus();
+            }
+        }
+
+        async function balanceEquation(equation) {
+            try {
+                const result = balancer.balance(equation);
+                
+                // Display balanced equation
+                const balancedEquation = result.balanced || result.equation || equation;
+                showBalancedEquation(balancedEquation);
+
+                // Parse reactants and products
+                const parts = equation.split(/[=→]/).map(part => part.trim());
+                if (parts.length !== 2) {
+                    throw new Error('Invalid equation format. Use = or → to separate reactants and products');
+                }
+
+                const reactants = parseSpecies(parts[0]);
+                const products = parseSpecies(parts[1]);
+
+                currentMolecules = { reactants, products };
+
+                log(`📋 Reactants: ${reactants.join(', ')}`);
+                log(`📋 Products: ${products.join(', ')}`);
+
+                return { reactants, products, balancedEquation };
+
+            } catch (error) {
+                throw new Error(`Balancing failed: ${error.message}`);
+            }
+        }
+
+        function parseSpecies(speciesString) {
+            // Split by + and clean up
+            return speciesString
+                .split('+')
+                .map(s => s.trim())
+                .map(s => s.replace(/^\d+/, '').trim()) // Remove coefficients
+                .filter(s => s.length > 0);
+        }
+
+        async function loadMolecularStructures(balanceResult) {
+            const { reactants, products } = balanceResult;
+
+            // Show loading state
+            showLoading('reactants');
+            showLoading('products');
+
+            // Load reactants
+            updateStatus('pubchem-status', 'Loading reactants...');
+            const reactantPromises = reactants.map(molecule => loadMolecule(molecule, 'reactant'));
+            const reactantResults = await Promise.allSettled(reactantPromises);
+
+            // Load products
+            updateStatus('pubchem-status', 'Loading products...');
+            const productPromises = products.map(molecule => loadMolecule(molecule, 'product'));
+            const productResults = await Promise.allSettled(productPromises);
+
+            // Hide loading state
+            hideLoading('reactants');
+            hideLoading('products');
+
+            // Process results
+            const successfulReactants = reactantResults.filter(r => r.status === 'fulfilled').map(r => r.value);
+            const successfulProducts = productResults.filter(r => r.status === 'fulfilled').map(r => r.value);
+
+            // Render molecules
+            if (successfulReactants.length > 0) {
+                await renderMolecules(successfulReactants, reactantsViewer);
+                displayMoleculeInfo(successfulReactants, 'reactants-info');
+            }
+
+            if (successfulProducts.length > 0) {
+                await renderMolecules(successfulProducts, productsViewer);
+                displayMoleculeInfo(successfulProducts, 'products-info');
+            }
+
+            // Update loaded count
+            loadedCount = successfulReactants.length + successfulProducts.length;
+            updateMoleculeCount();
+
+            log(`✅ Loaded ${loadedCount} molecules successfully`);
+        }
+
+        async function loadMolecule(formula, type) {
+            try {
+                // Get better name for PubChem lookup
+                const searchName = moleculeNameMap[formula] || formula;
+                log(`🔍 Looking up ${formula} (${searchName})`);
+
+                // Step 1: Get CID
+                const cidUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(searchName)}/cids/JSON`;
+                const cidResponse = await fetch(cidUrl);
+
+                if (!cidResponse.ok) {
+                    throw new Error(`CID lookup failed for ${searchName}`);
+                }
+
+                const cidData = await cidResponse.json();
+                const cid = cidData.IdentifierList.CID[0];
+
+                // Step 2: Get SDF
+                const sdfUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/SDF`;
+                const sdfResponse = await fetch(sdfUrl);
+
+                if (!sdfResponse.ok) {
+                    throw new Error(`SDF download failed for CID ${cid}`);
+                }
+
+                const sdfData = await sdfResponse.text();
+
+                log(`✅ Loaded ${formula} (CID: ${cid})`);
+
+                return {
+                    formula,
+                    name: searchName,
+                    cid,
+                    sdf: sdfData,
+                    type
+                };
+
+            } catch (error) {
+                log(`⚠️ Failed to load ${formula}: ${error.message}`, 'warning');
+                throw error;
+            }
+        }
+
+        async function renderMolecules(molecules, viewer) {
+            try {
+                viewer.clear();
+
+                molecules.forEach((molecule, index) => {
+                    viewer.addModel(molecule.sdf, 'sdf');
+                });
+
+                // Apply styling
+                viewer.setStyle({}, {
+                    stick: { radius: 0.15, colorscheme: 'Jmol' },
+                    sphere: { scale: 0.25, colorscheme: 'element' }
+                });
+
+                viewer.zoomTo();
+                viewer.render();
+
+                log(`🎬 Rendered ${molecules.length} molecules in viewer`);
+
+            } catch (error) {
+                log(`❌ Rendering failed: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        function displayMoleculeInfo(molecules, containerId) {
+            const container = document.getElementById(containerId);
+            
+            const html = `
+                <div class="molecule-list">
+                    ${molecules.map(mol => `
+                        <div class="molecule-item">
+                            <span class="molecule-name">${mol.formula}</span>
+                            <span class="molecule-cid">CID: ${mol.cid}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        function showBalancedEquation(equation) {
+            const container = document.getElementById('equation-result');
+            container.innerHTML = `
+                <div class="equation-display">
+                    <strong>Balanced Equation:</strong><br>
+                    ${equation}
+                </div>
+            `;
+        }
+
+        function showLoading(type) {
+            const loadingEl = document.getElementById(`${type}-loading`);
+            if (loadingEl) {
+                loadingEl.style.display = 'flex';
+            }
+        }
+
+        function hideLoading(type) {
+            const loadingEl = document.getElementById(`${type}-loading`);
+            if (loadingEl) {
+                loadingEl.style.display = 'none';
+            }
+        }
+
+        function showError(message) {
+            const container = document.getElementById('equation-result');
+            container.innerHTML = `<div class="error-message">${message}</div>`;
+        }
+
+        function showSuccess(message) {
+            const container = document.getElementById('equation-result');
+            container.innerHTML = `<div class="success-message">${message}</div>`;
+        }
+
+        function clearResults() {
+            document.getElementById('equation-result').innerHTML = '';
+            document.getElementById('reactants-info').innerHTML = '<div style="text-align: center; color: #718096;">Loading reactants...</div>';
+            document.getElementById('products-info').innerHTML = '<div style="text-align: center; color: #718096;">Loading products...</div>';
+            
+            if (reactantsViewer) reactantsViewer.clear();
+            if (productsViewer) productsViewer.clear();
+        }
+
+        function clearAll() {
+            document.getElementById('equation-input').value = '';
+            clearResults();
+            document.getElementById('reactants-info').innerHTML = '<div style="text-align: center; color: #718096;">Enter an equation to view reactant molecules</div>';
+            document.getElementById('products-info').innerHTML = '<div style="text-align: center; color: #718096;">Enter an equation to view product molecules</div>';
+            resetStatus();
+            loadedCount = 0;
+            updateMoleculeCount();
+        }
+
+        function loadExample(equation) {
+            document.getElementById('equation-input').value = equation;
+        }
+
+        function updateStatus(statusId, message) {
+            const element = document.getElementById(statusId);
+            if (element) {
+                element.textContent = message;
+            }
+        }
+
+        function updateSystemStatus(message, type) {
+            const element = document.getElementById('system-status');
+            element.textContent = message;
+            element.className = `status-badge ${type || ''}`;
+        }
+
+        function updateMoleculeCount() {
+            updateStatus('molecules-count', loadedCount);
+        }
+
+        function resetStatus() {
+            updateStatus('balance-status', 'Ready');
+            updateStatus('pubchem-status', 'Ready');
+            updateStatus('visualization-status', 'Ready');
+        }
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'error' ? '❌' : type === 'warning' ? '⚠️' : type === 'success' ? '✅' : 'ℹ️';
+            console.log(`[${timestamp}] ${prefix} ${message}`);
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', () => {
+            setTimeout(init, 500);
+        });
+
+        // Allow Enter key to submit
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('equation-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    processEquation();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

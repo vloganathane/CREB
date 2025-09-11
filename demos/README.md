@@ -1,8 +1,29 @@
 # CREB Molecular Visualization Demos
 
-This directory contains interactive demonstrations of the CREB molecular visualization system, showcasing the integration of RDKit.js, 3Dmol.js, and PubChem APIs.
+This directory contains interactive demonstrations of the CREB molecular visualization system, showcasing the complete equation-to-animation pipeline with real molecular data.
 
 ## 🎯 Current Demos
+
+### 🎉 **[NEW] Static Molecular Viewer - Phase 1 Demo** 🎉
+**[static-molecular-viewer.html](static-molecular-viewer.html)** - **PRODUCTION READY PHASE 1**
+
+The **complete equation-to-animation pipeline demo** showcasing our fully integrated system:
+
+**🚀 Key Features:**
+- ⚖️ **Real Chemical Equation Balancing** (CREB-JS ChemicalEquationBalancer)
+- 🔬 **Live PubChem Integration** (Authentic 3D molecular structures)
+- 🎬 **Dual 3D Visualization** (Reactants ↔ Products side-by-side)
+- 📊 **Real-time Status Tracking** (Pipeline monitoring)
+- 🎨 **Production UI/UX** (Professional glassmorphism design)
+- 📱 **Responsive Design** (Mobile-optimized)
+
+**🧪 Validated Reactions:**
+- `H2 + O2 = H2O` (Water formation)
+- `CH4 + 2O2 = CO2 + 2H2O` (Methane combustion) 
+- `C6H12O6 + 6O2 = 6CO2 + 6H2O` (Glucose combustion)
+- `2H2O2 = 2H2O + O2` (Hydrogen peroxide decomposition)
+
+**📖 [Complete Documentation](STATIC_MOLECULAR_VIEWER_GUIDE.md)**
 
 ### [Molecular Visualization Demo v2](molecular-visualization-demo.html)
 **Primary Demo** - Clean, modern interface with comprehensive molecular visualization capabilities.
