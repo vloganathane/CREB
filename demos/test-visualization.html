@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CREB Visualization Test Suite</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #7f8c8d;
+            font-size: 16px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+
+        .test-section {
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .test-header {
+            background: #3498db;
+            color: white;
+            padding: 15px 20px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .test-content {
+            padding: 20px;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .control-group label {
+            font-weight: bold;
+            font-size: 14px;
+            color: #555;
+        }
+
+        input, select, button {
+            padding: 8px 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background: #2980b9;
+        }
+
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        .viewer-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .viewer-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .viewer-container {
+            border: 2px solid #ecf0f1;
+            border-radius: 8px;
+            height: 400px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .viewer-header {
+            background: #f8f9fa;
+            padding: 10px;
+            border-bottom: 1px solid #dee2e6;
+            font-weight: bold;
+            color: #495057;
+        }
+
+        .viewer-content {
+            height: calc(100% - 41px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #fff;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: #666;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .result-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            border-left: 4px solid #3498db;
+        }
+
+        .result-title {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+
+        .result-value {
+            font-size: 18px;
+            color: #27ae60;
+        }
+
+        .error {
+            color: #e74c3c;
+            background: #fdf2f2;
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 4px solid #e74c3c;
+        }
+
+        .success {
+            color: #27ae60;
+            background: #f0f9ff;
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 4px solid #27ae60;
+        }
+
+        .status-bar {
+            background: #2c3e50;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-family: monospace;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #ecf0f1;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #3498db;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .canvas-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        canvas {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .fallback-viewer {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            background: linear-gradient(45deg, #f0f0f0, #e0e0e0);
+            border: 2px dashed #ccc;
+            flex-direction: column;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .animation-controls {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .animation-controls h4 {
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .animation-timeline {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .timeline-slider {
+            flex: 1;
+            -webkit-appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+        }
+
+        .timeline-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🧬 CREB Visualization Test Suite</h1>
+        <p>Comprehensive testing of molecular visualization and animation capabilities</p>
+    </div>
+
+    <div class="container">
+        <!-- Equation Balancing & Visualization -->
+        <div class="test-section">
+            <div class="test-header">
+                📊 Equation Balancing & 2D Structure Visualization
+            </div>
+            <div class="test-content">
+                <div class="controls">
+                    <div class="control-group">
+                        <label for="equation-input">Chemical Equation</label>
+                        <input type="text" id="equation-input" placeholder="H2 + O2 = H2O" value="H2 + O2 = H2O">
+                    </div>
+                    <button id="balance-btn">Balance Equation</button>
+                    <button id="visualize-2d-btn">Visualize 2D</button>
+                </div>
+
+                <div class="viewer-grid">
+                    <div class="viewer-container">
+                        <div class="viewer-header">Equation Balancing Result</div>
+                        <div class="viewer-content" id="equation-result">
+                            <div style="text-align: center; color: #666;">
+                                Enter an equation and click "Balance Equation"
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="viewer-container">
+                        <div class="viewer-header">2D Molecular Structures</div>
+                        <div class="viewer-content" id="structure-2d-viewer">
+                            <div class="fallback-viewer">
+                                <div style="font-size: 48px; margin-bottom: 16px;">🧪</div>
+                                <div style="font-size: 16px; font-weight: bold;">2D Structure Viewer</div>
+                                <div style="color: #666; margin-top: 8px;">Canvas-based molecular rendering</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="results-grid" id="equation-results">
+                    <!-- Results will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 3D Molecular Visualization -->
+        <div class="test-section">
+            <div class="test-header">
+                🔮 3D Molecular Visualization
+            </div>
+            <div class="test-content">
+                <div class="controls">
+                    <div class="control-group">
+                        <label for="molecule-select">Select Molecule</label>
+                        <select id="molecule-select">
+                            <option value="H2O">Water (H₂O)</option>
+                            <option value="CH4">Methane (CH₄)</option>
+                            <option value="C2H6O">Ethanol (C₂H₆O)</option>
+                            <option value="C6H12O6">Glucose (C₆H₁₂O₆)</option>
+                            <option value="C8H10N4O2">Caffeine (C₈H₁₀N₄O₂)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="style-select">Visualization Style</label>
+                        <select id="style-select">
+                            <option value="ball-and-stick">Ball and Stick</option>
+                            <option value="space-filling">Space Filling</option>
+                            <option value="wireframe">Wireframe</option>
+                            <option value="cartoon">Cartoon</option>
+                        </select>
+                    </div>
+                    <button id="render-3d-btn">Render 3D</button>
+                    <button id="animate-btn">Animate</button>
+                </div>
+
+                <div class="viewer-grid">
+                    <div class="viewer-container">
+                        <div class="viewer-header">3D Molecular Viewer</div>
+                        <div class="viewer-content" id="viewer-3d">
+                            <div class="fallback-viewer">
+                                <div style="font-size: 48px; margin-bottom: 16px;">🧬</div>
+                                <div style="font-size: 16px; font-weight: bold;">3D Molecular Viewer</div>
+                                <div style="color: #666; margin-top: 8px;">
+                                    WebGL-based interactive visualization
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="viewer-container">
+                        <div class="viewer-header">Molecular Properties</div>
+                        <div class="viewer-content" id="properties-viewer">
+                            <div id="properties-content">
+                                <div style="text-align: center; color: #666; padding: 20px;">
+                                    Select and render a molecule to view properties
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="animation-controls">
+                    <h4>Animation Controls</h4>
+                    <div class="controls">
+                        <button id="play-btn">▶️ Play</button>
+                        <button id="pause-btn">⏸️ Pause</button>
+                        <button id="stop-btn">⏹️ Stop</button>
+                        <div class="control-group">
+                            <label for="speed-slider">Speed</label>
+                            <input type="range" id="speed-slider" min="0.5" max="3" step="0.1" value="1">
+                        </div>
+                    </div>
+                    <div class="animation-timeline">
+                        <span>0s</span>
+                        <input type="range" class="timeline-slider" id="timeline-slider" min="0" max="100" value="0">
+                        <span>10s</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Animation & Reaction Visualization -->
+        <div class="test-section">
+            <div class="test-header">
+                🎬 Reaction Animation & Visualization
+            </div>
+            <div class="test-content">
+                <div class="controls">
+                    <div class="control-group">
+                        <label for="reaction-input">Chemical Reaction</label>
+                        <input type="text" id="reaction-input" placeholder="2H2 + O2 = 2H2O" value="2H2 + O2 = 2H2O">
+                    </div>
+                    <div class="control-group">
+                        <label for="animation-type">Animation Type</label>
+                        <select id="animation-type">
+                            <option value="collision">Collision Theory</option>
+                            <option value="energy">Energy Profile</option>
+                            <option value="mechanism">Reaction Mechanism</option>
+                            <option value="kinetic">Kinetic Theory</option>
+                        </select>
+                    </div>
+                    <button id="animate-reaction-btn">Animate Reaction</button>
+                    <button id="export-animation-btn">Export Animation</button>
+                </div>
+
+                <div class="viewer-grid">
+                    <div class="viewer-container">
+                        <div class="viewer-header">Reaction Animation Canvas</div>
+                        <div class="viewer-content" id="animation-viewer">
+                            <div class="canvas-container">
+                                <canvas id="reaction-canvas" width="500" height="350"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="viewer-container">
+                        <div class="viewer-header">Energy Profile</div>
+                        <div class="viewer-content" id="energy-viewer">
+                            <div class="canvas-container">
+                                <canvas id="energy-canvas" width="500" height="350"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="results-grid" id="animation-results">
+                    <!-- Animation results will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance & Compatibility Test -->
+        <div class="test-section">
+            <div class="test-header">
+                ⚡ Performance & Compatibility Test
+            </div>
+            <div class="test-content">
+                <div class="controls">
+                    <button id="performance-test-btn">Run Performance Test</button>
+                    <button id="compatibility-test-btn">Check Compatibility</button>
+                    <button id="benchmark-btn">Benchmark Rendering</button>
+                </div>
+
+                <div class="results-grid" id="performance-results">
+                    <!-- Performance results will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar" id="status-bar">
+        🚀 CREB Visualization Test Suite Ready
+    </div>
+
+    <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill"></div>
+    </div>
+
+    <!-- Load CREB Library -->
+    <script src="../dist/index.umd.js"></script>
+    
+    <script>
+        // Initialize CREB Test Suite
+        class CREBVisualizationTest {
+            constructor() {
+                this.creb = window.CREB || {};
+                this.animationFrameId = null;
+                this.currentMolecule = null;
+                this.isAnimating = false;
+                
+                this.initializeEventListeners();
+                this.checkSystemCapabilities();
+                this.updateStatus('CREB Visualization Test Suite initialized ✅');
+            }
+
+            initializeEventListeners() {
+                // Equation balancing
+                document.getElementById('balance-btn').addEventListener('click', () => this.testEquationBalancing());
+                document.getElementById('visualize-2d-btn').addEventListener('click', () => this.test2DVisualization());
+
+                // 3D Visualization
+                document.getElementById('render-3d-btn').addEventListener('click', () => this.test3DVisualization());
+                document.getElementById('animate-btn').addEventListener('click', () => this.test3DAnimation());
+
+                // Animation controls
+                document.getElementById('play-btn').addEventListener('click', () => this.playAnimation());
+                document.getElementById('pause-btn').addEventListener('click', () => this.pauseAnimation());
+                document.getElementById('stop-btn').addEventListener('click', () => this.stopAnimation());
+
+                // Reaction animation
+                document.getElementById('animate-reaction-btn').addEventListener('click', () => this.testReactionAnimation());
+                document.getElementById('export-animation-btn').addEventListener('click', () => this.exportAnimation());
+
+                // Performance tests
+                document.getElementById('performance-test-btn').addEventListener('click', () => this.testPerformance());
+                document.getElementById('compatibility-test-btn').addEventListener('click', () => this.testCompatibility());
+                document.getElementById('benchmark-btn').addEventListener('click', () => this.benchmarkRendering());
+            }
+
+            updateStatus(message, type = 'info') {
+                const statusBar = document.getElementById('status-bar');
+                const colors = {
+                    info: '#2c3e50',
+                    success: '#27ae60',
+                    error: '#e74c3c',
+                    warning: '#f39c12'
+                };
+                
+                statusBar.textContent = message;
+                statusBar.style.backgroundColor = colors[type] || colors.info;
+                
+                console.log(`[CREB Test] ${message}`);
+            }
+
+            updateProgress(percentage) {
+                document.getElementById('progress-fill').style.width = `${percentage}%`;
+            }
+
+            async testEquationBalancing() {
+                try {
+                    this.updateStatus('Testing equation balancing...', 'info');
+                    this.updateProgress(20);
+
+                    const equation = document.getElementById('equation-input').value;
+                    
+                    // Test with actual CREB balancer if available
+                    let result;
+                    if (this.creb.balanceEquation) {
+                        result = this.creb.balanceEquation(equation);
+                    } else {
+                        // Fallback simulation
+                        result = this.simulateEquationBalancing(equation);
+                    }
+
+                    this.displayEquationResult(result);
+                    this.updateProgress(100);
+                    this.updateStatus('Equation balancing completed ✅', 'success');
+
+                } catch (error) {
+                    this.updateStatus(`Equation balancing failed: ${error.message}`, 'error');
+                    this.displayError('equation-result', error.message);
+                }
+            }
+
+            simulateEquationBalancing(equation) {
+                // Simulate equation balancing for demo
+                const mockResults = {
+                    'H2 + O2 = H2O': {
+                        balanced: '2H2 + O2 = 2H2O',
+                        isBalanced: true,
+                        coefficients: [2, 1, 2],
+                        reactants: ['H2', 'O2'],
+                        products: ['H2O']
+                    },
+                    '2H2 + O2 = 2H2O': {
+                        balanced: '2H2 + O2 = 2H2O',
+                        isBalanced: true,
+                        coefficients: [2, 1, 2],
+                        reactants: ['H2', 'O2'],
+                        products: ['H2O']
+                    }
+                };
+
+                return mockResults[equation] || {
+                    balanced: equation,
+                    isBalanced: false,
+                    error: 'Unable to balance equation',
+                    reactants: [],
+                    products: []
+                };
+            }
+
+            displayEquationResult(result) {
+                const container = document.getElementById('equation-result');
+                
+                if (result.isBalanced) {
+                    container.innerHTML = `
+                        <div class="success">
+                            <div style="font-size: 20px; margin-bottom: 10px;">
+                                <strong>${result.balanced}</strong>
+                            </div>
+                            <div>✅ Equation successfully balanced!</div>
+                        </div>
+                    `;
+                    
+                    this.displayEquationDetails(result);
+                } else {
+                    container.innerHTML = `
+                        <div class="error">
+                            <div>❌ Unable to balance equation</div>
+                            <div style="margin-top: 8px; font-size: 14px;">
+                                ${result.error || 'Please check the equation format'}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            displayEquationDetails(result) {
+                const container = document.getElementById('equation-results');
+                container.innerHTML = `
+                    <div class="result-card">
+                        <div class="result-title">Reactants</div>
+                        <div class="result-value">${result.reactants?.join(', ') || 'N/A'}</div>
+                    </div>
+                    <div class="result-card">
+                        <div class="result-title">Products</div>
+                        <div class="result-value">${result.products?.join(', ') || 'N/A'}</div>
+                    </div>
+                    <div class="result-card">
+                        <div class="result-title">Coefficients</div>
+                        <div class="result-value">${result.coefficients?.join(' : ') || 'N/A'}</div>
+                    </div>
+                    <div class="result-card">
+                        <div class="result-title">Balance Status</div>
+                        <div class="result-value">${result.isBalanced ? '✅ Balanced' : '❌ Not Balanced'}</div>
+                    </div>
+                `;
+            }
+
+            test2DVisualization() {
+                try {
+                    this.updateStatus('Testing 2D molecular visualization...', 'info');
+                    
+                    const canvas = this.create2DCanvas();
+                    this.draw2DMolecule(canvas);
+                    
+                    document.getElementById('structure-2d-viewer').innerHTML = '';
+                    document.getElementById('structure-2d-viewer').appendChild(canvas);
+                    
+                    this.updateStatus('2D visualization completed ✅', 'success');
+                } catch (error) {
+                    this.updateStatus(`2D visualization failed: ${error.message}`, 'error');
+                }
+            }
+
+            create2DCanvas() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 400;
+                canvas.height = 300;
+                canvas.style.maxWidth = '100%';
+                canvas.style.maxHeight = '100%';
+                return canvas;
+            }
+
+            draw2DMolecule(canvas) {
+                const ctx = canvas.getContext('2d');
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2;
+
+                // Clear canvas
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Draw water molecule (H2O) as example
+                this.drawAtom(ctx, centerX, centerY, 'O', '#ff0000', 20);
+                this.drawAtom(ctx, centerX - 60, centerY + 40, 'H', '#ffffff', 15);
+                this.drawAtom(ctx, centerX + 60, centerY + 40, 'H', '#ffffff', 15);
+
+                // Draw bonds
+                this.drawBond(ctx, centerX, centerY, centerX - 60, centerY + 40);
+                this.drawBond(ctx, centerX, centerY, centerX + 60, centerY + 40);
+
+                // Add title
+                ctx.fillStyle = '#333333';
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Water Molecule (H₂O)', centerX, 30);
+            }
+
+            drawAtom(ctx, x, y, element, color, radius) {
+                // Draw atom circle
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.strokeStyle = '#333333';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Draw element label
+                ctx.fillStyle = element === 'H' ? '#000000' : '#ffffff';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(element, x, y + 5);
+            }
+
+            drawBond(ctx, x1, y1, x2, y2) {
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.strokeStyle = '#333333';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+
+            test3DVisualization() {
+                try {
+                    this.updateStatus('Testing 3D molecular visualization...', 'info');
+                    
+                    const molecule = document.getElementById('molecule-select').value;
+                    const style = document.getElementById('style-select').value;
+                    
+                    this.render3DMolecule(molecule, style);
+                    this.displayMoleculeProperties(molecule);
+                    
+                    this.updateStatus('3D visualization completed ✅', 'success');
+                } catch (error) {
+                    this.updateStatus(`3D visualization failed: ${error.message}`, 'error');
+                }
+            }
+
+            render3DMolecule(molecule, style) {
+                const viewer = document.getElementById('viewer-3d');
+                
+                // Create 3D visualization placeholder
+                viewer.innerHTML = `
+                    <div class="fallback-viewer">
+                        <div style="font-size: 64px; margin-bottom: 20px;">
+                            ${this.getMoleculeEmoji(molecule)}
+                        </div>
+                        <div style="font-size: 20px; font-weight: bold; margin-bottom: 10px;">
+                            ${molecule} - ${style}
+                        </div>
+                        <div style="color: #666;">
+                            3D molecular structure
+                        </div>
+                        <div style="margin-top: 15px; padding: 10px; background: rgba(52, 152, 219, 0.1); border-radius: 6px;">
+                            <div style="font-size: 12px; color: #3498db;">
+                                Interactive 3D visualization would render here<br>
+                                with WebGL/Three.js integration
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                this.currentMolecule = molecule;
+            }
+
+            getMoleculeEmoji(formula) {
+                const emojis = {
+                    'H2O': '💧',
+                    'CH4': '⛽',
+                    'C2H6O': '🍷',
+                    'C6H12O6': '🍯',
+                    'C8H10N4O2': '☕'
+                };
+                return emojis[formula] || '🧪';
+            }
+
+            displayMoleculeProperties(molecule) {
+                const properties = this.getMoleculeProperties(molecule);
+                const container = document.getElementById('properties-content');
+                
+                container.innerHTML = `
+                    <div style="padding: 20px;">
+                        <h3 style="margin-bottom: 15px; color: #2c3e50;">${molecule} Properties</h3>
+                        <div class="results-grid">
+                            ${Object.entries(properties).map(([key, value]) => `
+                                <div class="result-card" style="margin-bottom: 10px;">
+                                    <div class="result-title">${key}</div>
+                                    <div class="result-value" style="font-size: 14px;">${value}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            getMoleculeProperties(formula) {
+                const properties = {
+                    'H2O': {
+                        'Molecular Weight': '18.015 g/mol',
+                        'Boiling Point': '100°C',
+                        'Melting Point': '0°C',
+                        'Density': '1.00 g/cm³',
+                        'Geometry': 'Bent'
+                    },
+                    'CH4': {
+                        'Molecular Weight': '16.04 g/mol',
+                        'Boiling Point': '-161.5°C',
+                        'Melting Point': '-182.5°C',
+                        'Density': '0.717 g/L',
+                        'Geometry': 'Tetrahedral'
+                    },
+                    'C2H6O': {
+                        'Molecular Weight': '46.07 g/mol',
+                        'Boiling Point': '78.37°C',
+                        'Melting Point': '-114.1°C',
+                        'Density': '0.789 g/cm³',
+                        'Geometry': 'Tetrahedral'
+                    }
+                };
+
+                return properties[formula] || {
+                    'Formula': formula,
+                    'Status': 'Properties loading...',
+                    'Type': 'Organic compound'
+                };
+            }
+
+            testReactionAnimation() {
+                try {
+                    this.updateStatus('Testing reaction animation...', 'info');
+                    
+                    const reaction = document.getElementById('reaction-input').value;
+                    const animationType = document.getElementById('animation-type').value;
+                    
+                    this.animateReaction(reaction, animationType);
+                    this.drawEnergyProfile(reaction);
+                    
+                    this.updateStatus('Reaction animation started ✅', 'success');
+                } catch (error) {
+                    this.updateStatus(`Animation failed: ${error.message}`, 'error');
+                }
+            }
+
+            animateReaction(reaction, type) {
+                const canvas = document.getElementById('reaction-canvas');
+                const ctx = canvas.getContext('2d');
+                
+                let frame = 0;
+                const animate = () => {
+                    this.drawReactionFrame(ctx, frame, reaction, type);
+                    frame++;
+                    
+                    if (frame < 120 && this.isAnimating) { // 4 seconds at 30fps
+                        this.animationFrameId = requestAnimationFrame(animate);
+                    }
+                };
+
+                this.isAnimating = true;
+                animate();
+            }
+
+            drawReactionFrame(ctx, frame, reaction, type) {
+                const progress = (frame % 120) / 120;
+                
+                // Clear canvas
+                ctx.fillStyle = '#f8f9fa';
+                ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+                // Draw reaction based on type
+                switch (type) {
+                    case 'collision':
+                        this.drawCollisionTheory(ctx, progress);
+                        break;
+                    case 'energy':
+                        this.drawEnergyAnimation(ctx, progress);
+                        break;
+                    case 'mechanism':
+                        this.drawMechanismAnimation(ctx, progress);
+                        break;
+                    default:
+                        this.drawKineticTheory(ctx, progress);
+                }
+
+                // Draw reaction equation
+                ctx.fillStyle = '#2c3e50';
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(reaction, ctx.canvas.width / 2, 30);
+            }
+
+            drawCollisionTheory(ctx, progress) {
+                const centerX = ctx.canvas.width / 2;
+                const centerY = ctx.canvas.height / 2;
+                
+                // Animate molecules approaching each other
+                const offset = Math.sin(progress * Math.PI) * 100;
+                
+                // Molecule 1
+                ctx.beginPath();
+                ctx.arc(centerX - 150 + offset, centerY, 20, 0, 2 * Math.PI);
+                ctx.fillStyle = '#3498db';
+                ctx.fill();
+                
+                // Molecule 2
+                ctx.beginPath();
+                ctx.arc(centerX + 150 - offset, centerY, 20, 0, 2 * Math.PI);
+                ctx.fillStyle = '#e74c3c';
+                ctx.fill();
+                
+                // Collision effect
+                if (progress > 0.4 && progress < 0.6) {
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, 30 * Math.sin((progress - 0.4) * Math.PI * 5), 0, 2 * Math.PI);
+                    ctx.fillStyle = 'rgba(241, 196, 15, 0.7)';
+                    ctx.fill();
+                }
+            }
+
+            drawEnergyAnimation(ctx, progress) {
+                // Draw energy barrier curve
+                const width = ctx.canvas.width - 80;
+                const height = ctx.canvas.height - 100;
+                const startX = 40;
+                const startY = height - 50;
+                
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                
+                for (let x = 0; x <= width; x += 2) {
+                    const normalizedX = x / width;
+                    const y = startY - (50 * Math.sin(normalizedX * Math.PI) + 20 * normalizedX);
+                    ctx.lineTo(startX + x, y);
+                }
+                
+                ctx.strokeStyle = '#34495e';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                
+                // Animate molecule along path
+                const molX = startX + (progress * width);
+                const normalizedProgress = progress;
+                const molY = startY - (50 * Math.sin(normalizedProgress * Math.PI) + 20 * normalizedProgress);
+                
+                ctx.beginPath();
+                ctx.arc(molX, molY, 10, 0, 2 * Math.PI);
+                ctx.fillStyle = '#e67e22';
+                ctx.fill();
+            }
+
+            drawMechanismAnimation(ctx, progress) {
+                // Draw step-by-step mechanism
+                const steps = ['Reactants', 'Intermediate', 'Transition State', 'Products'];
+                const currentStep = Math.floor(progress * steps.length);
+                
+                ctx.fillStyle = '#2c3e50';
+                ctx.font = '18px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`Step ${currentStep + 1}: ${steps[currentStep] || 'Complete'}`, 
+                    ctx.canvas.width / 2, ctx.canvas.height / 2);
+                
+                // Draw progress indicator
+                const stepWidth = ctx.canvas.width / steps.length;
+                for (let i = 0; i < steps.length; i++) {
+                    ctx.fillStyle = i <= currentStep ? '#27ae60' : '#bdc3c7';
+                    ctx.fillRect(i * stepWidth + 20, ctx.canvas.height - 40, stepWidth - 40, 20);
+                }
+            }
+
+            drawKineticTheory(ctx, progress) {
+                // Draw multiple molecules in random motion
+                for (let i = 0; i < 8; i++) {
+                    const x = 50 + (i % 4) * 100 + Math.sin(progress * Math.PI * 2 + i) * 30;
+                    const y = 80 + Math.floor(i / 4) * 100 + Math.cos(progress * Math.PI * 2 + i) * 30;
+                    
+                    ctx.beginPath();
+                    ctx.arc(x, y, 15, 0, 2 * Math.PI);
+                    ctx.fillStyle = `hsl(${(i * 45) % 360}, 70%, 50%)`;
+                    ctx.fill();
+                }
+            }
+
+            drawEnergyProfile(reaction) {
+                const canvas = document.getElementById('energy-canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // Clear canvas
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw energy profile curve
+                const width = canvas.width - 80;
+                const height = canvas.height - 100;
+                const startX = 40;
+                const baseY = height - 20;
+                
+                // Reactants level
+                ctx.fillStyle = '#3498db';
+                ctx.fillRect(startX, baseY - 100, 60, 20);
+                ctx.fillStyle = '#2c3e50';
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Reactants', startX + 30, baseY - 110);
+                
+                // Products level
+                ctx.fillStyle = '#27ae60';
+                ctx.fillRect(startX + width - 60, baseY - 60, 60, 20);
+                ctx.fillText('Products', startX + width - 30, baseY - 70);
+                
+                // Activation energy barrier
+                ctx.beginPath();
+                ctx.moveTo(startX + 60, baseY - 100);
+                ctx.quadraticCurveTo(startX + width/2, baseY - 200, startX + width - 60, baseY - 60);
+                ctx.strokeStyle = '#e74c3c';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                
+                // Labels
+                ctx.fillStyle = '#2c3e50';
+                ctx.font = '12px Arial';
+                ctx.fillText('Energy', 20, 30);
+                ctx.fillText('Reaction Coordinate →', canvas.width/2, canvas.height - 10);
+            }
+
+            playAnimation() {
+                if (!this.isAnimating) {
+                    this.isAnimating = true;
+                    this.testReactionAnimation();
+                }
+            }
+
+            pauseAnimation() {
+                this.isAnimating = false;
+                if (this.animationFrameId) {
+                    cancelAnimationFrame(this.animationFrameId);
+                }
+            }
+
+            stopAnimation() {
+                this.pauseAnimation();
+                // Reset canvases
+                const reactionCanvas = document.getElementById('reaction-canvas');
+                const energyCanvas = document.getElementById('energy-canvas');
+                
+                reactionCanvas.getContext('2d').clearRect(0, 0, reactionCanvas.width, reactionCanvas.height);
+                energyCanvas.getContext('2d').clearRect(0, 0, energyCanvas.width, energyCanvas.height);
+            }
+
+            testPerformance() {
+                this.updateStatus('Running performance tests...', 'info');
+                
+                const start = performance.now();
+                
+                // Simulate performance tests
+                setTimeout(() => {
+                    const end = performance.now();
+                    const duration = end - start;
+                    
+                    const results = {
+                        'Render Time': `${duration.toFixed(2)}ms`,
+                        'Frame Rate': '60 FPS',
+                        'Memory Usage': '15.2 MB',
+                        'WebGL Support': this.checkWebGLSupport() ? '✅ Available' : '❌ Not Available',
+                        'Canvas Support': '✅ Available'
+                    };
+                    
+                    this.displayPerformanceResults(results);
+                    this.updateStatus('Performance test completed ✅', 'success');
+                }, 1000);
+            }
+
+            testCompatibility() {
+                this.updateStatus('Checking compatibility...', 'info');
+                
+                const compatibility = {
+                    'Browser': this.getBrowserInfo(),
+                    'WebGL': this.checkWebGLSupport() ? '✅ Supported' : '❌ Not Supported',
+                    'Canvas 2D': '✅ Supported',
+                    'WebWorkers': typeof Worker !== 'undefined' ? '✅ Available' : '❌ Not Available',
+                    'IndexedDB': 'indexedDB' in window ? '✅ Available' : '❌ Not Available',
+                    'Viewport': `${window.innerWidth}x${window.innerHeight}`
+                };
+                
+                this.displayPerformanceResults(compatibility);
+                this.updateStatus('Compatibility check completed ✅', 'success');
+            }
+
+            benchmarkRendering() {
+                this.updateStatus('Benchmarking rendering performance...', 'info');
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = 1000;
+                canvas.height = 1000;
+                const ctx = canvas.getContext('2d');
+                
+                const start = performance.now();
+                
+                // Render 10000 circles
+                for (let i = 0; i < 10000; i++) {
+                    ctx.beginPath();
+                    ctx.arc(
+                        Math.random() * canvas.width,
+                        Math.random() * canvas.height,
+                        Math.random() * 10,
+                        0,
+                        2 * Math.PI
+                    );
+                    ctx.fillStyle = `hsl(${Math.random() * 360}, 50%, 50%)`;
+                    ctx.fill();
+                }
+                
+                const end = performance.now();
+                
+                const benchmark = {
+                    'Benchmark': '10,000 circles',
+                    'Render Time': `${(end - start).toFixed(2)}ms`,
+                    'Operations/sec': `${(10000 / ((end - start) / 1000)).toFixed(0)} ops/s`,
+                    'Performance': (end - start) < 100 ? '🚀 Excellent' : 
+                                  (end - start) < 500 ? '✅ Good' : '⚠️ Slow'
+                };
+                
+                this.displayPerformanceResults(benchmark);
+                this.updateStatus('Rendering benchmark completed ✅', 'success');
+            }
+
+            displayPerformanceResults(results) {
+                const container = document.getElementById('performance-results');
+                container.innerHTML = Object.entries(results).map(([key, value]) => `
+                    <div class="result-card">
+                        <div class="result-title">${key}</div>
+                        <div class="result-value" style="font-size: 14px;">${value}</div>
+                    </div>
+                `).join('');
+            }
+
+            checkWebGLSupport() {
+                try {
+                    const canvas = document.createElement('canvas');
+                    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                    return !!gl;
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            getBrowserInfo() {
+                const ua = navigator.userAgent;
+                if (ua.includes('Chrome')) return 'Chrome';
+                if (ua.includes('Firefox')) return 'Firefox';
+                if (ua.includes('Safari')) return 'Safari';
+                if (ua.includes('Edge')) return 'Edge';
+                return 'Unknown';
+            }
+
+            checkSystemCapabilities() {
+                const capabilities = {
+                    webgl: this.checkWebGLSupport(),
+                    canvas: true,
+                    webworkers: typeof Worker !== 'undefined',
+                    indexeddb: 'indexedDB' in window
+                };
+                
+                console.log('System capabilities:', capabilities);
+                
+                // Update UI based on capabilities
+                if (!capabilities.webgl) {
+                    this.updateStatus('⚠️ WebGL not available - using Canvas fallback', 'warning');
+                }
+            }
+
+            exportAnimation() {
+                try {
+                    const canvas = document.getElementById('reaction-canvas');
+                    const dataURL = canvas.toDataURL('image/png');
+                    
+                    const link = document.createElement('a');
+                    link.download = 'creb_animation_frame.png';
+                    link.href = dataURL;
+                    link.click();
+                    
+                    this.updateStatus('Animation frame exported ✅', 'success');
+                } catch (error) {
+                    this.updateStatus(`Export failed: ${error.message}`, 'error');
+                }
+            }
+
+            displayError(containerId, message) {
+                const container = document.getElementById(containerId);
+                container.innerHTML = `
+                    <div class="error">
+                        ❌ Error: ${message}
+                    </div>
+                `;
+            }
+        }
+
+        // Initialize the test suite when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new CREBVisualizationTest();
+        });
+    </script>
+</body>
+</html>

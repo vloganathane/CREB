@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CREB Enhanced System Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #1a1a1a;
+            color: white;
+        }
+        
+        #viewer {
+            width: 800px;
+            height: 600px;
+            border: 1px solid #333;
+            margin: 20px 0;
+            background: #000;
+        }
+        
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background: #333;
+        }
+        
+        .error { background: #800; }
+        .success { background: #080; }
+        .info { background: #008; }
+    </style>
+</head>
+<body>
+    <h1>CREB Enhanced System Debug Test</h1>
+    
+    <div id="status"></div>
+    
+    <div>
+        <input type="text" id="equation" value="H2 + O2 → H2O" placeholder="Enter equation">
+        <button onclick="testAnimation()">Test Animation</button>
+    </div>
+    
+    <div id="viewer"></div>
+
+    <!-- Load required dependencies -->
+    <script src="https://3Dmol.csb.pitt.edu/build/3Dmol-min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    
+    <!-- Load CREB -->
+    <script src="../dist/index.umd.js"></script>
+    <script>
+        let enhancedSystem = null;
+        
+        function log(type, message) {
+            const status = document.getElementById('status');
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            status.appendChild(div);
+            console.log(`${type.toUpperCase()}: ${message}`);
+        }
+        
+        async function initializeSystem() {
+            try {
+                log('info', 'Starting initialization...');
+                
+                // Check if CREB is available
+                if (typeof CREB === 'undefined') {
+                    throw new Error('CREB is not available in global scope');
+                }
+                
+                log('info', 'CREB object found');
+                console.log('Available CREB exports:', Object.keys(CREB));
+                
+                // Check if createEnhancedCREB is available
+                if (typeof CREB.createEnhancedCREB !== 'function') {
+                    throw new Error('createEnhancedCREB is not a function');
+                }
+                
+                log('info', 'createEnhancedCREB function found');
+                
+                const container = document.getElementById('viewer');
+                
+                log('info', 'Creating enhanced system...');
+                enhancedSystem = CREB.createEnhancedCREB(container, {
+                    animation: {
+                        duration: 2000,
+                        qualityLevel: 'medium'
+                    },
+                    rendering: {
+                        useExperimentalData: true
+                    }
+                });
+                
+                log('info', 'Enhanced system created, checking readiness...');
+                console.log('Enhanced system object:', enhancedSystem);
+                console.log('Available methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(enhancedSystem)));
+                
+                // Wait for system to be ready
+                let attempts = 0;
+                const maxAttempts = 100;
+                
+                while (!enhancedSystem.isReady() && attempts < maxAttempts) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    attempts++;
+                    if (attempts % 10 === 0) {
+                        log('info', `Waiting for system ready... (${attempts}/${maxAttempts})`);
+                    }
+                }
+                
+                if (enhancedSystem.isReady()) {
+                    log('success', 'Enhanced system is ready!');
+                    
+                    const capabilities = enhancedSystem.getCapabilities();
+                    const status = enhancedSystem.getSystemStatus();
+                    
+                    log('info', `Capabilities: ${JSON.stringify(capabilities)}`);
+                    log('info', `Status: ${JSON.stringify(status)}`);
+                } else {
+                    throw new Error('System failed to become ready within timeout');
+                }
+                
+            } catch (error) {
+                log('error', `Initialization failed: ${error.message}`);
+                console.error('Full error:', error);
+            }
+        }
+        
+        async function testAnimation() {
+            if (!enhancedSystem) {
+                log('error', 'System not initialized');
+                return;
+            }
+            
+            if (!enhancedSystem.isReady()) {
+                log('error', 'System not ready');
+                return;
+            }
+            
+            try {
+                const equation = document.getElementById('equation').value;
+                log('info', `Testing animation for: ${equation}`);
+                
+                const result = await enhancedSystem.animateReaction({
+                    equation: equation,
+                    options: {
+                        quality: 'medium',
+                        effects: true
+                    }
+                });
+                
+                if (result.success) {
+                    log('success', `Animation completed! Duration: ${result.duration}ms, FPS: ${result.performance.fps}`);
+                } else {
+                    log('error', `Animation failed: ${result.errors.join(', ')}`);
+                }
+                
+            } catch (error) {
+                log('error', `Animation test failed: ${error.message}`);
+                console.error('Full animation error:', error);
+            }
+        }
+        
+        // Initialize when page loads
+        window.addEventListener('load', initializeSystem);
+    </script>
+</body>
+</html>
