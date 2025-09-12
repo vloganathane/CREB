@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CREB Chemical Equation Visualizer - Static Demo</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .app-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(90deg, #4a90e2 0%, #357abd 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+
+        .header p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .input-section {
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .equation-input {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #4a90e2;
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        }
+
+        .visualize-btn {
+            padding: 15px 30px;
+            background: linear-gradient(90deg, #4a90e2 0%, #357abd 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .visualize-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .visualize-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .examples {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .example-btn {
+            padding: 8px 16px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .example-btn:hover {
+            background: #e9ecef;
+            border-color: #4a90e2;
+        }
+
+        .visualization-container {
+            padding: 0;
+            min-height: 600px;
+            position: relative;
+        }
+
+        .reaction-viewer {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 20px;
+            padding: 30px;
+            min-height: 500px;
+        }
+
+        .reactants-section, .products-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            border: 2px solid #e9ecef;
+        }
+
+        .reactants-section h3, .products-section h3 {
+            margin: 0 0 20px 0;
+            color: #495057;
+            font-size: 1.3em;
+            text-align: center;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .molecules-container {
+            min-height: 300px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            margin-bottom: 15px;
+            position: relative;
+        }
+
+        .molecule-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .molecule-placeholder {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .molecule-name {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+
+        .molecule-formula {
+            font-family: 'Courier New', monospace;
+            background: #e9ecef;
+            padding: 4px 8px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 5px;
+        }
+
+        .error-message {
+            color: #dc3545;
+            font-size: 12px;
+            font-style: italic;
+        }
+
+        .reaction-arrow {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-width: 150px;
+        }
+
+        .arrow {
+            font-size: 3em;
+            color: #4a90e2;
+            margin-bottom: 20px;
+        }
+
+        .reaction-info {
+            text-align: center;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            font-size: 14px;
+        }
+
+        .balanced-equation {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #495057;
+        }
+
+        .coefficients {
+            color: #6c757d;
+            margin-bottom: 10px;
+        }
+
+        .validation {
+            display: flex;
+            justify-content: space-around;
+            font-size: 12px;
+        }
+
+        .error-display {
+            padding: 40px;
+            text-align: center;
+            background: #fff5f5;
+            border: 2px solid #fed7d7;
+            border-radius: 12px;
+            margin: 30px;
+            color: #c53030;
+        }
+
+        .error-display h3 {
+            margin: 0 0 20px 0;
+            font-size: 1.5em;
+        }
+
+        .error-display .equation {
+            font-family: 'Courier New', monospace;
+            background: #fed7d7;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .error-display .suggestions {
+            text-align: left;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .loading-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            z-index: 1000;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e9ecef;
+            border-top: 4px solid #4a90e2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .progress-text {
+            color: #495057;
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .reaction-viewer {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto;
+            }
+
+            .reaction-arrow {
+                order: 2;
+                transform: rotate(90deg);
+                margin: 20px 0;
+            }
+
+            .products-section {
+                order: 3;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <h1>🧪 CREB Chemical Equation Visualizer</h1>
+            <p>Transform chemical equations into interactive 3D molecular visualizations</p>
+        </header>
+
+        <section class="input-section">
+            <div class="equation-input">
+                <input 
+                    type="text" 
+                    id="equation-input" 
+                    placeholder="Enter a chemical equation (e.g., H2 + O2 = H2O)"
+                    value="H2 + O2 = H2O"
+                >
+                <button class="visualize-btn" id="visualize-btn">
+                    🔬 Visualize
+                </button>
+            </div>
+
+            <div class="examples">
+                <strong>Try these examples:</strong>
+                <button class="example-btn" data-equation="H2 + O2 = H2O">Hydrogen Combustion</button>
+                <button class="example-btn" data-equation="CH4 + O2 = CO2 + H2O">Methane Combustion</button>
+                <button class="example-btn" data-equation="NaOH + HCl = NaCl + H2O">Acid-Base Reaction</button>
+                <button class="example-btn" data-equation="Ca(OH)2 + HCl = CaCl2 + H2O">Complex Acid-Base</button>
+                <button class="example-btn" data-equation="C6H12O6 + O2 = CO2 + H2O">Glucose Combustion</button>
+            </div>
+        </section>
+
+        <section class="visualization-container" id="visualization-container">
+            <div class="reaction-viewer">
+                <div class="reactants-section">
+                    <h3>Reactants</h3>
+                    <div class="molecules-container">
+                        <div class="molecule-placeholder">
+                            <div class="molecule-name">Ready to visualize</div>
+                            <div style="color: #6c757d;">Enter an equation above to get started</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="reaction-arrow">
+                    <div class="arrow">→</div>
+                    <div class="reaction-info">
+                        <div style="color: #6c757d;">Equation analysis will appear here</div>
+                    </div>
+                </div>
+                
+                <div class="products-section">
+                    <h3>Products</h3>
+                    <div class="molecules-container">
+                        <div class="molecule-placeholder">
+                            <div class="molecule-name">Ready to visualize</div>
+                            <div style="color: #6c757d;">Enter an equation above to get started</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script type="module">
+        // Demo JavaScript - would integrate with StaticMoleculeViewer
+        class DemoVisualization {
+            constructor() {
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                const input = document.getElementById('equation-input');
+                const visualizeBtn = document.getElementById('visualize-btn');
+                const exampleButtons = document.querySelectorAll('.example-btn');
+
+                visualizeBtn.addEventListener('click', () => {
+                    this.visualizeEquation(input.value);
+                });
+
+                input.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.visualizeEquation(input.value);
+                    }
+                });
+
+                exampleButtons.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const equation = btn.dataset.equation;
+                        input.value = equation;
+                        this.visualizeEquation(equation);
+                    });
+                });
+            }
+
+            async visualizeEquation(equation) {
+                if (!equation.trim()) return;
+
+                const container = document.getElementById('visualization-container');
+                const btn = document.getElementById('visualize-btn');
+
+                // Show loading state
+                this.showLoading(container, 'Analyzing equation...');
+                btn.disabled = true;
+
+                try {
+                    // Simulate the actual processing
+                    await this.simulateProcessing(equation);
+                    
+                    // Show results (this would be replaced with actual StaticMoleculeViewer)
+                    this.showResults(container, equation);
+
+                } catch (error) {
+                    this.showError(container, equation, error.message);
+                } finally {
+                    btn.disabled = false;
+                }
+            }
+
+            showLoading(container, message) {
+                container.innerHTML = `
+                    <div class="loading-indicator">
+                        <div class="spinner"></div>
+                        <div class="progress-text">${message}</div>
+                    </div>
+                `;
+            }
+
+            async simulateProcessing(equation) {
+                // Simulate different processing stages
+                const stages = [
+                    'Parsing equation...',
+                    'Balancing coefficients...',
+                    'Looking up compounds in PubChem...',
+                    'Loading 3D molecular structures...',
+                    'Preparing visualization...'
+                ];
+
+                for (let i = 0; i < stages.length; i++) {
+                    const container = document.getElementById('visualization-container');
+                    this.showLoading(container, stages[i]);
+                    await new Promise(resolve => setTimeout(resolve, 800));
+                }
+            }
+
+            showResults(container, equation) {
+                // Parse equation for demo purposes
+                const parts = equation.split(/[=→]/);
+                const reactants = parts[0].trim().split('+').map(r => r.trim());
+                const products = parts[1] ? parts[1].trim().split('+').map(p => p.trim()) : [];
+
+                container.innerHTML = `
+                    <div class="reaction-viewer">
+                        <div class="reactants-section">
+                            <h3>Reactants</h3>
+                            <div class="molecules-container">
+                                ${reactants.map(r => `
+                                    <div class="molecule-placeholder">
+                                        <div class="molecule-name">${this.getCompoundName(r)}</div>
+                                        <div class="molecule-formula">${r}</div>
+                                        <div style="color: #28a745; font-size: 12px;">✅ 3D structure loaded from PubChem</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        
+                        <div class="reaction-arrow">
+                            <div class="arrow">→</div>
+                            <div class="reaction-info">
+                                <div class="balanced-equation">${equation}</div>
+                                <div class="coefficients">Coefficients: [1, 1, 1]</div>
+                                <div class="validation">
+                                    <div>Mass Balanced: ✅</div>
+                                    <div>Charge Balanced: ✅</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="products-section">
+                            <h3>Products</h3>
+                            <div class="molecules-container">
+                                ${products.map(p => `
+                                    <div class="molecule-placeholder">
+                                        <div class="molecule-name">${this.getCompoundName(p)}</div>
+                                        <div class="molecule-formula">${p}</div>
+                                        <div style="color: #28a745; font-size: 12px;">✅ 3D structure loaded from PubChem</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            showError(container, equation, errorMessage) {
+                container.innerHTML = `
+                    <div class="error-display">
+                        <h3>❌ Error Processing Equation</h3>
+                        <div class="equation">Input: "${equation}"</div>
+                        <div class="error-message">${errorMessage}</div>
+                        <div class="suggestions">
+                            <p><strong>Suggestions:</strong></p>
+                            <ul>
+                                <li>Check chemical formula spelling</li>
+                                <li>Ensure equation uses = or → as separator</li>
+                                <li>Try simpler compounds (H2O, CO2, CH4)</li>
+                                <li>Make sure formulas are valid (e.g., H2O not H20)</li>
+                            </ul>
+                        </div>
+                    </div>
+                `;
+            }
+
+            getCompoundName(formula) {
+                const names = {
+                    'H2': 'Hydrogen',
+                    'O2': 'Oxygen', 
+                    'H2O': 'Water',
+                    'CH4': 'Methane',
+                    'CO2': 'Carbon Dioxide',
+                    'NaOH': 'Sodium Hydroxide',
+                    'HCl': 'Hydrochloric Acid',
+                    'NaCl': 'Sodium Chloride',
+                    'Ca(OH)2': 'Calcium Hydroxide',
+                    'CaCl2': 'Calcium Chloride',
+                    'C6H12O6': 'Glucose'
+                };
+                return names[formula] || formula;
+            }
+        }
+
+        // Initialize the demo
+        new DemoVisualization();
+    </script>
+</body>
+</html>
