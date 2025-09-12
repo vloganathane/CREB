@@ -15,6 +15,7 @@ import {
 import { Injectable } from './core/decorators/Injectable';
 import { AdvancedCache } from './performance/cache/AdvancedCache';
 import { validateChemicalFormula, ValidationResult } from './validation/browserValidation';
+import { PubChemIntegration } from './visualization/PubChemIntegration';
 
 // Import type definitions for PubChem integration
 // Note: In production, this would import from 'creb-pubchem-js'
@@ -76,6 +77,13 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
     defaultTtl: 7200000, // 2 hours
     evictionStrategy: 'lru'
   });
+
+  private pubchemIntegration: PubChemIntegration;
+
+  constructor(pubchemIntegration?: PubChemIntegration) {
+    super();
+    this.pubchemIntegration = pubchemIntegration || new PubChemIntegration();
+  }
 
   /**
    * Balance equation with safety and hazard information
@@ -518,57 +526,61 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
     };
 
     try {
-      // Dynamic import of PubChem functionality
-      const pubchemModule = await this.loadPubChemModule();
-      if (!pubchemModule) {
-        result.error = 'PubChem module not available. Install creb-pubchem-js for enhanced functionality.';
-        await this.compoundCache.set(compoundName, result);
-        return result;
-      }
+      // Use PubChemIntegration to search for the compound
+      const searchResult = await this.pubchemIntegration.searchCompounds(compoundName, {
+        searchType: 'name',
+        limit: 1
+      });
 
-      // Try to find compound by name
-      let compounds: PubChemCompound[] = [];
-      
-      // First try exact name match
-      try {
-        compounds = await pubchemModule.fromName(compoundName);
-      } catch (error) {
-        // If name search fails and it looks like a formula, try CID search
-        if (this.isLikelyFormula(compoundName)) {
-          try {
-            // For simple cases, try to find by common names
-            const commonNames = this.getCommonNames(compoundName);
-            for (const name of commonNames) {
-              try {
-                compounds = await pubchemModule.fromName(name);
-                if (compounds.length > 0) break;
-              } catch {
-                // Continue to next name
-              }
-            }
-          } catch (formulaError) {
-            result.error = `Not found by name or common formula names: ${error instanceof Error ? error.message : 'Unknown error'}`;
-          }
-        } else {
-          result.error = `Not found by name: ${error instanceof Error ? error.message : 'Unknown error'}`;
-        }
-      }
-
-      if (compounds.length > 0) {
-        const compound = compounds[0]; // Use first match
+      if (searchResult.success && searchResult.compounds.length > 0) {
+        const compound = searchResult.compounds[0];
         
         result.cid = compound.cid;
         result.molecularWeight = compound.molecularWeight || undefined;
         result.molecularFormula = compound.molecularFormula || undefined;
-        result.iupacName = compound.iupacName || undefined;
-        result.canonicalSmiles = compound.isomericSmiles || undefined;
+        result.iupacName = compound.name; // Use the name field as iupacName
+        result.canonicalSmiles = compound.smiles || undefined;
         result.isValid = true;
-        result.pubchemData = compound;
-      } else if (!result.error) {
-        result.error = 'No compounds found';
+        result.pubchemData = {
+          cid: compound.cid,
+          molecularWeight: compound.molecularWeight,
+          molecularFormula: compound.molecularFormula,
+          iupacName: compound.name,
+          isomericSmiles: compound.smiles
+        };
+      } else {
+        // If name search fails, try searching as a molecular formula
+        try {
+          const formulaSearchResult = await this.pubchemIntegration.searchCompounds(compoundName, {
+            searchType: 'formula',
+            limit: 1
+          });
+
+          if (formulaSearchResult.success && formulaSearchResult.compounds.length > 0) {
+            const compound = formulaSearchResult.compounds[0];
+            
+            result.cid = compound.cid;
+            result.molecularWeight = compound.molecularWeight || undefined;
+            result.molecularFormula = compound.molecularFormula || undefined;
+            result.iupacName = compound.name;
+            result.canonicalSmiles = compound.smiles || undefined;
+            result.isValid = true;
+            result.pubchemData = {
+              cid: compound.cid,
+              molecularWeight: compound.molecularWeight,
+              molecularFormula: compound.molecularFormula,
+              iupacName: compound.name,
+              isomericSmiles: compound.smiles
+            };
+          } else {
+            result.error = searchResult.error || 'No compounds found by name or formula';
+          }
+        } catch (formulaError) {
+          result.error = searchResult.error || `Not found: ${formulaError instanceof Error ? formulaError.message : 'Unknown error'}`;
+        }
       }
     } catch (error) {
-      result.error = `Search failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      result.error = `PubChem search failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
     }
 
     // Cache the result
@@ -576,42 +588,7 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
     return result;
   }
 
-  /**
-   * Dynamically load PubChem module if available
-   */
-  private async loadPubChemModule(): Promise<any> {
-    try {
-      // Try to import the PubChem module
-      // In browser environment, check for global PubChemJS
-      if (typeof globalThis !== 'undefined' && (globalThis as any).PubChemJS) {
-        return (globalThis as any).PubChemJS.Compound;
-      }
-      
-      // Also check window for browser compatibility
-      if (typeof globalThis !== 'undefined' && typeof (globalThis as any).window !== 'undefined' && (globalThis as any).window.PubChemJS) {
-        return (globalThis as any).window.PubChemJS.Compound;
-      }
-      
-      // Legacy check for CREBPubChem (for backwards compatibility)
-      if (typeof globalThis !== 'undefined' && (globalThis as any).CREBPubChem) {
-        return (globalThis as any).CREBPubChem.Compound;
-      }
-      
-      // In Node.js environment, try dynamic import with error handling
-      try {
-        // Use eval to avoid TypeScript compile-time module resolution
-        const importFn = new Function('specifier', 'return import(specifier)');
-        const pubchemModule = await importFn('creb-pubchem-js');
-        return pubchemModule.Compound;
-      } catch (importError) {
-        // Module not available
-        return null;
-      }
-    } catch (error) {
-      // PubChem module not available
-      return null;
-    }
-  }
+
 
   /**
    * Parse equation with compound names to extract reactant and product names
@@ -833,11 +810,6 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
     const suggestions: string[] = [];
     
     try {
-      const pubchemModule = await this.loadPubChemModule();
-      if (!pubchemModule) {
-        return suggestions;
-      }
-
       // Try various search strategies
       const searchTerms = [
         compoundName.toLowerCase(),
@@ -850,8 +822,11 @@ export class EnhancedChemicalEquationBalancer extends ChemicalEquationBalancer {
       for (const term of searchTerms) {
         if (term !== compoundName) {
           try {
-            const compounds = await pubchemModule.fromName(term);
-            if (compounds.length > 0) {
+            const searchResult = await this.pubchemIntegration.searchCompounds(term, {
+              searchType: 'name',
+              limit: 1
+            });
+            if (searchResult.success && searchResult.compounds.length > 0) {
               suggestions.push(term);
             }
           } catch {

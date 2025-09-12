@@ -7,6 +7,7 @@ export { ReactionAnimationEngine } from './animation/ReactionAnimationEngine';
 export { ReactionClassifier } from './ai/SimplifiedReactionClassifier';
 export { SimplifiedPhysicsEngine as MolecularPhysicsEngine } from './physics/SimplifiedPhysicsEngine';
 export { SimplifiedCacheManager as IntelligentCacheManager } from './caching/SimplifiedCacheManager';
+export { CREBMasterEnhancementSystem, createEnhancedCREB, EnhancedAnimationController, EnhancedMolecularRenderer, EnhancedUI, BrowserCompatibilityManager, EnhancedFeaturesSystem } from './enhancements';
 export { Mol3DWrapper } from './visualization/Mol3DWrapper';
 export { PubChemIntegration } from './visualization/PubChemIntegration';
 export { RDKitWrapper } from './visualization/RDKitWrapper';

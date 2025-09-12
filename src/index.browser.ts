@@ -14,6 +14,17 @@ export { ReactionClassifier } from './ai/SimplifiedReactionClassifier';
 export { SimplifiedPhysicsEngine as MolecularPhysicsEngine } from './physics/SimplifiedPhysicsEngine';
 export { SimplifiedCacheManager as IntelligentCacheManager } from './caching/SimplifiedCacheManager';
 
+// Phase 4: Enhanced Systems (NEW) - All-in-one enhancements
+export { 
+  CREBMasterEnhancementSystem,
+  createEnhancedCREB,
+  EnhancedAnimationController,
+  EnhancedMolecularRenderer,
+  EnhancedUI,
+  BrowserCompatibilityManager,
+  EnhancedFeaturesSystem
+} from './enhancements';
+
 // 3D Visualization System (browser-compatible)
 export { Mol3DWrapper } from './visualization/Mol3DWrapper';
 export { PubChemIntegration } from './visualization/PubChemIntegration';

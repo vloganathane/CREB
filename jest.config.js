@@ -6,7 +6,8 @@ export default {
   testPathIgnorePatterns: [
     '/node_modules/',
     '/dist/',
-    '/src/core/telemetry/__tests__/archived/'
+    '/src/core/telemetry/__tests__/archived/',
+    '/tests/e2e/'
   ],
   collectCoverageFrom: [
     'src/**/*.ts',
