@@ -1,21 +1,23 @@
 /**
  * Browser-compatible CREB-JS entry point
- * This file exclu// Reaction Animation System (browser-compatible)
+ * This file excludes Node.js-specific functionality to ensure browser compatibility
+ */
+
+// Reaction Animation System (browser-compatible)
 export { ReactionAnimator } from './visualization/ReactionAnimation';
 
 // Phase 2: Advanced Animation Engine (NEW)
 export { ReactionAnimationEngine } from './animation/ReactionAnimationEngine';
 
-// Phase 3: AI and Physics Integration (NEW)
-export { ReactionClassifier } from './ai/ReactionClassifier';
-export { MolecularPhysicsEngine } from './physics/MolecularPhysicsEngine';
-export { IntelligentCacheManager } from './caching/IntelligentCacheManager';
+// Phase 3: AI and Physics Integration (NEW) - Browser Compatible Versions
+export { ReactionClassifier } from './ai/SimplifiedReactionClassifier';
+export { SimplifiedPhysicsEngine as MolecularPhysicsEngine } from './physics/SimplifiedPhysicsEngine';
+export { SimplifiedCacheManager as IntelligentCacheManager } from './caching/SimplifiedCacheManager';
 
 // 3D Visualization System (browser-compatible)
 export { Mol3DWrapper } from './visualization/Mol3DWrapper';
 export { PubChemIntegration } from './visualization/PubChemIntegration';
-export { RDKitWrapper } from './visualization/RDKitWrapper';s Node.js-specific functionality to ensure browser compatibility
- */
+export { RDKitWrapper } from './visualization/RDKitWrapper';
 
 // Core chemistry functionality (browser-compatible)
 export { ChemicalEquationBalancer } from './balancer';
@@ -76,8 +78,7 @@ export {
   type MoleculeVisualizationData
 } from './visualization/SimplifiedMolecularVisualization';
 
-// Reaction Animation System (Browser-compatible)
-export { ReactionAnimator } from './visualization/ReactionAnimation';
+// Reaction Animation System (Browser-compatible) - already exported above
 
 // Import the class for use in factory function
 import { MolecularVisualization as MolViz } from './visualization/SimplifiedMolecularVisualization';

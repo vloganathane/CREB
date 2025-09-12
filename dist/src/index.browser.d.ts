@@ -1,21 +1,15 @@
 /**
  * Browser-compatible CREB-JS entry point
- * This file exclu// Reaction Animation System (browser-compatible)
+ * This file excludes Node.js-specific functionality to ensure browser compatibility
+ */
 export { ReactionAnimator } from './visualization/ReactionAnimation';
-
-// Phase 2: Advanced Animation Engine (NEW)
 export { ReactionAnimationEngine } from './animation/ReactionAnimationEngine';
-
-// Phase 3: AI and Physics Integration (NEW)
-export { ReactionClassifier } from './ai/ReactionClassifier';
-export { MolecularPhysicsEngine } from './physics/MolecularPhysicsEngine';
-export { IntelligentCacheManager } from './caching/IntelligentCacheManager';
-
-// 3D Visualization System (browser-compatible)
+export { ReactionClassifier } from './ai/SimplifiedReactionClassifier';
+export { SimplifiedPhysicsEngine as MolecularPhysicsEngine } from './physics/SimplifiedPhysicsEngine';
+export { SimplifiedCacheManager as IntelligentCacheManager } from './caching/SimplifiedCacheManager';
 export { Mol3DWrapper } from './visualization/Mol3DWrapper';
 export { PubChemIntegration } from './visualization/PubChemIntegration';
-export { RDKitWrapper } from './visualization/RDKitWrapper';s Node.js-specific functionality to ensure browser compatibility
- */
+export { RDKitWrapper } from './visualization/RDKitWrapper';
 export { ChemicalEquationBalancer } from './balancer';
 export { Stoichiometry } from './stoichiometry';
 export { ElementCounter, EquationParser, calculateMolarWeight } from './utils';
@@ -27,7 +21,6 @@ export { EnhancedChemicalEquationBalancer, type EnhancedBalancedEquation, type C
 export { Canvas2DRenderer } from './visualization/Canvas2DRenderer';
 export { SVGRenderer } from './visualization/SVGRenderer';
 export { MolecularVisualization, type MolecularVisualizationConfig, type MolecularStyleOptions, type MoleculeVisualizationData } from './visualization/SimplifiedMolecularVisualization';
-export { ReactionAnimator } from './visualization/ReactionAnimation';
 import { MolecularVisualization as MolViz } from './visualization/SimplifiedMolecularVisualization';
 export type MoleculeForVisualization = {
     elements: string[];

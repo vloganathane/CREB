@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phase 3 Exports Test</title>
+</head>
+<body>
+    <h1>Phase 3 Exports Test</h1>
+    <div id="test-results"></div>
+
+    <script src="../dist/index.umd.js"></script>
+    <script>
+        const results = document.getElementById('test-results');
+        
+        function addResult(test, passed, error = null) {
+            const div = document.createElement('div');
+            div.style.color = passed ? 'green' : 'red';
+            div.style.marginBottom = '5px';
+            
+            if (passed) {
+                div.textContent = `✓ ${test}: PASSED`;
+            } else {
+                div.textContent = `✗ ${test}: FAILED - ${error || 'Unknown error'}`;
+            }
+            
+            results.appendChild(div);
+        }
+
+        // Test Phase 3 exports
+        try {
+            // Test ReactionClassifier
+            if (typeof CREB.ReactionClassifier === 'function') {
+                const classifier = new CREB.ReactionClassifier();
+                addResult('ReactionClassifier constructor', true);
+                
+                // Test classifyReaction method
+                if (typeof classifier.classifyReaction === 'function') {
+                    const result = classifier.classifyReaction('2H2 + O2 -> 2H2O');
+                    addResult('ReactionClassifier.classifyReaction', true);
+                } else {
+                    addResult('ReactionClassifier.classifyReaction', false, 'Method not found');
+                }
+            } else {
+                addResult('ReactionClassifier constructor', false, 'Constructor not found or not a function');
+            }
+        } catch (error) {
+            addResult('ReactionClassifier constructor', false, error.message);
+        }
+
+        try {
+            // Test MolecularPhysicsEngine
+            if (typeof CREB.MolecularPhysicsEngine === 'function') {
+                const physics = new CREB.MolecularPhysicsEngine();
+                addResult('MolecularPhysicsEngine constructor', true);
+                
+                // Test simulateReaction method
+                if (typeof physics.simulateReaction === 'function') {
+                    addResult('MolecularPhysicsEngine.simulateReaction', true);
+                } else {
+                    addResult('MolecularPhysicsEngine.simulateReaction', false, 'Method not found');
+                }
+            } else {
+                addResult('MolecularPhysicsEngine constructor', false, 'Constructor not found or not a function');
+            }
+        } catch (error) {
+            addResult('MolecularPhysicsEngine constructor', false, error.message);
+        }
+
+        try {
+            // Test IntelligentCacheManager
+            if (typeof CREB.IntelligentCacheManager === 'function') {
+                const cache = new CREB.IntelligentCacheManager();
+                addResult('IntelligentCacheManager constructor', true);
+                
+                // Test set method
+                if (typeof cache.set === 'function') {
+                    addResult('IntelligentCacheManager.set', true);
+                } else {
+                    addResult('IntelligentCacheManager.set', false, 'Method not found');
+                }
+            } else {
+                addResult('IntelligentCacheManager constructor', false, 'Constructor not found or not a function');
+            }
+        } catch (error) {
+            addResult('IntelligentCacheManager constructor', false, error.message);
+        }
+
+        try {
+            // Test ReactionAnimationEngine (Phase 2)
+            if (typeof CREB.ReactionAnimationEngine === 'function') {
+                addResult('ReactionAnimationEngine constructor available', true);
+            } else {
+                addResult('ReactionAnimationEngine constructor available', false, 'Constructor not found or not a function');
+            }
+        } catch (error) {
+            addResult('ReactionAnimationEngine constructor available', false, error.message);
+        }
+
+        // List all available CREB properties
+        console.log('Available CREB properties:', Object.keys(CREB));
+        
+        const availableDiv = document.createElement('div');
+        availableDiv.style.marginTop = '20px';
+        availableDiv.innerHTML = '<h3>Available CREB Properties:</h3>' + 
+            Object.keys(CREB).map(key => `<div>${key}: ${typeof CREB[key]}</div>`).join('');
+        results.appendChild(availableDiv);
+    </script>
+</body>
+</html>

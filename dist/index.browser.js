@@ -1,4 +1,3796 @@
-import { EventEmitter as EventEmitter$1 } from 'events';
+import { gsap } from 'gsap';
+import * as THREE from 'three';
+
+/**
+ * RDKit.js Wrapper for CREB Molecular Visualization
+ * Provides unified API for advanced molecular structure processing and generation
+ *
+ * Features:
+ * - SMILES/SMARTS parsing and validation
+ * - 2D coordinate generation with RDKit algorithms
+ * - Molecular descriptors and properties calculation
+ * - Substructure searching and matching
+ * - Chemical transformation operations
+ * - SVG generation with RDKit's advanced rendering
+ */
+/**
+ * RDKit.js Wrapper Class
+ * Provides simplified access to RDKit functionality within CREB
+ */
+class RDKitWrapper {
+    constructor(config = {}) {
+        this.rdkit = null;
+        this.initialized = false;
+        this.config = {
+            kekulize: true,
+            addCoords: true,
+            removeHs: true,
+            sanitize: true,
+            useCoordGen: true,
+            width: 600,
+            height: 400,
+            offsetx: 0,
+            offsety: 0,
+            ...config
+        };
+    }
+    /**
+     * Initialize RDKit.js library using the official pattern
+     */
+    async initialize() {
+        if (this.initialized)
+            return;
+        try {
+            // Browser environment - use official initRDKitModule
+            if (typeof window !== 'undefined') {
+                // Check if initRDKitModule is available globally (official method)
+                if (typeof window.initRDKitModule === 'function') {
+                    console.log('Initializing RDKit using official initRDKitModule...');
+                    this.rdkit = await window.initRDKitModule();
+                    this.initialized = true;
+                    console.log('RDKit initialized successfully, version:', this.rdkit.version());
+                    return;
+                }
+                // Fallback: check if RDKit is already available globally
+                if (window.RDKit) {
+                    console.log('Using pre-loaded RDKit instance...');
+                    this.rdkit = window.RDKit;
+                    this.initialized = true;
+                    return;
+                }
+                // Try dynamic import as last resort
+                try {
+                    // Use string-based import to avoid build-time type checking
+                    const rdkitModule = await import('@' + 'rdkit' + '/' + 'rdkit');
+                    this.rdkit = await rdkitModule.initRDKitModule();
+                    this.initialized = true;
+                    return;
+                }
+                catch (importError) {
+                    console.warn('Dynamic import failed:', importError);
+                }
+                throw new Error('RDKit.js not available - please ensure RDKit.js is loaded via script tag');
+            }
+            else {
+                // Node.js environment
+                console.warn('RDKit.js not available in Node.js environment. Using fallback implementations.');
+                this.rdkit = this.createFallbackRDKit();
+                this.initialized = true;
+            }
+            this.initialized = true;
+        }
+        catch (error) {
+            console.warn('RDKit.js initialization failed:', error);
+            this.rdkit = this.createFallbackRDKit();
+            this.initialized = true;
+        }
+    }
+    /**
+     * Parse SMILES string and generate molecule object
+     */
+    async parseSMILES(smiles) {
+        await this.initialize();
+        try {
+            if (!this.rdkit.get_mol) {
+                return this.fallbackParseSMILES(smiles);
+            }
+            const mol = this.rdkit.get_mol(smiles);
+            if (!mol || !mol.is_valid()) {
+                throw new Error(`Invalid SMILES: ${smiles}`);
+            }
+            // Generate 2D coordinates
+            if (this.config.addCoords) {
+                mol.generate_2d_coords();
+            }
+            // Extract molecule data
+            const molData = this.extractMoleculeData(mol);
+            // Cleanup RDKit object
+            mol.delete();
+            return molData;
+        }
+        catch (error) {
+            console.error('SMILES parsing failed:', error);
+            return null;
+        }
+    }
+    /**
+     * Generate SVG representation of molecule
+     */
+    async generateSVG(smiles, options = {}) {
+        await this.initialize();
+        const config = { ...this.config, ...options };
+        try {
+            if (!this.rdkit.get_mol) {
+                return this.fallbackGenerateSVG(smiles, config);
+            }
+            const mol = this.rdkit.get_mol(smiles);
+            if (!mol || !mol.is_valid()) {
+                throw new Error(`Invalid SMILES: ${smiles}`);
+            }
+            // Generate SVG
+            const svg = mol.get_svg_with_highlights(JSON.stringify({
+                width: config.width,
+                height: config.height,
+                offsetx: config.offsetx,
+                offsety: config.offsety
+            }));
+            mol.delete();
+            return svg;
+        }
+        catch (error) {
+            console.error('SVG generation failed:', error);
+            return this.fallbackGenerateSVG(smiles, config);
+        }
+    }
+    /**
+     * Calculate molecular descriptors
+     */
+    async calculateDescriptors(smiles) {
+        await this.initialize();
+        try {
+            if (!this.rdkit.get_mol) {
+                return this.fallbackCalculateDescriptors(smiles);
+            }
+            const mol = this.rdkit.get_mol(smiles);
+            if (!mol || !mol.is_valid()) {
+                throw new Error(`Invalid SMILES: ${smiles}`);
+            }
+            const descriptors = JSON.parse(mol.get_descriptors());
+            const properties = {
+                molecularWeight: descriptors.amw || 0,
+                logP: descriptors.clogp || 0,
+                tpsa: descriptors.tpsa || 0,
+                hbd: descriptors.lipinskiHBD || 0,
+                hba: descriptors.lipinskiHBA || 0,
+                rotatableBonds: descriptors.NumRotatableBonds || 0,
+                aromaticRings: descriptors.NumAromaticRings || 0,
+                aliphaticRings: descriptors.NumAliphaticRings || 0,
+                formula: mol.get_molformula() || '',
+                inchi: mol.get_inchi() || '',
+                inchiKey: mol.get_inchi_key() || ''
+            };
+            mol.delete();
+            return properties;
+        }
+        catch (error) {
+            console.error('Descriptor calculation failed:', error);
+            return this.fallbackCalculateDescriptors(smiles);
+        }
+    }
+    /**
+     * Perform substructure search
+     */
+    async findSubstructure(moleculeSmiles, querySmarts) {
+        await this.initialize();
+        try {
+            if (!this.rdkit.get_mol) {
+                return this.fallbackFindSubstructure(moleculeSmiles, querySmarts);
+            }
+            const mol = this.rdkit.get_mol(moleculeSmiles);
+            const query = this.rdkit.get_qmol(querySmarts);
+            if (!mol || !mol.is_valid() || !query || !query.is_valid()) {
+                throw new Error('Invalid molecule or query structure');
+            }
+            const matches = JSON.parse(mol.get_substruct_matches(query));
+            mol.delete();
+            query.delete();
+            return matches.map((match) => ({
+                atomIds: match.atoms || [],
+                bondIds: match.bonds || [],
+                matched: true
+            }));
+        }
+        catch (error) {
+            console.error('Substructure search failed:', error);
+            return [];
+        }
+    }
+    /**
+     * Apply chemical transformation
+     */
+    async applyTransformation(smiles, reactionSmarts) {
+        await this.initialize();
+        try {
+            if (!this.rdkit.get_mol) {
+                return this.fallbackApplyTransformation(smiles, reactionSmarts);
+            }
+            const mol = this.rdkit.get_mol(smiles);
+            const rxn = this.rdkit.get_rxn(reactionSmarts);
+            if (!mol || !mol.is_valid() || !rxn || !rxn.is_valid()) {
+                throw new Error('Invalid molecule or reaction');
+            }
+            const products = JSON.parse(rxn.run_reactants([mol]));
+            mol.delete();
+            rxn.delete();
+            return products.map((product) => product.smiles || '');
+        }
+        catch (error) {
+            console.error('Chemical transformation failed:', error);
+            return [];
+        }
+    }
+    /**
+     * Validate SMILES string
+     */
+    async validateSMILES(smiles) {
+        await this.initialize();
+        try {
+            if (!this.rdkit.get_mol) {
+                return this.fallbackValidateSMILES(smiles);
+            }
+            const mol = this.rdkit.get_mol(smiles);
+            const isValid = mol && mol.is_valid();
+            if (mol)
+                mol.delete();
+            return isValid;
+        }
+        catch (error) {
+            return false;
+        }
+    }
+    /**
+     * Extract detailed molecule data from RDKit molecule object
+     */
+    extractMoleculeData(mol) {
+        const molblock = mol.get_molblock();
+        const smiles = mol.get_smiles();
+        // Get atom and bond information
+        const atoms = [];
+        const bonds = [];
+        try {
+            const molData = JSON.parse(mol.get_json());
+            // Extract atoms
+            if (molData.atoms) {
+                molData.atoms.forEach((atom, index) => {
+                    atoms.push({
+                        atomicNum: atom.z || 0,
+                        symbol: atom.l || 'C',
+                        x: atom.x || 0,
+                        y: atom.y || 0,
+                        z: atom.z || 0,
+                        charge: atom.c || 0,
+                        hybridization: atom.h || 'sp3',
+                        aromantic: atom.a || false,
+                        inRing: atom.r || false
+                    });
+                });
+            }
+            // Extract bonds
+            if (molData.bonds) {
+                molData.bonds.forEach((bond) => {
+                    bonds.push({
+                        beginAtomIdx: bond.b || 0,
+                        endAtomIdx: bond.e || 0,
+                        bondType: this.mapBondType(bond.o || 1),
+                        isInRing: bond.r || false,
+                        isConjugated: bond.c || false
+                    });
+                });
+            }
+        }
+        catch (error) {
+            console.warn('Failed to extract detailed molecule data:', error);
+        }
+        return {
+            smiles,
+            molblock,
+            atoms,
+            bonds,
+            properties: {
+                molecularWeight: 0,
+                logP: 0,
+                tpsa: 0,
+                hbd: 0,
+                hba: 0,
+                rotatableBonds: 0,
+                aromaticRings: 0,
+                aliphaticRings: 0,
+                formula: mol.get_molformula() || '',
+                inchi: mol.get_inchi() || '',
+                inchiKey: mol.get_inchi_key() || ''
+            }
+        };
+    }
+    /**
+     * Map RDKit bond order to bond type
+     */
+    mapBondType(order) {
+        switch (order) {
+            case 1: return 'SINGLE';
+            case 2: return 'DOUBLE';
+            case 3: return 'TRIPLE';
+            case 12: return 'AROMATIC';
+            default: return 'SINGLE';
+        }
+    }
+    /**
+     * Create fallback RDKit implementation for environments where RDKit.js is not available
+     */
+    createFallbackRDKit() {
+        return {
+            get_mol: null,
+            get_qmol: null,
+            get_rxn: null
+        };
+    }
+    /**
+     * Fallback implementations for when RDKit.js is not available
+     */
+    fallbackParseSMILES(smiles) {
+        // Simple SMILES parsing fallback
+        const atomCount = smiles.length; // Simplified
+        return {
+            smiles,
+            atoms: [],
+            bonds: [],
+            properties: {
+                molecularWeight: atomCount * 12, // Rough estimate
+                logP: 0,
+                tpsa: 0,
+                hbd: 0,
+                hba: 0,
+                rotatableBonds: 0,
+                aromaticRings: 0,
+                aliphaticRings: 0,
+                formula: smiles,
+                inchi: '',
+                inchiKey: ''
+            }
+        };
+    }
+    fallbackGenerateSVG(smiles, config) {
+        return `<svg width="${config.width}" height="${config.height}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="white"/>
+      <text x="${config.width / 2}" y="${config.height / 2}" text-anchor="middle" font-family="Arial" font-size="16">
+        ${smiles}
+      </text>
+      <text x="${config.width / 2}" y="${config.height / 2 + 25}" text-anchor="middle" font-family="Arial" font-size="12" fill="#666">
+        (RDKit.js not available - showing SMILES)
+      </text>
+    </svg>`;
+    }
+    fallbackCalculateDescriptors(smiles) {
+        return {
+            molecularWeight: smiles.length * 12, // Very rough estimate
+            logP: 0,
+            tpsa: 0,
+            hbd: 0,
+            hba: 0,
+            rotatableBonds: 0,
+            aromaticRings: 0,
+            aliphaticRings: 0,
+            formula: smiles,
+            inchi: '',
+            inchiKey: ''
+        };
+    }
+    fallbackFindSubstructure(moleculeSmiles, querySmarts) {
+        // Simple substring search as fallback
+        const matched = moleculeSmiles.includes(querySmarts);
+        return matched ? [{ atomIds: [], bondIds: [], matched: true }] : [];
+    }
+    fallbackApplyTransformation(smiles, reactionSmarts) {
+        // No transformation capability in fallback
+        return [smiles];
+    }
+    fallbackValidateSMILES(smiles) {
+        // Basic validation - check for common SMILES characters
+        const smilesPattern = /^[A-Za-z0-9@+\-\[\]()=#:/\\%*.]+$/;
+        return smilesPattern.test(smiles) && smiles.length > 0;
+    }
+    /**
+     * Cleanup resources
+     */
+    dispose() {
+        // RDKit.js cleanup if needed
+        this.initialized = false;
+    }
+}
+
+/**
+ * 3Dmol.js Wrapper for CREB Molecular Visualization
+ * Provides unified API for advanced 3D molecular structure visualization
+ *
+ * Features:
+ * - Interactive 3D molecular visualization with WebGL
+ * - Multiple rendering styles (ball-and-stick, space-filling, cartoon, etc.)
+ * - Animation and transition effects
+ * - Chemical property visualization (electrostatic, hydrophobic surfaces)
+ * - Multi-molecule scene management
+ * - Export capabilities (PNG, WebM, molecular formats)
+ * - Event handling for molecular interactions
+ */
+/**
+ * 3Dmol.js Wrapper Class
+ * Provides simplified access to 3Dmol.js functionality within CREB
+ */
+class Mol3DWrapper {
+    constructor(container, config = {}) {
+        this.viewer = null;
+        this.container = null;
+        this.initialized = false;
+        this.molecules = new Map();
+        this.eventHandlers = new Map();
+        this.container = typeof container === 'string'
+            ? document.getElementById(container)
+            : container;
+        this.config = {
+            backgroundColor: '#ffffff',
+            width: 600,
+            height: 400,
+            antialias: true,
+            alpha: false,
+            preserveDrawingBuffer: true,
+            premultipliedAlpha: false,
+            camera: {
+                fov: 45,
+                near: 0.1,
+                far: 1000,
+                position: { x: 0, y: 0, z: 50 },
+                target: { x: 0, y: 0, z: 0 },
+                up: { x: 0, y: 1, z: 0 }
+            },
+            lighting: {
+                ambient: '#404040',
+                directional: [
+                    {
+                        color: '#ffffff',
+                        intensity: 1.0,
+                        position: { x: 1, y: 1, z: 1 }
+                    }
+                ]
+            },
+            fog: {
+                enabled: false,
+                color: '#ffffff',
+                near: 50,
+                far: 100
+            },
+            ...config
+        };
+    }
+    /**
+     * Initialize 3Dmol.js viewer
+     */
+    async initialize() {
+        if (this.initialized || !this.container)
+            return;
+        try {
+            // Dynamic import for 3Dmol.js
+            let $3Dmol;
+            if (typeof window !== 'undefined') {
+                // Browser environment - try different import methods
+                try {
+                    // Use string-based import to avoid build-time type checking
+                    $3Dmol = await import('3' + 'dmol');
+                }
+                catch {
+                    // Fallback to global $3Dmol if module import fails
+                    $3Dmol = window.$3Dmol;
+                }
+            }
+            if (!$3Dmol) {
+                console.warn('3Dmol.js not available. Using fallback implementation.');
+                this.viewer = this.createFallbackViewer();
+            }
+            else {
+                // Create 3Dmol viewer
+                this.viewer = $3Dmol.createViewer(this.container, {
+                    backgroundColor: this.config.backgroundColor,
+                    antialias: this.config.antialias,
+                    alpha: this.config.alpha,
+                    preserveDrawingBuffer: this.config.preserveDrawingBuffer,
+                    premultipliedAlpha: this.config.premultipliedAlpha
+                });
+                // Configure camera
+                this.viewer.setCameraParameters({
+                    fov: this.config.camera.fov,
+                    near: this.config.camera.near,
+                    far: this.config.camera.far
+                });
+                // Set initial camera position
+                this.viewer.setViewStyle({
+                    style: 'outline',
+                    color: 'black',
+                    width: 0.1
+                });
+            }
+            this.initialized = true;
+            this.setupEventHandlers();
+        }
+        catch (error) {
+            console.warn('3Dmol.js initialization failed:', error);
+            this.viewer = this.createFallbackViewer();
+            this.initialized = true;
+        }
+    }
+    /**
+     * Get the 3Dmol viewer instance
+     */
+    getViewer() {
+        return this.viewer;
+    }
+    /**
+     * Add molecule to the scene
+     */
+    async addMolecule(id, moleculeData, format = 'pdb') {
+        await this.initialize();
+        try {
+            let molecule;
+            if (typeof moleculeData === 'string') {
+                // Parse molecule data
+                molecule = this.parseMoleculeData(moleculeData, format);
+                if (this.viewer.addModel) {
+                    this.viewer.addModel(moleculeData, format);
+                }
+            }
+            else {
+                molecule = moleculeData;
+                if (this.viewer.addModel && molecule.data) {
+                    this.viewer.addModel(molecule.data, molecule.format || format);
+                }
+            }
+            this.molecules.set(id, molecule);
+            this.render();
+        }
+        catch (error) {
+            console.error('Failed to add molecule:', error);
+        }
+    }
+    /**
+     * Remove molecule from the scene
+     */
+    removeMolecule(id) {
+        if (this.molecules.has(id)) {
+            this.molecules.delete(id);
+            // Remove from 3Dmol viewer
+            if (this.viewer.removeAllModels) {
+                this.viewer.removeAllModels();
+                // Re-add remaining molecules
+                this.molecules.forEach((molecule, moleculeId) => {
+                    if (molecule.data && moleculeId !== id) {
+                        this.viewer.addModel(molecule.data, molecule.format || 'pdb');
+                    }
+                });
+            }
+            this.render();
+        }
+    }
+    /**
+     * Set visualization style for molecules
+     */
+    setStyle(style, selector) {
+        if (!this.viewer.setStyle) {
+            console.warn('Style setting not available in fallback mode');
+            return;
+        }
+        try {
+            this.viewer.setStyle(selector || {}, style);
+            this.render();
+        }
+        catch (error) {
+            console.error('Failed to set style:', error);
+        }
+    }
+    /**
+     * Add surface to molecule
+     */
+    addSurface(surfaceType = 'VDW', style = {}, selector) {
+        if (!this.viewer.addSurface) {
+            console.warn('Surface rendering not available in fallback mode');
+            return;
+        }
+        try {
+            this.viewer.addSurface(surfaceType, style, selector);
+            this.render();
+        }
+        catch (error) {
+            console.error('Failed to add surface:', error);
+        }
+    }
+    /**
+     * Animate camera movement
+     */
+    animateCamera(targetPosition, options = { duration: 1000 }) {
+        return new Promise((resolve) => {
+            if (!this.viewer.animate) {
+                console.warn('Animation not available in fallback mode');
+                resolve();
+                return;
+            }
+            try {
+                this.viewer.animate({
+                    camera: targetPosition,
+                    duration: options.duration,
+                    easing: options.easing || 'ease'
+                });
+                setTimeout(resolve, options.duration);
+            }
+            catch (error) {
+                console.error('Camera animation failed:', error);
+                resolve();
+            }
+        });
+    }
+    /**
+     * Animate molecular properties
+     */
+    animateMolecule(properties, options = { duration: 1000 }) {
+        return new Promise((resolve) => {
+            if (!this.viewer.animate) {
+                console.warn('Animation not available in fallback mode');
+                resolve();
+                return;
+            }
+            try {
+                this.viewer.animate({
+                    ...properties,
+                    duration: options.duration,
+                    easing: options.easing || 'ease'
+                });
+                setTimeout(resolve, options.duration);
+            }
+            catch (error) {
+                console.error('Molecule animation failed:', error);
+                resolve();
+            }
+        });
+    }
+    /**
+     * Export scene as image or animation
+     */
+    async exportScene(options) {
+        if (!this.viewer) {
+            throw new Error('Viewer not initialized');
+        }
+        switch (options.format) {
+            case 'png':
+                return this.exportPNG(options);
+            case 'webm':
+                return this.exportWebM(options);
+            case 'pdb':
+            case 'sdf':
+            case 'mol2':
+                return this.exportMoleculeData(options.format);
+            default:
+                throw new Error(`Unsupported export format: ${options.format}`);
+        }
+    }
+    /**
+     * Add event listener for molecular interactions
+     */
+    addEventListener(event, handler) {
+        if (!this.eventHandlers.has(event)) {
+            this.eventHandlers.set(event, []);
+        }
+        this.eventHandlers.get(event).push(handler);
+    }
+    /**
+     * Remove event listener
+     */
+    removeEventListener(event, handler) {
+        const handlers = this.eventHandlers.get(event);
+        if (handlers) {
+            const index = handlers.indexOf(handler);
+            if (index > -1) {
+                handlers.splice(index, 1);
+            }
+        }
+    }
+    /**
+     * Center and fit all molecules in view
+     */
+    zoomToFit() {
+        if (this.viewer.zoomTo) {
+            this.viewer.zoomTo();
+            this.render();
+        }
+    }
+    /**
+     * Set camera position
+     */
+    setCameraPosition(position) {
+        if (this.viewer.setCameraPosition) {
+            this.viewer.setCameraPosition(position);
+            this.render();
+        }
+    }
+    /**
+     * Get current camera position
+     */
+    getCameraPosition() {
+        if (this.viewer.getCameraPosition) {
+            return this.viewer.getCameraPosition();
+        }
+        return { x: 0, y: 0, z: 50 };
+    }
+    /**
+     * Clear all molecules from scene
+     */
+    clear() {
+        this.molecules.clear();
+        if (this.viewer.removeAllModels) {
+            this.viewer.removeAllModels();
+            this.render();
+        }
+    }
+    /**
+     * Render the scene
+     */
+    render() {
+        if (this.viewer.render) {
+            this.viewer.render();
+        }
+    }
+    /**
+     * Resize viewer
+     */
+    resize(width, height) {
+        if (width)
+            this.config.width = width;
+        if (height)
+            this.config.height = height;
+        if (this.viewer.resize) {
+            this.viewer.resize();
+        }
+    }
+    /**
+     * Parse molecule data string into structured format
+     */
+    parseMoleculeData(data, format) {
+        const atoms = [];
+        try {
+            switch (format.toLowerCase()) {
+                case 'pdb':
+                    return this.parsePDB(data);
+                case 'sdf':
+                case 'mol':
+                    return this.parseSDF(data);
+                case 'xyz':
+                    return this.parseXYZ(data);
+                default:
+                    console.warn(`Unsupported format: ${format}`);
+                    break;
+            }
+        }
+        catch (error) {
+            console.error('Failed to parse molecule data:', error);
+        }
+        return {
+            atoms,
+            format: format,
+            data
+        };
+    }
+    /**
+     * Parse PDB format
+     */
+    parsePDB(data) {
+        const atoms = [];
+        const lines = data.split('\n');
+        for (const line of lines) {
+            if (line.startsWith('ATOM') || line.startsWith('HETATM')) {
+                const atom = {
+                    elem: line.substring(76, 78).trim() || line.substring(12, 16).trim().charAt(0),
+                    x: parseFloat(line.substring(30, 38)),
+                    y: parseFloat(line.substring(38, 46)),
+                    z: parseFloat(line.substring(46, 54)),
+                    serial: parseInt(line.substring(6, 11)),
+                    atom: line.substring(12, 16).trim(),
+                    resn: line.substring(17, 20).trim(),
+                    chain: line.substring(21, 22),
+                    resi: parseInt(line.substring(22, 26)),
+                    b: parseFloat(line.substring(60, 66)),
+                    pdbline: line
+                };
+                atoms.push(atom);
+            }
+        }
+        return {
+            atoms,
+            format: 'pdb',
+            data
+        };
+    }
+    /**
+     * Parse SDF format
+     */
+    parseSDF(data) {
+        const atoms = [];
+        const lines = data.split('\n');
+        // Find the counts line (typically line 3)
+        const countsLine = lines[3];
+        if (countsLine) {
+            const atomCount = parseInt(countsLine.substring(0, 3));
+            // Parse atom block (starts at line 4)
+            for (let i = 4; i < 4 + atomCount && i < lines.length; i++) {
+                const line = lines[i];
+                const parts = line.trim().split(/\s+/);
+                if (parts.length >= 4) {
+                    atoms.push({
+                        elem: parts[3],
+                        x: parseFloat(parts[0]),
+                        y: parseFloat(parts[1]),
+                        z: parseFloat(parts[2])
+                    });
+                }
+            }
+        }
+        return {
+            atoms,
+            format: 'sdf',
+            data
+        };
+    }
+    /**
+     * Parse XYZ format
+     */
+    parseXYZ(data) {
+        const atoms = [];
+        const lines = data.split('\n');
+        if (lines.length < 2)
+            return { atoms, format: 'xyz', data };
+        const atomCount = parseInt(lines[0]);
+        // Parse atoms (start from line 2)
+        for (let i = 2; i < 2 + atomCount && i < lines.length; i++) {
+            const parts = lines[i].trim().split(/\s+/);
+            if (parts.length >= 4) {
+                atoms.push({
+                    elem: parts[0],
+                    x: parseFloat(parts[1]),
+                    y: parseFloat(parts[2]),
+                    z: parseFloat(parts[3])
+                });
+            }
+        }
+        return {
+            atoms,
+            format: 'xyz',
+            data
+        };
+    }
+    /**
+     * Setup event handlers for viewer interactions
+     */
+    setupEventHandlers() {
+        if (!this.viewer.setClickCallback)
+            return;
+        // Click events
+        this.viewer.setClickCallback((event) => {
+            const handlers = this.eventHandlers.get('click');
+            if (handlers) {
+                const interactionEvent = {
+                    type: 'click',
+                    atom: event.atom,
+                    position: event.position || { x: 0, y: 0, z: 0 },
+                    screenPosition: event.screenPosition || { x: 0, y: 0 }
+                };
+                handlers.forEach(handler => handler(interactionEvent));
+            }
+        });
+        // Hover events
+        this.viewer.setHoverCallback((event) => {
+            const handlers = this.eventHandlers.get('hover');
+            if (handlers) {
+                const interactionEvent = {
+                    type: 'hover',
+                    atom: event.atom,
+                    position: event.position || { x: 0, y: 0, z: 0 },
+                    screenPosition: event.screenPosition || { x: 0, y: 0 }
+                };
+                handlers.forEach(handler => handler(interactionEvent));
+            }
+        });
+    }
+    /**
+     * Export as PNG image
+     */
+    exportPNG(options) {
+        return new Promise((resolve, reject) => {
+            if (!this.viewer.pngURI) {
+                reject(new Error('PNG export not available in fallback mode'));
+                return;
+            }
+            try {
+                const uri = this.viewer.pngURI({
+                    width: options.width || this.config.width,
+                    height: options.height || this.config.height
+                });
+                resolve(uri);
+            }
+            catch (error) {
+                reject(error);
+            }
+        });
+    }
+    /**
+     * Export as WebM animation
+     */
+    exportWebM(options) {
+        return new Promise((resolve, reject) => {
+            // WebM export would require additional implementation
+            reject(new Error('WebM export not yet implemented'));
+        });
+    }
+    /**
+     * Export molecule data in specified format
+     */
+    exportMoleculeData(format) {
+        const molecules = Array.from(this.molecules.values());
+        if (molecules.length === 0) {
+            return '';
+        }
+        // Return the first molecule's data or convert to requested format
+        const molecule = molecules[0];
+        return molecule.data || this.convertMoleculeFormat(molecule, format);
+    }
+    /**
+     * Convert molecule to different format
+     */
+    convertMoleculeFormat(molecule, targetFormat) {
+        // Basic format conversion (would need more sophisticated implementation)
+        switch (targetFormat.toLowerCase()) {
+            case 'xyz':
+                return this.moleculeToXYZ(molecule);
+            case 'pdb':
+                return this.moleculeToPDB(molecule);
+            default:
+                return molecule.data || '';
+        }
+    }
+    /**
+     * Convert molecule to XYZ format
+     */
+    moleculeToXYZ(molecule) {
+        const lines = [
+            molecule.atoms.length.toString(),
+            molecule.title || 'Generated by CREB'
+        ];
+        molecule.atoms.forEach(atom => {
+            lines.push(`${atom.elem} ${atom.x.toFixed(6)} ${atom.y.toFixed(6)} ${atom.z.toFixed(6)}`);
+        });
+        return lines.join('\n');
+    }
+    /**
+     * Convert molecule to PDB format
+     */
+    moleculeToPDB(molecule) {
+        const lines = [];
+        molecule.atoms.forEach((atom, index) => {
+            const line = [
+                'ATOM  ',
+                (index + 1).toString().padStart(5),
+                '  ',
+                atom.atom?.padEnd(4) || atom.elem.padEnd(4),
+                ' ',
+                'UNK',
+                ' ',
+                'A',
+                '   1    ',
+                atom.x.toFixed(3).padStart(8),
+                atom.y.toFixed(3).padStart(8),
+                atom.z.toFixed(3).padStart(8),
+                '  1.00',
+                '  0.00',
+                '          ',
+                atom.elem.padStart(2)
+            ].join('');
+            lines.push(line);
+        });
+        lines.push('END');
+        return lines.join('\n');
+    }
+    /**
+     * Create fallback viewer for environments where 3Dmol.js is not available
+     */
+    createFallbackViewer() {
+        return {
+            addModel: () => console.warn('3Dmol.js not available - addModel disabled'),
+            removeAllModels: () => console.warn('3Dmol.js not available - removeAllModels disabled'),
+            setStyle: () => console.warn('3Dmol.js not available - setStyle disabled'),
+            addSurface: () => console.warn('3Dmol.js not available - addSurface disabled'),
+            render: () => console.warn('3Dmol.js not available - render disabled'),
+            zoomTo: () => console.warn('3Dmol.js not available - zoomTo disabled'),
+            resize: () => console.warn('3Dmol.js not available - resize disabled'),
+            animate: () => console.warn('3Dmol.js not available - animate disabled'),
+            pngURI: () => { throw new Error('PNG export not available without 3Dmol.js'); }
+        };
+    }
+    /**
+     * Cleanup resources
+     */
+    dispose() {
+        this.clear();
+        this.eventHandlers.clear();
+        if (this.viewer && this.viewer.removeAllModels) {
+            this.viewer.removeAllModels();
+        }
+        this.initialized = false;
+    }
+}
+
+/**
+ * PubChem Integration Module for CREB Molecular Visualization
+ * Connects PubChem database with RDKit.js and 3Dmol.js visualization pipeline
+ */
+/**
+ * PubChem Integration Class
+ * Provides unified access to PubChem database for molecular visualization
+ */
+class PubChemIntegration {
+    constructor() {
+        this.baseUrl = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug';
+        this.requestDelay = 200; // Rate limiting: 5 requests per second
+        this.lastRequestTime = 0;
+        // Initialize with default settings
+    }
+    /**
+     * Search for compounds by various criteria
+     */
+    async searchCompounds(query, options = { searchType: 'name' }) {
+        try {
+            await this.enforceRateLimit();
+            let searchUrl = '';
+            const limit = options.limit || options.maxResults || 10;
+            switch (options.searchType) {
+                case 'name':
+                    searchUrl = `${this.baseUrl}/compound/name/${encodeURIComponent(query)}/cids/JSON?cids_type=flat`;
+                    break;
+                case 'cid':
+                    searchUrl = `${this.baseUrl}/compound/cid/${query}/cids/JSON`;
+                    break;
+                case 'smiles':
+                    searchUrl = `${this.baseUrl}/compound/smiles/${encodeURIComponent(query)}/cids/JSON`;
+                    break;
+                case 'formula':
+                    searchUrl = `${this.baseUrl}/compound/formula/${encodeURIComponent(query)}/cids/JSON`;
+                    break;
+                case 'inchi':
+                    searchUrl = `${this.baseUrl}/compound/inchi/${encodeURIComponent(query)}/cids/JSON`;
+                    break;
+            }
+            const response = await fetch(searchUrl);
+            if (!response.ok) {
+                throw new Error(`PubChem search failed: ${response.statusText}`);
+            }
+            const data = await response.json();
+            const cids = data.IdentifierList?.CID || [];
+            if (cids.length === 0) {
+                return {
+                    success: true,
+                    compounds: [],
+                    totalFound: 0,
+                    source: 'pubchem',
+                    timestamp: new Date()
+                };
+            }
+            // Get detailed compound information for found CIDs
+            const limitedCids = cids.slice(0, limit);
+            const compounds = await this.getCompoundDetails(limitedCids, options);
+            return {
+                success: true,
+                compounds,
+                totalFound: cids.length,
+                source: 'pubchem',
+                timestamp: new Date()
+            };
+        }
+        catch (error) {
+            return {
+                success: false,
+                compounds: [],
+                totalFound: 0,
+                source: 'pubchem',
+                timestamp: new Date(),
+                error: error instanceof Error ? error.message : 'Unknown error'
+            };
+        }
+    }
+    /**
+     * Get detailed compound information by CID
+     */
+    async getCompoundByCid(cid, options = { searchType: 'cid' }) {
+        try {
+            await this.enforceRateLimit();
+            const propertiesUrl = `${this.baseUrl}/compound/cid/${cid}/property/MolecularFormula,MolecularWeight,CanonicalSMILES,InChI,InChIKey/JSON`;
+            const response = await fetch(propertiesUrl);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch compound ${cid}: ${response.statusText}`);
+            }
+            const data = await response.json();
+            const properties = data.PropertyTable?.Properties?.[0];
+            if (!properties) {
+                return null;
+            }
+            const compound = {
+                cid,
+                name: `CID ${cid}`, // Will be updated if synonyms are requested
+                molecularFormula: properties.MolecularFormula || '',
+                molecularWeight: properties.MolecularWeight || 0,
+                smiles: properties.CanonicalSMILES || '',
+                inchi: properties.InChI || '',
+                inchiKey: properties.InChIKey || '',
+                properties: properties
+            };
+            // Get synonyms if requested
+            if (options.includeSynonyms) {
+                const synonyms = await this.getCompoundSynonyms(cid);
+                if (synonyms.length > 0) {
+                    compound.name = synonyms[0]; // Use first synonym as primary name
+                    compound.synonyms = synonyms;
+                }
+            }
+            return compound;
+        }
+        catch (error) {
+            console.error(`Error fetching compound ${cid}:`, error);
+            return null;
+        }
+    }
+    /**
+     * Get molecular structure data (2D/3D SDF)
+     */
+    async getMolecularData(cid, include3D = false) {
+        try {
+            const compound = await this.getCompoundByCid(cid, { searchType: 'cid', includeSynonyms: true });
+            if (!compound) {
+                return null;
+            }
+            await this.enforceRateLimit();
+            // Get 2D SDF structure
+            const sdf2DUrl = `${this.baseUrl}/compound/cid/${cid}/SDF`;
+            const sdf2DResponse = await fetch(sdf2DUrl);
+            const structure2D = sdf2DResponse.ok ? await sdf2DResponse.text() : undefined;
+            let structure3D;
+            let conformers;
+            if (include3D) {
+                await this.enforceRateLimit();
+                // Get 3D SDF structure
+                const sdf3DUrl = `${this.baseUrl}/compound/cid/${cid}/SDF?record_type=3d`;
+                const sdf3DResponse = await fetch(sdf3DUrl);
+                structure3D = sdf3DResponse.ok ? await sdf3DResponse.text() : undefined;
+                // Get conformer data if available
+                await this.enforceRateLimit();
+                try {
+                    const conformerUrl = `${this.baseUrl}/compound/cid/${cid}/conformers/JSON`;
+                    const conformerResponse = await fetch(conformerUrl);
+                    if (conformerResponse.ok) {
+                        const conformerData = await conformerResponse.json();
+                        conformers = this.parseConformerData(conformerData);
+                    }
+                }
+                catch (error) {
+                    // Conformer data not available for all compounds
+                    console.warn(`Conformer data not available for CID ${cid}`);
+                }
+            }
+            return {
+                compound,
+                structure2D,
+                structure3D,
+                conformers
+            };
+        }
+        catch (error) {
+            console.error(`Error fetching molecular data for CID ${cid}:`, error);
+            return null;
+        }
+    }
+    /**
+     * Search and get the best matching compound with full molecular data
+     */
+    async searchAndGetMolecularData(query, options = { searchType: 'name' }) {
+        const searchResult = await this.searchCompounds(query, { ...options, limit: 1 });
+        if (!searchResult.success || searchResult.compounds.length === 0) {
+            return null;
+        }
+        const compound = searchResult.compounds[0];
+        return this.getMolecularData(compound.cid, options.include3D);
+    }
+    /**
+     * Get compound synonyms
+     */
+    async getCompoundSynonyms(cid) {
+        try {
+            await this.enforceRateLimit();
+            const synonymsUrl = `${this.baseUrl}/compound/cid/${cid}/synonyms/JSON`;
+            const response = await fetch(synonymsUrl);
+            if (!response.ok) {
+                return [];
+            }
+            const data = await response.json();
+            return data.InformationList?.Information?.[0]?.Synonym || [];
+        }
+        catch (error) {
+            return [];
+        }
+    }
+    /**
+     * Get detailed compound information for multiple CIDs
+     */
+    async getCompoundDetails(cids, options) {
+        const compounds = [];
+        // Process in batches to respect rate limits
+        const batchSize = 5;
+        for (let i = 0; i < cids.length; i += batchSize) {
+            const batch = cids.slice(i, i + batchSize);
+            const batchPromises = batch.map(cid => this.getCompoundByCid(cid, options));
+            const batchResults = await Promise.all(batchPromises);
+            compounds.push(...batchResults.filter(compound => compound !== null));
+            // Add delay between batches
+            if (i + batchSize < cids.length) {
+                await new Promise(resolve => setTimeout(resolve, this.requestDelay * batch.length));
+            }
+        }
+        return compounds;
+    }
+    /**
+     * Parse conformer data from PubChem response
+     */
+    parseConformerData(conformerData) {
+        // Implementation would parse the conformer JSON structure
+        // This is a simplified version
+        return [];
+    }
+    /**
+     * Enforce rate limiting for PubChem API
+     */
+    async enforceRateLimit() {
+        const now = Date.now();
+        const timeSinceLastRequest = now - this.lastRequestTime;
+        if (timeSinceLastRequest < this.requestDelay) {
+            const waitTime = this.requestDelay - timeSinceLastRequest;
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+        this.lastRequestTime = Date.now();
+    }
+    /**
+     * Convert PubChem compound to SMILES for RDKit processing
+     */
+    getCompoundSMILES(compound) {
+        return compound.smiles || null;
+    }
+    /**
+     * Get compound 3D structure in SDF format for 3Dmol.js
+     */
+    async getCompound3DSDF(cid) {
+        const molecularData = await this.getMolecularData(cid, true);
+        return molecularData?.structure3D || molecularData?.structure2D || null;
+    }
+    /**
+     * Validate if PubChem API is accessible
+     */
+    async validateConnection() {
+        try {
+            await this.enforceRateLimit();
+            const testUrl = `${this.baseUrl}/compound/cid/2244/property/MolecularFormula/JSON`; // Aspirin
+            const response = await fetch(testUrl);
+            return response.ok;
+        }
+        catch (error) {
+            return false;
+        }
+    }
+}
+
+/**
+ * Reaction Animation System
+ * Implements animated bond formation/breaking visualization for chemical reactions
+ * Part of CREB-JS v1.7.0 - Complete Reaction Animation Feature
+ *
+ * Integrates with:
+ * - RDKit.js for molecular structure processing and SMILES parsing
+ * - 3Dmol.js for advanced 3D visualization and animation
+ * - PubChem API for compound data retrieval
+ */
+/**
+ * Main class for creating and managing reaction animations
+ * Integrates RDKit.js for molecular processing and 3Dmol.js for 3D visualization
+ */
+class ReactionAnimator {
+    constructor(config = {}) {
+        this.currentAnimation = [];
+        this.isPlaying = false;
+        this.currentFrame = 0;
+        this.animationId = null;
+        this.canvas = null;
+        this.context = null;
+        this.energyProfile = null;
+        this.mol3dWrapper = null;
+        this.viewer3D = null; // 3Dmol viewer instance
+        this.moleculeCache = new Map();
+        this.config = {
+            duration: 5000,
+            fps: 30,
+            easing: 'ease-in-out',
+            showEnergyProfile: true,
+            showBondOrders: true,
+            showCharges: false,
+            style: 'smooth',
+            bondColorScheme: 'energy-based',
+            ...config
+        };
+        // Initialize RDKit wrapper for molecular processing
+        this.rdkitWrapper = new RDKitWrapper({
+            addCoords: true,
+            sanitize: true,
+            useCoordGen: true,
+            width: 400,
+            height: 300
+        });
+    }
+    /**
+     * Initialize 3D visualization system
+     */
+    async initialize3DViewer(container) {
+        try {
+            this.mol3dWrapper = new Mol3DWrapper(container, {
+                backgroundColor: 'white',
+                width: container.clientWidth || 600,
+                height: container.clientHeight || 400,
+                antialias: true,
+                alpha: true,
+                preserveDrawingBuffer: false,
+                premultipliedAlpha: false,
+                camera: {
+                    fov: 45,
+                    near: 0.1,
+                    far: 1000,
+                    position: { x: 0, y: 0, z: 10 },
+                    target: { x: 0, y: 0, z: 0 },
+                    up: { x: 0, y: 1, z: 0 }
+                },
+                lighting: {
+                    ambient: '#404040',
+                    directional: [{
+                            color: '#ffffff',
+                            intensity: 1.0,
+                            position: { x: 1, y: 1, z: 1 }
+                        }]
+                },
+                fog: {
+                    enabled: false,
+                    color: '#ffffff',
+                    near: 10,
+                    far: 100
+                }
+            });
+            await this.mol3dWrapper.initialize();
+            this.viewer3D = this.mol3dWrapper.getViewer();
+            console.log('✅ 3D viewer initialized for reaction animation');
+        }
+        catch (error) {
+            console.error('❌ Failed to initialize 3D viewer:', error);
+            throw new Error(`3D viewer initialization failed: ${error}`);
+        }
+    }
+    /**
+     * Parse molecule from SMILES using RDKit
+     */
+    async parseSMILES(smiles) {
+        if (!this.rdkitWrapper) {
+            throw new Error('RDKit wrapper not initialized. Call initializeRDKit() first.');
+        }
+        try {
+            const mol = await this.rdkitWrapper.parseSMILES(smiles);
+            if (!mol) {
+                throw new Error(`Failed to parse SMILES: ${smiles}`);
+            }
+            return mol;
+        }
+        catch (error) {
+            console.error('❌ SMILES parsing failed:', error);
+            throw error;
+        }
+    }
+    /**
+     * Generate 3D coordinates for a molecule using PubChem SDF data
+     */
+    async generate3DCoordinates(molecule) {
+        if (!this.rdkitWrapper) {
+            throw new Error('RDKit wrapper not initialized');
+        }
+        try {
+            // If molecule has a CID, get real 3D structure from PubChem
+            if (molecule.cid) {
+                console.log(`🔬 Fetching real 3D structure from PubChem for CID: ${molecule.cid}`);
+                const pubchem = new PubChemIntegration();
+                const sdf3D = await pubchem.getCompound3DSDF(molecule.cid);
+                if (sdf3D) {
+                    console.log('✅ Retrieved real 3D SDF structure from PubChem');
+                    return { molblock: sdf3D, format: 'sdf', source: 'PubChem_3D' };
+                }
+            }
+            // If molecule has SMILES, try to get PubChem data by name/SMILES lookup
+            if (molecule.smiles || molecule.name) {
+                console.log(`🔍 Looking up ${molecule.name || molecule.smiles} in PubChem`);
+                const pubchem = new PubChemIntegration();
+                try {
+                    const searchTerm = molecule.name || molecule.smiles;
+                    const searchResult = await pubchem.searchCompounds(searchTerm, { searchType: 'name', limit: 1 });
+                    if (searchResult.success && searchResult.compounds.length > 0) {
+                        const compound = searchResult.compounds[0];
+                        const sdf3D = await pubchem.getCompound3DSDF(compound.cid);
+                        if (sdf3D) {
+                            console.log(`✅ Found PubChem 3D structure for ${searchTerm} (CID: ${compound.cid})`);
+                            return { molblock: sdf3D, format: 'sdf', source: 'PubChem_3D' };
+                        }
+                    }
+                }
+                catch (searchError) {
+                    console.warn(`⚠️ PubChem lookup failed for ${molecule.name || molecule.smiles}:`, searchError);
+                }
+            }
+            // Fallback: use RDKit for basic 2D structure (but warn about it)
+            console.warn('⚠️ Using 2D fallback - no PubChem 3D data available');
+            return { molblock: molecule.molblock || '', format: 'mol', source: 'RDKit_2D' };
+        }
+        catch (error) {
+            console.error('❌ 3D coordinate generation failed:', error);
+            throw error;
+        }
+    }
+    /**
+     * Add molecule to 3D scene for animation
+     */
+    async addMoleculeToScene(smiles, moleculeId) {
+        if (!this.mol3dWrapper) {
+            throw new Error('3D viewer not initialized. Call initialize3DViewer() first.');
+        }
+        try {
+            // Parse SMILES with RDKit
+            const molecule = await this.parseSMILES(smiles);
+            // Generate 3D coordinates using PubChem integration
+            const mol3D = await this.generate3DCoordinates(molecule);
+            // Get molecular data
+            let molData;
+            let format = 'sdf';
+            if (mol3D && mol3D.molblock) {
+                molData = mol3D.molblock;
+                format = mol3D.format === 'sdf' ? 'sdf' : 'pdb'; // Use PDB as fallback format
+                console.log(`🔬 Using ${mol3D.source} data for ${moleculeId}`);
+            }
+            else {
+                // Fallback: create simple MOL format from SMILES (convert to PDB format)
+                console.warn(`⚠️ No 3D data available for ${smiles}, using 2D fallback`);
+                molData = await this.createMolBlockFromSMILES(smiles);
+                format = 'pdb';
+            }
+            // Add to 3D scene with correct format
+            await this.mol3dWrapper.addMolecule(moleculeId, molData, format);
+            // Apply default styling (fix setStyle signature)
+            this.mol3dWrapper.setStyle({
+                stick: { radius: 0.15 },
+                sphere: { scale: 0.25 }
+            });
+            console.log(`✅ Added molecule ${moleculeId} to 3D scene`);
+        }
+        catch (error) {
+            console.error(`❌ Failed to add molecule ${moleculeId} to scene:`, error);
+            throw error;
+        }
+    }
+    /**
+     * Create a simple MOL block from SMILES (fallback method)
+     */
+    async createMolBlockFromSMILES(smiles) {
+        // This is a simplified MOL block for basic visualization
+        // In a real implementation, this would use RDKit's molblock generation
+        return `
+  RDKit          2D
+
+  1  0  0  0  0  0  0  0  0  0999 V2000
+    0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
+M  END
+$$$$
+`;
+    }
+    /**
+     * Animate molecular transformation using real 3D structures
+     */
+    async animateMolecularTransformation(reactantSMILES, productSMILES, duration = 2000) {
+        if (!this.mol3dWrapper) {
+            throw new Error('3D viewer not initialized');
+        }
+        try {
+            console.log('🔄 Starting molecular transformation animation...');
+            // Clear existing molecules
+            this.mol3dWrapper.clear();
+            // Add reactants
+            for (let i = 0; i < reactantSMILES.length; i++) {
+                await this.addMoleculeToScene(reactantSMILES[i], `reactant_${i}`);
+                // Position reactants on the left (styling applied in addMoleculeToScene)
+            }
+            // Render initial state
+            this.mol3dWrapper.render();
+            // Wait for half duration
+            await new Promise(resolve => setTimeout(resolve, duration / 2));
+            // Transition: fade out reactants, fade in products
+            console.log('🔄 Transitioning to products...');
+            // Clear and add products
+            this.mol3dWrapper.clear();
+            for (let i = 0; i < productSMILES.length; i++) {
+                await this.addMoleculeToScene(productSMILES[i], `product_${i}`);
+                // Products will have green styling applied in addMoleculeToScene
+            }
+            // Final render
+            this.mol3dWrapper.render();
+            console.log('✅ Molecular transformation animation complete');
+        }
+        catch (error) {
+            console.error('❌ Molecular transformation animation failed:', error);
+            throw error;
+        }
+    }
+    /**
+     * Calculate and display molecular properties during animation
+     */
+    async showMolecularProperties(smiles) {
+        if (!this.rdkitWrapper) {
+            throw new Error('RDKit wrapper not initialized');
+        }
+        try {
+            // Use the correct method name from RDKitWrapper
+            const properties = await this.rdkitWrapper.calculateDescriptors(smiles);
+            // Display properties in UI (can be customized)
+            console.log('📊 Molecular Properties:', {
+                formula: properties.formula,
+                molecularWeight: properties.molecularWeight,
+                logP: properties.logP,
+                tpsa: properties.tpsa,
+                rotatableBonds: properties.rotatableBonds,
+                hbd: properties.hbd,
+                hba: properties.hba,
+                aromaticRings: properties.aromaticRings,
+                aliphaticRings: properties.aliphaticRings
+            });
+            return properties;
+        }
+        catch (error) {
+            console.error('❌ Failed to calculate molecular properties:', error);
+            throw error;
+        }
+    }
+    /**
+     * Create animation from balanced equation and energy profile
+     */
+    async createAnimationFromEquation(equation, energyProfile, transitionStates) {
+        this.energyProfile = energyProfile;
+        // Parse reactants and products
+        const reactantStructures = await this.generateMolecularStructures(equation.reactants);
+        const productStructures = await this.generateMolecularStructures(equation.products);
+        // Create transition path
+        const transitionPath = this.createTransitionPath(reactantStructures, productStructures, energyProfile, transitionStates);
+        // Generate animation frames
+        this.currentAnimation = this.generateAnimationFrames(transitionPath);
+        return this.currentAnimation;
+    }
+    /**
+     * Create animation from custom molecular structures
+     */
+    createCustomAnimation(reactants, products, bondChanges) {
+        const transitionPath = this.createCustomTransitionPath(reactants, products, bondChanges);
+        this.currentAnimation = this.generateAnimationFrames(transitionPath);
+        return this.currentAnimation;
+    }
+    /**
+     * Play the animation on a canvas
+     */
+    async playAnimation(canvas, onFrameUpdate) {
+        if (this.currentAnimation.length === 0) {
+            throw new Error('No animation loaded. Call createAnimation first.');
+        }
+        this.canvas = canvas;
+        this.context = canvas.getContext('2d');
+        if (!this.context) {
+            throw new Error('Could not get 2D context from canvas');
+        }
+        this.isPlaying = true;
+        this.currentFrame = 0;
+        const frameInterval = 1000 / this.config.fps;
+        return new Promise((resolve) => {
+            const animate = () => {
+                if (!this.isPlaying || this.currentFrame >= this.currentAnimation.length) {
+                    this.isPlaying = false;
+                    resolve();
+                    return;
+                }
+                const frame = this.currentAnimation[this.currentFrame];
+                this.renderFrame(frame);
+                if (onFrameUpdate) {
+                    onFrameUpdate(frame);
+                }
+                this.currentFrame++;
+                this.animationId = setTimeout(animate, frameInterval);
+            };
+            animate();
+        });
+    }
+    /**
+     * Pause the animation
+     */
+    pauseAnimation() {
+        this.isPlaying = false;
+        if (this.animationId) {
+            clearTimeout(this.animationId);
+            this.animationId = null;
+        }
+    }
+    /**
+     * Resume the animation
+     */
+    resumeAnimation() {
+        if (!this.isPlaying && this.currentFrame < this.currentAnimation.length) {
+            this.isPlaying = true;
+            this.playAnimation(this.canvas);
+        }
+    }
+    /**
+     * Reset animation to beginning
+     */
+    resetAnimation() {
+        this.pauseAnimation();
+        this.currentFrame = 0;
+    }
+    /**
+     * Export animation as video data
+     */
+    exportAnimation(format = 'gif') {
+        // Implementation would depend on the specific video encoding library
+        // For now, return a mock blob
+        return Promise.resolve(new Blob(['animation data'], { type: `video/${format}` }));
+    }
+    /**
+     * Generate molecular structures from species names
+     */
+    async generateMolecularStructures(species) {
+        const structures = [];
+        for (const molecule of species) {
+            const structure = await this.generateStructureFromName(molecule);
+            structures.push(structure);
+        }
+        return structures;
+    }
+    /**
+     * Generate a molecular structure from a molecule name
+     */
+    async generateStructureFromName(moleculeName) {
+        // This would integrate with molecular database or SMILES parser
+        // For now, return mock structures for common molecules
+        const mockStructures = {
+            'H2O': {
+                atoms: [
+                    { element: 'O', position: { x: 0, y: 0, z: 0 }, charge: -0.34 },
+                    { element: 'H', position: { x: 0.757, y: 0.587, z: 0 }, charge: 0.17 },
+                    { element: 'H', position: { x: -0.757, y: 0.587, z: 0 }, charge: 0.17 }
+                ],
+                bonds: [
+                    { atom1: 0, atom2: 1, order: 1, length: 0.96 },
+                    { atom1: 0, atom2: 2, order: 1, length: 0.96 }
+                ],
+                properties: { totalEnergy: 0, charge: 0 }
+            },
+            'CH4': {
+                atoms: [
+                    { element: 'C', position: { x: 0, y: 0, z: 0 }, charge: -0.4 },
+                    { element: 'H', position: { x: 1.089, y: 0, z: 0 }, charge: 0.1 },
+                    { element: 'H', position: { x: -0.363, y: 1.027, z: 0 }, charge: 0.1 },
+                    { element: 'H', position: { x: -0.363, y: -0.513, z: 0.889 }, charge: 0.1 },
+                    { element: 'H', position: { x: -0.363, y: -0.513, z: -0.889 }, charge: 0.1 }
+                ],
+                bonds: [
+                    { atom1: 0, atom2: 1, order: 1, length: 1.089 },
+                    { atom1: 0, atom2: 2, order: 1, length: 1.089 },
+                    { atom1: 0, atom2: 3, order: 1, length: 1.089 },
+                    { atom1: 0, atom2: 4, order: 1, length: 1.089 }
+                ],
+                properties: { totalEnergy: 0, charge: 0 }
+            },
+            'O2': {
+                atoms: [
+                    { element: 'O', position: { x: -0.6, y: 0, z: 0 }, charge: 0 },
+                    { element: 'O', position: { x: 0.6, y: 0, z: 0 }, charge: 0 }
+                ],
+                bonds: [
+                    { atom1: 0, atom2: 1, order: 2, length: 1.21 }
+                ],
+                properties: { totalEnergy: 0, charge: 0 }
+            },
+            'CO2': {
+                atoms: [
+                    { element: 'C', position: { x: 0, y: 0, z: 0 }, charge: 0.4 },
+                    { element: 'O', position: { x: -1.16, y: 0, z: 0 }, charge: -0.2 },
+                    { element: 'O', position: { x: 1.16, y: 0, z: 0 }, charge: -0.2 }
+                ],
+                bonds: [
+                    { atom1: 0, atom2: 1, order: 2, length: 1.16 },
+                    { atom1: 0, atom2: 2, order: 2, length: 1.16 }
+                ],
+                properties: { totalEnergy: 0, charge: 0 }
+            }
+        };
+        return mockStructures[moleculeName] || mockStructures['H2O'];
+    }
+    /**
+     * Create transition path between reactants and products
+     */
+    createTransitionPath(reactants, products, energyProfile, transitionStates) {
+        const steps = [];
+        // Create steps based on energy profile points
+        for (let i = 0; i < energyProfile.points.length - 1; i++) {
+            const currentPoint = energyProfile.points[i];
+            const nextPoint = energyProfile.points[i + 1];
+            const step = {
+                stepNumber: i,
+                description: `${currentPoint.label} → ${nextPoint.label}`,
+                energyChange: nextPoint.energy - currentPoint.energy,
+                bondChanges: this.inferBondChanges(currentPoint, nextPoint),
+                duration: 1 / (energyProfile.points.length - 1),
+                intermediates: this.generateIntermediateStructures(currentPoint, nextPoint)
+            };
+            steps.push(step);
+        }
+        return steps;
+    }
+    /**
+     * Create custom transition path from bond changes
+     */
+    createCustomTransitionPath(reactants, products, bondChanges) {
+        const steps = [];
+        // Group bond changes by type
+        const breakingBonds = bondChanges.filter(bc => bc.type === 'breaking');
+        const formingBonds = bondChanges.filter(bc => bc.type === 'forming');
+        // Create breaking step
+        if (breakingBonds.length > 0) {
+            steps.push({
+                stepNumber: 0,
+                description: 'Bond breaking',
+                energyChange: breakingBonds.reduce((sum, bc) => sum + bc.energyContribution, 0),
+                bondChanges: breakingBonds,
+                duration: 0.4
+            });
+        }
+        // Create transition state step
+        steps.push({
+            stepNumber: steps.length,
+            description: 'Transition state',
+            energyChange: 50, // Estimated activation energy
+            bondChanges: [],
+            duration: 0.2
+        });
+        // Create forming step
+        if (formingBonds.length > 0) {
+            steps.push({
+                stepNumber: steps.length,
+                description: 'Bond forming',
+                energyChange: formingBonds.reduce((sum, bc) => sum + bc.energyContribution, 0),
+                bondChanges: formingBonds,
+                duration: 0.4
+            });
+        }
+        return steps;
+    }
+    /**
+     * Generate animation frames from reaction steps
+     */
+    generateAnimationFrames(steps) {
+        const frames = [];
+        const totalFrames = Math.floor(this.config.duration * this.config.fps / 1000);
+        let currentFrameIndex = 0;
+        for (const step of steps) {
+            const stepFrames = Math.floor(totalFrames * step.duration);
+            for (let i = 0; i < stepFrames; i++) {
+                const stepProgress = i / (stepFrames - 1);
+                const totalProgress = currentFrameIndex / totalFrames;
+                const frame = {
+                    frameNumber: currentFrameIndex,
+                    time: totalProgress,
+                    structure: this.interpolateStructure(step, stepProgress),
+                    energy: this.interpolateEnergy(step, stepProgress),
+                    bonds: this.generateAnimatedBonds(step, stepProgress),
+                    atoms: this.generateAnimatedAtoms(step, stepProgress)
+                };
+                frames.push(frame);
+                currentFrameIndex++;
+            }
+        }
+        return frames;
+    }
+    /**
+     * Interpolate molecular structure during a reaction step
+     */
+    interpolateStructure(step, progress) {
+        // Apply easing function
+        this.applyEasing(progress);
+        // For now, return a simple interpolated structure
+        return {
+            atoms: [
+                { element: 'C', position: { x: 0, y: 0, z: 0 } }
+            ],
+            bonds: [],
+            properties: { totalEnergy: 0, charge: 0 }
+        };
+    }
+    /**
+     * Interpolate energy during a reaction step
+     */
+    interpolateEnergy(step, progress) {
+        const easedProgress = this.applyEasing(progress);
+        return step.energyChange * easedProgress;
+    }
+    /**
+     * Generate animated bonds for a frame
+     */
+    generateAnimatedBonds(step, progress) {
+        const bonds = [];
+        for (const bondChange of step.bondChanges) {
+            const easedProgress = this.applyEasing(progress);
+            const bond = {
+                atom1: 0, // Would be determined from bond change
+                atom2: 1,
+                order: this.interpolateBondOrder(bondChange, easedProgress),
+                targetOrder: bondChange.bondOrderChange,
+                state: bondChange.type === 'breaking' ? 'breaking' : 'forming',
+                color: this.getBondColor(bondChange, easedProgress),
+                opacity: this.getBondOpacity(bondChange, easedProgress)
+            };
+            bonds.push(bond);
+        }
+        return bonds;
+    }
+    /**
+     * Generate animated atoms for a frame
+     */
+    generateAnimatedAtoms(step, progress) {
+        const atoms = [];
+        // This would generate atoms based on the molecular structure
+        // For now, return empty array
+        return atoms;
+    }
+    /**
+     * Render a single animation frame
+     */
+    renderFrame(frame) {
+        if (!this.context || !this.canvas)
+            return;
+        // Clear canvas
+        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        // Set up coordinate system
+        this.context.save();
+        this.context.translate(this.canvas.width / 2, this.canvas.height / 2);
+        this.context.scale(100, -100); // Scale and flip Y axis for chemistry coordinates
+        // Render atoms
+        this.renderAtoms(frame.atoms);
+        // Render bonds
+        this.renderBonds(frame.bonds);
+        // Render energy indicator
+        if (this.config.showEnergyProfile) {
+            this.renderEnergyIndicator(frame.energy);
+        }
+        this.context.restore();
+        // Render frame information
+        this.renderFrameInfo(frame);
+    }
+    /**
+     * Render atoms in the current frame
+     */
+    renderAtoms(atoms) {
+        if (!this.context)
+            return;
+        for (const atom of atoms) {
+            this.context.save();
+            // Set atom color
+            this.context.fillStyle = atom.color;
+            this.context.globalAlpha = atom.opacity;
+            // Draw atom
+            this.context.beginPath();
+            this.context.arc(atom.position.x, atom.position.y, atom.radius, 0, 2 * Math.PI);
+            this.context.fill();
+            // Draw element label
+            this.context.fillStyle = 'white';
+            this.context.font = '0.3px Arial';
+            this.context.textAlign = 'center';
+            this.context.fillText(atom.element, atom.position.x, atom.position.y + 0.1);
+            this.context.restore();
+        }
+    }
+    /**
+     * Render bonds in the current frame
+     */
+    renderBonds(bonds) {
+        if (!this.context)
+            return;
+        for (const bond of bonds) {
+            this.context.save();
+            // Set bond style
+            this.context.strokeStyle = bond.color;
+            this.context.globalAlpha = bond.opacity;
+            this.context.lineWidth = 0.1 * bond.order;
+            if (bond.dashPattern) {
+                this.context.setLineDash(bond.dashPattern);
+            }
+            // Draw bond (simplified - would need atom positions)
+            this.context.beginPath();
+            this.context.moveTo(-1, 0);
+            this.context.lineTo(1, 0);
+            this.context.stroke();
+            this.context.restore();
+        }
+    }
+    /**
+     * Render energy indicator
+     */
+    renderEnergyIndicator(energy) {
+        if (!this.context || !this.canvas)
+            return;
+        this.context.save();
+        // Reset transform for consistent positioning
+        this.context.setTransform(1, 0, 0, 1, 0, 0);
+        // Draw energy bar
+        const barWidth = 20;
+        const barHeight = 200;
+        const barX = this.canvas.width - 40;
+        const barY = 50;
+        // Background
+        this.context.fillStyle = '#f0f0f0';
+        this.context.fillRect(barX, barY, barWidth, barHeight);
+        // Energy level
+        const energyHeight = Math.max(0, Math.min(barHeight, (energy / 100) * barHeight));
+        this.context.fillStyle = energy > 0 ? '#ff6b6b' : '#51cf66';
+        this.context.fillRect(barX, barY + barHeight - energyHeight, barWidth, energyHeight);
+        // Label
+        this.context.fillStyle = 'black';
+        this.context.font = '12px Arial';
+        this.context.textAlign = 'center';
+        this.context.fillText(`${energy.toFixed(1)} kJ/mol`, barX + barWidth / 2, barY + barHeight + 20);
+        this.context.restore();
+    }
+    /**
+     * Render frame information
+     */
+    renderFrameInfo(frame) {
+        if (!this.context)
+            return;
+        this.context.save();
+        this.context.setTransform(1, 0, 0, 1, 0, 0);
+        this.context.fillStyle = 'black';
+        this.context.font = '14px Arial';
+        this.context.fillText(`Frame: ${frame.frameNumber}`, 10, 20);
+        this.context.fillText(`Time: ${(frame.time * 100).toFixed(1)}%`, 10, 40);
+        this.context.restore();
+    }
+    /**
+     * Apply easing function to animation progress
+     */
+    applyEasing(progress) {
+        switch (this.config.easing) {
+            case 'linear':
+                return progress;
+            case 'ease-in':
+                return progress * progress;
+            case 'ease-out':
+                return 1 - (1 - progress) * (1 - progress);
+            case 'ease-in-out':
+                return progress < 0.5
+                    ? 2 * progress * progress
+                    : 1 - 2 * (1 - progress) * (1 - progress);
+            default:
+                return progress;
+        }
+    }
+    /**
+     * Infer bond changes between energy profile points
+     */
+    inferBondChanges(current, next) {
+        // This would analyze the chemical structures to determine bond changes
+        // For now, return empty array
+        return [];
+    }
+    /**
+     * Generate intermediate structures between energy points
+     */
+    generateIntermediateStructures(current, next) {
+        // This would generate molecular structures at intermediate points
+        // For now, return empty array
+        return [];
+    }
+    /**
+     * Interpolate bond order during animation
+     */
+    interpolateBondOrder(bondChange, progress) {
+        if (bondChange.type === 'breaking') {
+            return Math.max(0, 1 - progress);
+        }
+        else if (bondChange.type === 'forming') {
+            return progress;
+        }
+        return 1;
+    }
+    /**
+     * Get bond color based on bond change and progress
+     */
+    getBondColor(bondChange, progress) {
+        switch (this.config.bondColorScheme) {
+            case 'energy-based':
+                const energy = Math.abs(bondChange.energyContribution);
+                return energy > 500 ? '#ff4757' : energy > 300 ? '#ffa502' : energy > 150 ? '#ffb347' : '#2ed573';
+            case 'order-based':
+                return bondChange.bondOrderChange > 0 ? '#2ed573' : '#ff4757';
+            default:
+                // Use energy-based coloring as default
+                const defaultEnergy = Math.abs(bondChange.energyContribution);
+                return defaultEnergy > 500 ? '#ff4757' : defaultEnergy > 300 ? '#ffa502' : '#2ed573';
+        }
+    }
+    /**
+     * Get bond opacity based on bond change and progress
+     */
+    getBondOpacity(bondChange, progress) {
+        if (bondChange.type === 'breaking') {
+            return 1 - progress;
+        }
+        else if (bondChange.type === 'forming') {
+            return progress;
+        }
+        return 1;
+    }
+}
+
+/**
+ * CREB Phase 3: Simplified AI-Powered Reaction Classification
+ * Browser-compatible version without external ML dependencies
+ */
+/**
+ * AI-Powered Reaction Classification System (Simplified)
+ * Provides intelligent reaction analysis without external ML dependencies
+ */
+class ReactionClassifier {
+    constructor() {
+        this.modelVersion = '1.0.0-browser';
+        console.log('🤖 AI Reaction Classifier initialized (Browser Mode)');
+    }
+    /**
+     * Classify a chemical reaction using rule-based AI
+     */
+    async classifyReaction(equation) {
+        try {
+            const startTime = Date.now();
+            // Parse equation components
+            const compounds = this.extractCompounds(equation);
+            const characteristics = this.analyzeReactionCharacteristics(equation);
+            // Determine reaction type using rule-based classification
+            const reactionType = this.determineReactionType(characteristics, compounds);
+            const confidence = this.calculateConfidence(characteristics);
+            const reasoning = this.generateReasoning(reactionType, characteristics);
+            const suggestedStyle = this.getAnimationStyle(reactionType);
+            const result = {
+                reactionType,
+                confidence,
+                reasoning,
+                suggestedStyle,
+                characteristics
+            };
+            const processingTime = Date.now() - startTime;
+            console.log(`✅ AI classification complete in ${processingTime}ms`, result);
+            return result;
+        }
+        catch (error) {
+            console.error('❌ AI classification failed:', error);
+            // Fallback to general classification
+            return {
+                reactionType: 'general',
+                confidence: 0.1,
+                reasoning: ['Classification failed, using default style'],
+                suggestedStyle: this.getDefaultAnimationStyle(),
+                characteristics: this.getDefaultCharacteristics()
+            };
+        }
+    }
+    /**
+     * Optimize animation parameters based on reaction type
+     */
+    async optimizeAnimationParameters(reactionType, reactants, products) {
+        try {
+            // Base parameters from reaction classification
+            const baseParams = {
+                duration: 3.0,
+                temperature: 298,
+                pressure: 1,
+                solvent: 'vacuum'
+            };
+            // Adjust based on reaction characteristics
+            if (reactionType.characteristics.hasEnergyRelease) {
+                return {
+                    ...baseParams,
+                    duration: 2.0,
+                    showEnergyProfile: true,
+                    particleEffects: true
+                };
+            }
+            if (reactionType.characteristics.hasGasProduction) {
+                return {
+                    ...baseParams,
+                    duration: 3.5,
+                    showBubbleEffects: true,
+                    emphasizeVolumeChange: true
+                };
+            }
+            return baseParams;
+        }
+        catch (error) {
+            console.error('AI parameter optimization failed:', error);
+            throw error;
+        }
+    }
+    /**
+     * Analyze the structural characteristics of a reaction
+     */
+    analyzeReactionCharacteristics(equation) {
+        const compounds = this.extractCompounds(equation);
+        const reactants = compounds.reactants;
+        const products = compounds.products;
+        return {
+            hasOxygen: this.containsOxygen(reactants) || this.containsOxygen(products),
+            hasCombustibleFuel: this.containsCombustibleFuel(reactants),
+            formsSingleProduct: products.length === 1,
+            breaksIntoMultipleProducts: products.length > reactants.length,
+            involvesIons: this.containsIons(reactants) || this.containsIons(products),
+            hasEnergyRelease: this.isExothermic(equation),
+            hasGasProduction: this.producesGas(products),
+            hasPrecipitate: this.formsPrecipitate(equation)
+        };
+    }
+    /**
+     * Extract compounds from equation
+     */
+    extractCompounds(equation) {
+        const [reactantSide, productSide] = equation.split(/→|->|=/).map(s => s.trim());
+        const reactants = reactantSide.split('+').map(s => s.trim().replace(/^\d+/, ''));
+        const products = productSide.split('+').map(s => s.trim().replace(/^\d+/, ''));
+        return { reactants, products };
+    }
+    /**
+     * Determine reaction type based on characteristics
+     */
+    determineReactionType(characteristics, compounds) {
+        const { reactants, products } = compounds;
+        // Combustion detection
+        if (characteristics.hasOxygen && characteristics.hasCombustibleFuel &&
+            products.some(p => p.includes('CO2') || p.includes('H2O'))) {
+            return 'combustion';
+        }
+        // Synthesis detection
+        if (reactants.length > 1 && characteristics.formsSingleProduct) {
+            return 'synthesis';
+        }
+        // Decomposition detection
+        if (reactants.length === 1 && characteristics.breaksIntoMultipleProducts) {
+            return 'decomposition';
+        }
+        // Acid-base detection
+        if (characteristics.involvesIons && products.some(p => p.includes('H2O'))) {
+            return 'acid-base';
+        }
+        // Single displacement
+        if (reactants.length === 2 && products.length === 2 &&
+            this.hasElementalMetal(reactants)) {
+            return 'single-displacement';
+        }
+        // Double displacement
+        if (reactants.length === 2 && products.length === 2 &&
+            characteristics.involvesIons) {
+            return 'double-displacement';
+        }
+        return 'general';
+    }
+    /**
+     * Helper methods for compound analysis
+     */
+    containsOxygen(compounds) {
+        return compounds.some(c => /O\d*/.test(c));
+    }
+    containsCombustibleFuel(compounds) {
+        return compounds.some(c => /C\d*H\d*/.test(c) || c === 'C' || c === 'H2');
+    }
+    containsIons(compounds) {
+        return compounds.some(c => /Cl|Na|K|Ca|Mg|OH/.test(c));
+    }
+    isExothermic(equation) {
+        return /combustion|burn|explode/i.test(equation) ||
+            equation.includes('CO2') && equation.includes('H2O');
+    }
+    producesGas(products) {
+        const gases = ['CO2', 'H2', 'O2', 'N2', 'Cl2', 'NH3'];
+        return products.some(p => gases.some(gas => p.includes(gas)));
+    }
+    formsPrecipitate(equation) {
+        return /precipitate|solid|↓/i.test(equation);
+    }
+    hasElementalMetal(reactants) {
+        const metals = ['Na', 'K', 'Ca', 'Mg', 'Al', 'Fe', 'Cu', 'Zn'];
+        return reactants.some(r => metals.includes(r));
+    }
+    /**
+     * Calculate confidence based on characteristics
+     */
+    calculateConfidence(characteristics) {
+        let confidence = 0.5; // Base confidence
+        // Increase confidence for clear indicators
+        if (characteristics.hasOxygen && characteristics.hasCombustibleFuel)
+            confidence += 0.3;
+        if (characteristics.formsSingleProduct)
+            confidence += 0.1;
+        if (characteristics.hasEnergyRelease)
+            confidence += 0.2;
+        if (characteristics.involvesIons)
+            confidence += 0.1;
+        return Math.min(confidence, 0.95); // Cap at 95%
+    }
+    /**
+     * Generate reasoning for classification
+     */
+    generateReasoning(reactionType, characteristics) {
+        const reasons = [];
+        switch (reactionType) {
+            case 'combustion':
+                reasons.push('Oxygen present in reactants');
+                reasons.push('Combustible fuel detected');
+                if (characteristics.hasEnergyRelease)
+                    reasons.push('Exothermic reaction');
+                break;
+            case 'synthesis':
+                reasons.push('Multiple reactants form single product');
+                break;
+            case 'decomposition':
+                reasons.push('Single reactant breaks into multiple products');
+                break;
+            case 'acid-base':
+                reasons.push('Ionic compounds detected');
+                reasons.push('Water formation indicates neutralization');
+                break;
+        }
+        return reasons;
+    }
+    /**
+     * Get animation style based on reaction type
+     */
+    getAnimationStyle(reactionType) {
+        const styles = {
+            combustion: {
+                particleEffects: true,
+                energyProfile: true,
+                colorScheme: 'fire',
+                duration: 2.0
+            },
+            synthesis: {
+                bondFormation: true,
+                convergence: true,
+                colorScheme: 'synthesis',
+                duration: 3.0
+            },
+            decomposition: {
+                bondBreaking: true,
+                divergence: true,
+                colorScheme: 'breakdown',
+                duration: 2.5
+            },
+            'acid-base': {
+                ionicMotion: true,
+                neutralization: true,
+                colorScheme: 'ionic',
+                duration: 3.5
+            }
+        };
+        return styles[reactionType] || this.getDefaultAnimationStyle();
+    }
+    getDefaultAnimationStyle() {
+        return {
+            particleEffects: false,
+            energyProfile: false,
+            colorScheme: 'default',
+            duration: 3.0
+        };
+    }
+    getDefaultCharacteristics() {
+        return {
+            hasOxygen: false,
+            hasCombustibleFuel: false,
+            formsSingleProduct: false,
+            breaksIntoMultipleProducts: false,
+            involvesIons: false,
+            hasEnergyRelease: false,
+            hasGasProduction: false,
+            hasPrecipitate: false
+        };
+    }
+}
+
+/**
+ * CREB Phase 3: Simplified Physics Engine
+ * Browser-compatible version without external physics dependencies
+ */
+/**
+ * Simplified Molecular Physics Engine (Browser Mode)
+ * Provides physics-based animation without external dependencies
+ */
+class SimplifiedPhysicsEngine {
+    constructor() {
+        this.config = {};
+        this.isInitialized = false;
+        this.initialize();
+    }
+    initialize() {
+        this.config = {
+            gravity: -9.82,
+            timeStep: 1 / 60,
+            temperature: 298,
+            pressure: 1.0
+        };
+        this.isInitialized = true;
+        console.log('⚡ Simplified Physics Engine initialized (Browser Mode)');
+    }
+    /**
+     * Configure physics simulation parameters
+     */
+    configure(config) {
+        try {
+            if (config.temperature !== undefined) {
+                this.config.temperature = config.temperature;
+                // Adjust gravity based on temperature (higher temp = more kinetic energy)
+                const tempFactor = Math.max(0.1, config.temperature / 298);
+                this.config.gravity = -9.82 * tempFactor;
+            }
+            if (config.enableCollision !== undefined) {
+                this.config.enableCollision = config.enableCollision;
+            }
+            console.log('Physics engine configured', config);
+        }
+        catch (error) {
+            console.error('Physics configuration failed:', error);
+            throw error;
+        }
+    }
+    /**
+     * Simulate reaction pathway with simplified physics
+     */
+    async simulateReactionPathway(transitions, duration) {
+        try {
+            const frames = [];
+            const frameRate = 60; // 60 FPS
+            const totalFrames = Math.floor(duration * frameRate);
+            console.log(`🔬 Starting physics simulation: ${totalFrames} frames over ${duration}s`);
+            for (let frame = 0; frame < totalFrames; frame++) {
+                const progress = frame / totalFrames;
+                const timestamp = (frame / frameRate) * 1000; // Convert to ms
+                // Apply simplified physics calculations
+                const molecularStates = transitions.map((transition, index) => ({
+                    moleculeId: `molecule_${index}`,
+                    position: this.interpolatePosition(transition, progress),
+                    rotation: this.interpolateRotation(transition, progress),
+                    scale: this.interpolateScale(transition, progress),
+                    velocity: this.calculateVelocity(transition, progress),
+                    bonds: transition.bonds || [],
+                    atoms: transition.atoms || []
+                }));
+                frames.push({
+                    timestamp,
+                    molecularStates,
+                    frameNumber: frame,
+                    progress: progress * 100
+                });
+                // Add some physics-based perturbations
+                this.applyPhysicsEffects(molecularStates, progress);
+            }
+            console.log(`✅ Physics simulation completed: ${frames.length} frames generated`);
+            return frames;
+        }
+        catch (error) {
+            console.error('Physics simulation failed:', error);
+            throw error;
+        }
+    }
+    /**
+     * Interpolate position with physics-based motion
+     */
+    interpolatePosition(transition, progress) {
+        if (!transition.startStructure || !transition.endStructure) {
+            return { x: 0, y: 0, z: 0 };
+        }
+        const start = transition.startStructure.center || { x: 0, y: 0, z: 0 };
+        const end = transition.endStructure.center || { x: 0, y: 0, z: 0 };
+        // Add physics-based easing (acceleration/deceleration)
+        const easedProgress = this.physicsEasing(progress);
+        // Add some random brownian motion for realism
+        const brownianX = (Math.random() - 0.5) * 0.1;
+        const brownianY = (Math.random() - 0.5) * 0.1;
+        const brownianZ = (Math.random() - 0.5) * 0.1;
+        return {
+            x: start.x + (end.x - start.x) * easedProgress + brownianX,
+            y: start.y + (end.y - start.y) * easedProgress + brownianY,
+            z: start.z + (end.z - start.z) * easedProgress + brownianZ
+        };
+    }
+    /**
+     * Physics-based easing function
+     */
+    physicsEasing(t) {
+        // Simulate realistic molecular motion with slight acceleration/deceleration
+        return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+    }
+    /**
+     * Interpolate rotation with angular momentum
+     */
+    interpolateRotation(transition, progress) {
+        const baseRotation = progress * Math.PI * 2;
+        // Add temperature-dependent rotational energy
+        const tempFactor = this.config.temperature / 298;
+        const thermalRotation = Math.sin(progress * Math.PI * 4) * tempFactor * 0.2;
+        return {
+            x: thermalRotation,
+            y: baseRotation + thermalRotation,
+            z: thermalRotation * 0.5
+        };
+    }
+    /**
+     * Interpolate scale with thermal expansion
+     */
+    interpolateScale(transition, progress) {
+        // Base scale oscillation
+        const baseScale = 1 + Math.sin(progress * Math.PI) * 0.1;
+        // Temperature-dependent thermal expansion
+        const tempFactor = this.config.temperature / 298;
+        const thermalExpansion = 1 + (tempFactor - 1) * 0.05;
+        const finalScale = baseScale * thermalExpansion;
+        return { x: finalScale, y: finalScale, z: finalScale };
+    }
+    /**
+     * Calculate velocity for motion blur effects
+     */
+    calculateVelocity(transition, progress) {
+        const timeStep = this.config.timeStep;
+        // Simple velocity calculation based on position change
+        const velocityFactor = Math.sin(progress * Math.PI) * 5.0; // Peak velocity at middle
+        return {
+            x: velocityFactor * timeStep,
+            y: velocityFactor * timeStep * 0.5,
+            z: velocityFactor * timeStep * 0.3
+        };
+    }
+    /**
+     * Apply physics effects like thermal motion
+     */
+    applyPhysicsEffects(molecularStates, progress) {
+        molecularStates.forEach(state => {
+            // Add thermal motion based on temperature
+            const tempFactor = this.config.temperature / 298;
+            const thermalMotion = tempFactor * 0.1;
+            // Apply random thermal vibrations
+            state.position.x += (Math.random() - 0.5) * thermalMotion;
+            state.position.y += (Math.random() - 0.5) * thermalMotion;
+            state.position.z += (Math.random() - 0.5) * thermalMotion;
+            // Add collision effects if enabled
+            if (this.config.enableCollision && progress > 0.3 && progress < 0.7) {
+                const collisionFactor = Math.sin((progress - 0.3) * Math.PI / 0.4);
+                state.scale.x *= (1 + collisionFactor * 0.2);
+                state.scale.y *= (1 - collisionFactor * 0.1);
+                state.scale.z *= (1 + collisionFactor * 0.15);
+            }
+        });
+    }
+    /**
+     * Calculate system energy for monitoring
+     */
+    calculateSystemEnergy(molecularStates) {
+        const kineticEnergy = molecularStates.reduce((total, state) => {
+            const v2 = state.velocity.x ** 2 + state.velocity.y ** 2 + state.velocity.z ** 2;
+            return total + 0.5 * v2; // Assuming unit mass
+        }, 0);
+        const potentialEnergy = molecularStates.length * this.config.temperature * 0.01; // Simplified
+        return {
+            kinetic: kineticEnergy,
+            potential: potentialEnergy,
+            total: kineticEnergy + potentialEnergy,
+            temperature: this.config.temperature
+        };
+    }
+    /**
+     * Reset physics state
+     */
+    reset() {
+        this.config = {
+            gravity: -9.82,
+            timeStep: 1 / 60,
+            temperature: 298,
+            pressure: 1.0
+        };
+        console.log('Physics engine reset to default state');
+    }
+    /**
+     * Alias for simulateReactionPathway - for API compatibility
+     */
+    async simulateReaction(equation, options) {
+        // Convert equation string to simple transitions array for compatibility
+        const transitions = [{
+                reactants: equation.split('->')[0]?.trim().split('+').map(r => r.trim()) || [],
+                products: equation.split('->')[1]?.trim().split('+').map(p => p.trim()) || [],
+                startStructure: { center: { x: -2, y: 0, z: 0 } },
+                endStructure: { center: { x: 2, y: 0, z: 0 } }
+            }];
+        const duration = options?.duration || 4.0;
+        return this.simulateReactionPathway(transitions, duration);
+    }
+    /**
+     * Dispose of physics resources
+     */
+    dispose() {
+        this.isInitialized = false;
+        console.log('🔬 Simplified Physics Engine disposed');
+    }
+}
+
+/**
+ * CREB Phase 3: Simplified Caching Manager
+ * Browser-compatible version with localStorage fallback
+ */
+/**
+ * Simplified Intelligent Cache Manager (Browser Mode)
+ * Uses localStorage and memory cache without external dependencies
+ */
+class SimplifiedCacheManager {
+    constructor() {
+        this.memoryCache = new Map();
+        this.maxMemorySize = 100; // Maximum items in memory
+        this.stats = {
+            memorySize: 0,
+            persistentSize: 0,
+            hitRate: 0,
+            missRate: 0,
+            totalRequests: 0
+        };
+        this.initialize();
+    }
+    initialize() {
+        // Clear old cache entries on startup
+        this.cleanupExpiredEntries();
+        console.log('🧠 Simplified Cache Manager initialized (Browser Mode)');
+    }
+    /**
+     * Get item from cache (memory first, then localStorage)
+     */
+    async get(key) {
+        this.stats.totalRequests++;
+        // Check memory cache first
+        const memoryItem = this.memoryCache.get(key);
+        if (memoryItem) {
+            // Check if expired
+            if (memoryItem.ttl && Date.now() > memoryItem.timestamp + memoryItem.ttl) {
+                this.memoryCache.delete(key);
+            }
+            else {
+                this.recordHit('memory');
+                console.log(`💾 Cache hit (memory): ${key}`);
+                return memoryItem.data;
+            }
+        }
+        // Check localStorage
+        try {
+            const persistentItem = localStorage.getItem(`creb_cache_${key}`);
+            if (persistentItem) {
+                const parsed = JSON.parse(persistentItem);
+                // Check if expired
+                if (parsed.ttl && Date.now() > parsed.timestamp + parsed.ttl) {
+                    localStorage.removeItem(`creb_cache_${key}`);
+                }
+                else {
+                    // Move to memory cache for faster future access
+                    this.memoryCache.set(key, {
+                        data: parsed.data,
+                        timestamp: parsed.timestamp,
+                        ttl: parsed.ttl
+                    });
+                    this.recordHit('persistent');
+                    console.log(`💽 Cache hit (persistent): ${key}`);
+                    return parsed.data;
+                }
+            }
+        }
+        catch (error) {
+            console.warn('Error reading from localStorage:', error);
+        }
+        // Cache miss
+        this.recordMiss();
+        console.log(`❌ Cache miss: ${key}`);
+        return null;
+    }
+    /**
+     * Set item in cache (both memory and localStorage)
+     */
+    async set(key, data, ttl) {
+        const timestamp = Date.now();
+        const cacheItem = { data, timestamp, ttl };
+        // Store in memory cache
+        this.memoryCache.set(key, cacheItem);
+        // Enforce memory size limit
+        if (this.memoryCache.size > this.maxMemorySize) {
+            this.evictOldestMemoryItems();
+        }
+        // Store in localStorage
+        try {
+            const serialized = JSON.stringify(cacheItem);
+            localStorage.setItem(`creb_cache_${key}`, serialized);
+            console.log(`✅ Cache set: ${key} (${serialized.length} bytes)`);
+        }
+        catch (error) {
+            // localStorage might be full
+            console.warn('Error writing to localStorage:', error);
+            this.cleanupLocalStorage();
+        }
+        this.updateStats();
+    }
+    /**
+     * Clear specific cache entry
+     */
+    async clear(key) {
+        this.memoryCache.delete(key);
+        localStorage.removeItem(`creb_cache_${key}`);
+        console.log(`🗑️ Cache cleared: ${key}`);
+    }
+    /**
+     * Clear all cache entries
+     */
+    async clearAll() {
+        this.memoryCache.clear();
+        // Clear all CREB cache entries from localStorage
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('creb_cache_')) {
+                keysToRemove.push(key);
+            }
+        }
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        this.resetStats();
+        console.log('🧹 All cache entries cleared');
+    }
+    /**
+     * Get cache statistics
+     */
+    getStats() {
+        this.updateStats();
+        return { ...this.stats };
+    }
+    /**
+     * Update cache statistics
+     */
+    updateStats() {
+        this.stats.memorySize = this.memoryCache.size;
+        // Count localStorage items
+        let persistentCount = 0;
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('creb_cache_')) {
+                persistentCount++;
+            }
+        }
+        this.stats.persistentSize = persistentCount;
+        // Calculate hit/miss rates
+        if (this.stats.totalRequests > 0) {
+            const hits = this.stats.totalRequests - (this.stats.totalRequests * this.stats.missRate);
+            this.stats.hitRate = hits / this.stats.totalRequests;
+        }
+    }
+    /**
+     * Record cache hit
+     */
+    recordHit(type) {
+        // Update hit rate calculation
+        const totalHits = this.stats.totalRequests * this.stats.hitRate + 1;
+        this.stats.hitRate = totalHits / this.stats.totalRequests;
+        this.stats.missRate = 1 - this.stats.hitRate;
+    }
+    /**
+     * Record cache miss
+     */
+    recordMiss() {
+        const totalMisses = this.stats.totalRequests * this.stats.missRate + 1;
+        this.stats.missRate = totalMisses / this.stats.totalRequests;
+        this.stats.hitRate = 1 - this.stats.missRate;
+    }
+    /**
+     * Reset statistics
+     */
+    resetStats() {
+        this.stats = {
+            memorySize: 0,
+            persistentSize: 0,
+            hitRate: 0,
+            missRate: 0,
+            totalRequests: 0
+        };
+    }
+    /**
+     * Evict oldest items from memory cache
+     */
+    evictOldestMemoryItems() {
+        const sortedEntries = Array.from(this.memoryCache.entries())
+            .sort(([, a], [, b]) => a.timestamp - b.timestamp);
+        // Remove oldest 25% of items
+        const toRemove = Math.floor(sortedEntries.length * 0.25);
+        for (let i = 0; i < toRemove; i++) {
+            this.memoryCache.delete(sortedEntries[i][0]);
+        }
+        console.log(`🧹 Evicted ${toRemove} old items from memory cache`);
+    }
+    /**
+     * Clean up expired cache entries
+     */
+    cleanupExpiredEntries() {
+        const now = Date.now();
+        // Clean memory cache
+        for (const [key, item] of this.memoryCache.entries()) {
+            if (item.ttl && now > item.timestamp + item.ttl) {
+                this.memoryCache.delete(key);
+            }
+        }
+        // Clean localStorage cache
+        const expiredKeys = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('creb_cache_')) {
+                try {
+                    const item = JSON.parse(localStorage.getItem(key) || '{}');
+                    if (item.ttl && now > item.timestamp + item.ttl) {
+                        expiredKeys.push(key);
+                    }
+                }
+                catch (error) {
+                    // Invalid JSON, remove it
+                    expiredKeys.push(key);
+                }
+            }
+        }
+        expiredKeys.forEach(key => localStorage.removeItem(key));
+        if (expiredKeys.length > 0) {
+            console.log(`🧹 Cleaned up ${expiredKeys.length} expired cache entries`);
+        }
+    }
+    /**
+     * Clean up localStorage when full
+     */
+    cleanupLocalStorage() {
+        console.log('🧹 localStorage full, cleaning up old CREB cache entries...');
+        const crebKeys = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('creb_cache_')) {
+                try {
+                    const item = JSON.parse(localStorage.getItem(key) || '{}');
+                    crebKeys.push({ key, timestamp: item.timestamp || 0 });
+                }
+                catch (error) {
+                    crebKeys.push({ key, timestamp: 0 });
+                }
+            }
+        }
+        // Sort by timestamp and remove oldest 50%
+        crebKeys.sort((a, b) => a.timestamp - b.timestamp);
+        const toRemove = Math.floor(crebKeys.length * 0.5);
+        for (let i = 0; i < toRemove; i++) {
+            localStorage.removeItem(crebKeys[i].key);
+        }
+        console.log(`🧹 Removed ${toRemove} old cache entries from localStorage`);
+    }
+}
+
+/**
+ * CREB Phase 2: Animated Reaction Transition Engine
+ *
+ * This module provides smooth, physics-based animations between
+ * reactant and product molecular states using GSAP and Three.js.
+ */
+class ReactionAnimationEngine {
+    constructor(container, config = {}) {
+        // 3Dmol.js Integration
+        this.mol3dViewer = null;
+        this.mol3dContainer = null;
+        this.molecularModels = new Map();
+        // Animation state
+        this.isPlaying = false;
+        this.currentFrame = 0;
+        this.totalFrames = 0;
+        this.animationData = [];
+        // Visual elements
+        this.atomMeshes = new Map();
+        this.bondMeshes = new Map();
+        this.energyProfileMesh = null;
+        this.particleSystem = null;
+        this.config = {
+            duration: 3.0,
+            easing: 'power2.inOut',
+            showEnergyProfile: true,
+            showBondTransitions: true,
+            particleEffects: true,
+            audioEnabled: false,
+            ...config
+        };
+        // Initialize Phase 3 systems
+        this.aiClassifier = new ReactionClassifier();
+        this.physicsEngine = new SimplifiedPhysicsEngine();
+        this.cacheManager = new SimplifiedCacheManager();
+        this.initializeThreeJS(container);
+        this.initialize3Dmol(container);
+        this.initializeGSAP();
+        // Start rendering immediately to show test geometry
+        this.startContinuousRender();
+    }
+    initializeThreeJS(container) {
+        // Scene setup
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x000000);
+        // Camera setup
+        this.camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+        this.camera.position.set(0, 0, 10);
+        // Renderer setup with optimization
+        this.renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            alpha: true,
+            powerPreference: 'high-performance'
+        });
+        this.renderer.setSize(container.clientWidth, container.clientHeight);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(this.renderer.domElement);
+        // Lighting setup
+        this.setupLighting();
+        // Add test geometry to verify renderer is working
+        this.addTestGeometry();
+        // Handle resize
+        window.addEventListener('resize', () => this.onWindowResize(container));
+    }
+    setupLighting() {
+        // Ambient light for overall illumination
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        this.scene.add(ambientLight);
+        // Directional light for shadows and highlights
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        directionalLight.position.set(5, 5, 5);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        this.scene.add(directionalLight);
+        // Point lights for dynamic effects
+        const pointLight1 = new THREE.PointLight(0x4080ff, 0.5, 20);
+        pointLight1.position.set(-10, 0, 0);
+        this.scene.add(pointLight1);
+        const pointLight2 = new THREE.PointLight(0xff4080, 0.5, 20);
+        pointLight2.position.set(10, 0, 0);
+        this.scene.add(pointLight2);
+    }
+    initialize3Dmol(container) {
+        try {
+            // Check if 3Dmol.js is available
+            const $3Dmol = globalThis.$3Dmol;
+            if (!$3Dmol) {
+                console.warn('3Dmol.js not available, using fallback rendering');
+                this.addTestGeometry();
+                return;
+            }
+            // Create a separate container for 3Dmol.js viewer
+            this.mol3dContainer = document.createElement('div');
+            this.mol3dContainer.style.position = 'absolute';
+            this.mol3dContainer.style.top = '0';
+            this.mol3dContainer.style.left = '0';
+            this.mol3dContainer.style.width = '100%';
+            this.mol3dContainer.style.height = '100%';
+            this.mol3dContainer.style.pointerEvents = 'none'; // Allow Three.js to handle interactions
+            container.appendChild(this.mol3dContainer);
+            // Initialize 3Dmol.js viewer
+            this.mol3dViewer = $3Dmol.createViewer(this.mol3dContainer, {
+                defaultcolors: $3Dmol.elementColors.defaultColors,
+                backgroundColor: 'rgba(0,0,0,0)' // Transparent background
+            });
+            // Add initial demo molecules to show that 3Dmol.js is working
+            this.addDemo3DMolecules();
+            console.log('🧬 3Dmol.js viewer initialized');
+        }
+        catch (error) {
+            console.error('Failed to initialize 3Dmol.js:', error);
+            this.addTestGeometry();
+        }
+    }
+    addTestGeometry() {
+        // Add a visible test cube to verify the renderer is working
+        const geometry = new THREE.BoxGeometry(1, 1, 1);
+        const material = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+        const cube = new THREE.Mesh(geometry, material);
+        cube.position.set(0, 0, 0);
+        this.scene.add(cube);
+        // Add rotation animation to make it obvious
+        gsap.to(cube.rotation, {
+            duration: 2,
+            y: Math.PI * 2,
+            repeat: -1,
+            ease: "none"
+        });
+        console.log('🟢 Test geometry added to scene');
+    }
+    addDemo3DMolecules() {
+        if (!this.mol3dViewer)
+            return;
+        // Add a water molecule as demo
+        const waterXYZ = '3\nWater molecule\nO 0.000 0.000 0.000\nH 0.757 0.586 0.000\nH -0.757 0.586 0.000\n';
+        try {
+            const model = this.mol3dViewer.addModel(waterXYZ, 'xyz');
+            model.setStyle({}, {
+                stick: { radius: 0.1 },
+                sphere: { scale: 0.3 }
+            });
+            this.mol3dViewer.zoomTo();
+            this.mol3dViewer.render();
+            console.log('🧬 Demo water molecule added');
+        }
+        catch (error) {
+            console.error('Failed to add demo molecule:', error);
+        }
+    }
+    initializeGSAP() {
+        gsap.registerPlugin();
+        this.timeline = gsap.timeline({
+            paused: true,
+            onUpdate: () => this.onTimelineUpdate(),
+            onComplete: () => this.handleAnimationComplete()
+        });
+    }
+    /**
+     * Create 3Dmol.js molecular models from molecular data
+     */
+    async createMolecularModels(molecules) {
+        if (!this.mol3dViewer) {
+            console.warn('3Dmol.js viewer not available');
+            return;
+        }
+        try {
+            this.mol3dViewer.clear();
+            this.molecularModels.clear();
+            for (const molecule of molecules) {
+                const modelId = `mol_${molecule.formula}`;
+                // Convert molecular data to 3Dmol.js format
+                const mol3dData = this.convertToMol3DFormat(molecule);
+                // Add model to viewer
+                const model = this.mol3dViewer.addModel(mol3dData, 'xyz');
+                model.setStyle({}, { stick: {}, sphere: { scale: 0.3 } });
+                this.molecularModels.set(modelId, model);
+                console.log(`🧬 Added molecular model: ${molecule.formula}`);
+            }
+            this.mol3dViewer.zoomTo();
+            this.mol3dViewer.render();
+        }
+        catch (error) {
+            console.error('Failed to create molecular models:', error);
+        }
+    }
+    /**
+     * Convert CREB molecular data to 3Dmol.js XYZ format
+     */
+    convertToMol3DFormat(molecule) {
+        if (!molecule.atoms || molecule.atoms.length === 0) {
+            return this.generateFallbackXYZ(molecule.formula || 'C');
+        }
+        let xyzData = `${molecule.atoms.length}\n`;
+        xyzData += `${molecule.formula || 'Molecule'}\n`;
+        for (const atom of molecule.atoms) {
+            const pos = atom.position || { x: 0, y: 0, z: 0 };
+            xyzData += `${atom.element} ${pos.x.toFixed(3)} ${pos.y.toFixed(3)} ${pos.z.toFixed(3)}\n`;
+        }
+        return xyzData;
+    }
+    /**
+     * Generate fallback XYZ data for simple molecules
+     */
+    generateFallbackXYZ(formula) {
+        const moleculeTemplates = {
+            'H2O': '3\nWater\nO 0.000 0.000 0.000\nH 0.757 0.586 0.000\nH -0.757 0.586 0.000\n',
+            'H2': '2\nHydrogen\nH 0.000 0.000 0.000\nH 0.740 0.000 0.000\n',
+            'O2': '2\nOxygen\nO 0.000 0.000 0.000\nO 1.210 0.000 0.000\n',
+            'CO2': '3\nCarbon Dioxide\nC 0.000 0.000 0.000\nO 1.160 0.000 0.000\nO -1.160 0.000 0.000\n',
+            'CH4': '5\nMethane\nC 0.000 0.000 0.000\nH 1.089 0.000 0.000\nH -0.363 1.027 0.000\nH -0.363 -0.513 0.889\nH -0.363 -0.513 -0.889\n'
+        };
+        return moleculeTemplates[formula] || `1\n${formula}\nC 0.000 0.000 0.000\n`;
+    }
+    /**
+     * Animate molecular transformations using both 3Dmol.js and Three.js
+     */
+    animateMolecularTransformation(reactants, products, duration) {
+        if (!this.mol3dViewer) {
+            console.warn('3Dmol.js not available for animation');
+            return;
+        }
+        // Create GSAP timeline for coordinated animation
+        const tl = gsap.timeline();
+        // Phase 1: Show reactants
+        tl.call(() => {
+            this.createMolecularModels(reactants);
+        });
+        // Phase 2: Transition animation (use Three.js for effects)
+        tl.to({}, {
+            duration: duration * 0.6,
+            onUpdate: () => {
+                // Add transition effects using Three.js
+                this.renderTransitionEffects();
+            }
+        });
+        // Phase 3: Show products
+        tl.call(() => {
+            this.createMolecularModels(products);
+        });
+        tl.play();
+    }
+    /**
+     * Render transition effects using Three.js
+     */
+    renderTransitionEffects() {
+        // Add particle effects, energy visualization, etc. using Three.js
+        // This complements the 3Dmol.js molecular rendering
+    }
+    /**
+     * Phase 3: AI-Enhanced Animation Creation
+     * Uses machine learning to optimize animation parameters
+     */
+    async createAIEnhancedAnimation(reactants, products, reactionEquation) {
+        try {
+            // Step 1: Use AI to classify reaction type and predict optimal parameters
+            const reactionType = await this.aiClassifier.classifyReaction(reactionEquation);
+            const optimizedParams = await this.aiClassifier.optimizeAnimationParameters(reactionType, reactants, products);
+            // Step 2: Check intelligent cache for similar animations
+            const cacheKey = `animation:${reactionEquation}:${JSON.stringify(optimizedParams)}`;
+            const cachedAnimation = await this.cacheManager.get(cacheKey);
+            if (cachedAnimation && Array.isArray(cachedAnimation)) {
+                this.animationData = cachedAnimation;
+                this.totalFrames = cachedAnimation.length;
+                return;
+            }
+            // Step 3: Use physics engine for realistic molecular dynamics
+            const physicsConfig = {
+                enableCollision: reactionType.characteristics.hasEnergyRelease || reactionType.characteristics.hasGasProduction,
+                temperature: optimizedParams.temperature || 298,
+                pressure: optimizedParams.pressure || 1,
+                solvent: optimizedParams.solvent || 'vacuum'
+            };
+            this.physicsEngine.configure(physicsConfig);
+            // Step 4: Create molecular models using 3Dmol.js
+            await this.createMolecularModels(reactants);
+            console.log('🧬 Initial molecular models created with 3Dmol.js');
+            // Step 5: Generate physics-based animation frames
+            const transitions = this.generateMolecularTransitions(reactants, products, reactionType);
+            const animationFrames = await this.physicsEngine.simulateReactionPathway(transitions, optimizedParams.duration || this.config.duration);
+            // Step 6: Set up coordinated animation using both systems
+            this.animateMolecularTransformation(reactants, products, optimizedParams.duration || this.config.duration);
+            // Step 7: Cache the generated animation
+            await this.cacheManager.set(cacheKey, animationFrames);
+            this.animationData = animationFrames;
+            this.totalFrames = animationFrames.length;
+        }
+        catch (error) {
+            console.error('AI-enhanced animation creation failed:', error);
+            // Fallback to traditional animation
+            await this.createReactionAnimation(reactants, products);
+        }
+    }
+    /**
+     * Generate molecular transitions based on AI classification
+     */
+    generateMolecularTransitions(reactants, products, reactionType) {
+        const transitions = [];
+        // Generate transitions based on reaction mechanism
+        switch (reactionType.mechanism) {
+            case 'substitution':
+                transitions.push(...this.generateSubstitutionTransitions(reactants, products));
+                break;
+            case 'addition':
+                transitions.push(...this.generateAdditionTransitions(reactants, products));
+                break;
+            case 'elimination':
+                transitions.push(...this.generateEliminationTransitions(reactants, products));
+                break;
+            default:
+                transitions.push(...this.generateGenericTransitions(reactants, products));
+        }
+        return transitions;
+    }
+    /**
+     * Create animated transition from reactants to products
+     */
+    async createReactionAnimation(reactants, products) {
+        try {
+            console.log('🎬 Creating reaction animation...');
+            // Clear previous animation
+            this.clearScene();
+            this.timeline.clear();
+            // Create initial molecular models with 3Dmol.js
+            await this.createMolecularModels(reactants);
+            console.log('🧬 Reactant models loaded with 3Dmol.js');
+            // Generate transition data
+            const transitions = await this.calculateMolecularTransitions(reactants, products);
+            // Create animation frames
+            this.animationData = await this.generateAnimationFrames(transitions);
+            this.totalFrames = this.animationData.length;
+            // Build 3D molecular geometries
+            await this.buildMolecularGeometries(reactants, products);
+            // Create GSAP animation timeline
+            this.createAnimationTimeline(transitions);
+            // Setup energy profile if enabled
+            if (this.config.showEnergyProfile) {
+                this.createEnergyProfileVisualization(transitions);
+            }
+            // Setup particle effects if enabled
+            if (this.config.particleEffects) {
+                this.createParticleEffects();
+            }
+            console.log('✅ Animation ready! Frames:', this.totalFrames);
+        }
+        catch (error) {
+            console.error('❌ Animation creation failed:', error);
+            throw new Error(`Animation creation failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    /**
+     * Calculate molecular transitions between reactants and products
+     */
+    async calculateMolecularTransitions(reactants, products) {
+        const transitions = [];
+        // For each product, find corresponding reactant transformations
+        for (let i = 0; i < Math.max(reactants.length, products.length); i++) {
+            const reactant = reactants[i] || reactants[0]; // Use first reactant as fallback
+            const product = products[i] || products[0]; // Use first product as fallback
+            const transition = {
+                startStructure: reactant,
+                endStructure: product,
+                transitionType: this.determineTransitionType(reactant, product),
+                energyBarrier: this.calculateEnergyBarrier(reactant, product),
+                transitionState: await this.generateTransitionState(reactant, product)
+            };
+            transitions.push(transition);
+        }
+        return transitions;
+    }
+    determineTransitionType(reactant, product) {
+        // Simple heuristic based on atom count changes
+        const reactantAtomCount = reactant.atoms?.length || 0;
+        const productAtomCount = product.atoms?.length || 0;
+        if (reactantAtomCount < productAtomCount) {
+            return 'formation';
+        }
+        else if (reactantAtomCount > productAtomCount) {
+            return 'breaking';
+        }
+        else {
+            return 'rearrangement';
+        }
+    }
+    calculateEnergyBarrier(reactant, product) {
+        // Simplified energy barrier calculation
+        // In practice, this would use quantum chemistry calculations
+        const baseBarrier = 50; // kJ/mol
+        const complexityFactor = (reactant.atoms?.length || 1) * 2;
+        return baseBarrier + Math.random() * complexityFactor;
+    }
+    async generateTransitionState(reactant, product) {
+        // Generate intermediate structure between reactant and product
+        // This is a simplified interpolation - real implementation would use
+        // advanced computational chemistry methods
+        if (!reactant.atoms || !product.atoms) {
+            return undefined;
+        }
+        const transitionState = {
+            ...reactant,
+            atoms: reactant.atoms.map((atom, i) => ({
+                ...atom,
+                position: {
+                    x: (atom.position.x + (product.atoms?.[i]?.position.x || atom.position.x)) / 2,
+                    y: (atom.position.y + (product.atoms?.[i]?.position.y || atom.position.y)) / 2,
+                    z: (atom.position.z + (product.atoms?.[i]?.position.z || atom.position.z)) / 2
+                }
+            }))
+        };
+        return transitionState;
+    }
+    /**
+     * Generate frame-by-frame animation data
+     */
+    async generateAnimationFrames(transitions) {
+        const frames = [];
+        const frameRate = 60; // 60 FPS
+        const totalDuration = this.config.duration * 1000; // Convert to ms
+        const frameCount = Math.floor((totalDuration / 1000) * frameRate);
+        for (let frame = 0; frame <= frameCount; frame++) {
+            const progress = frame / frameCount;
+            const timestamp = (frame / frameRate) * 1000;
+            // Create molecular state for this frame
+            const molecularStates = transitions.map(transition => this.interpolateMolecularState(transition, progress));
+            // Calculate energy level for this frame
+            const energyLevel = this.calculateFrameEnergy(transitions, progress);
+            // Determine bond changes at this frame
+            const bondChanges = this.calculateBondChanges(transitions, progress);
+            // Calculate atom movements
+            const atomMovements = this.calculateAtomMovements(transitions, progress);
+            frames.push({
+                timestamp,
+                molecularStates,
+                energyLevel,
+                bondChanges,
+                atomMovements
+            });
+        }
+        return frames;
+    }
+    interpolateMolecularState(transition, progress) {
+        const start = transition.startStructure;
+        const end = transition.endStructure;
+        // Use easing function for natural motion
+        const easedProgress = gsap.parseEase(this.config.easing)(progress);
+        // Interpolate atom positions
+        const atoms = start.atoms?.map((startAtom, i) => {
+            const endAtom = end.atoms?.[i] || startAtom;
+            return {
+                id: startAtom.id || `atom_${i}`,
+                element: startAtom.element,
+                position: new THREE.Vector3(THREE.MathUtils.lerp(startAtom.position.x, endAtom.position.x, easedProgress), THREE.MathUtils.lerp(startAtom.position.y, endAtom.position.y, easedProgress), THREE.MathUtils.lerp(startAtom.position.z, endAtom.position.z, easedProgress)),
+                charge: THREE.MathUtils.lerp(startAtom.charge || 0, endAtom.charge || 0, easedProgress),
+                hybridization: startAtom.hybridization || 'sp3',
+                color: `#${this.getAtomColor(startAtom.element).toString(16).padStart(6, '0')}`,
+                radius: this.getAtomRadius(startAtom.element)
+            };
+        }) || [];
+        // Interpolate bond states
+        const bonds = start.bonds?.map((startBond, i) => {
+            const endBond = end.bonds?.[i] || startBond;
+            return {
+                id: startBond.id || `bond_${i}`,
+                atom1: startBond.atom1,
+                atom2: startBond.atom2,
+                order: THREE.MathUtils.lerp(startBond.order, endBond.order, easedProgress),
+                length: THREE.MathUtils.lerp(startBond.length || 1.5, endBond.length || 1.5, easedProgress),
+                strength: THREE.MathUtils.lerp(startBond.strength || 1, endBond.strength || 1, easedProgress),
+                color: `#${this.getBondColor(startBond.order).toString(16).padStart(6, '0')}`
+            };
+        }) || [];
+        return {
+            atoms,
+            bonds,
+            overallCharge: start.charge || 0,
+            spinMultiplicity: start.spinMultiplicity || 1
+        };
+    }
+    calculateFrameEnergy(transitions, progress) {
+        // Calculate energy using a reaction coordinate model
+        // Energy increases to barrier height, then decreases to product energy
+        const maxBarrier = Math.max(...transitions.map(t => t.energyBarrier));
+        const barrierPosition = 0.5; // Transition state at 50% progress
+        if (progress <= barrierPosition) {
+            // Rising to transition state
+            const localProgress = progress / barrierPosition;
+            return maxBarrier * localProgress * localProgress; // Quadratic rise
+        }
+        else {
+            // Falling to products
+            const localProgress = (progress - barrierPosition) / (1 - barrierPosition);
+            return maxBarrier * (1 - localProgress * localProgress); // Quadratic fall
+        }
+    }
+    calculateBondChanges(transitions, progress) {
+        const changes = [];
+        transitions.forEach(transition => {
+            const startBonds = transition.startStructure.bonds || [];
+            const endBonds = transition.endStructure.bonds || [];
+            // Find bonds that change during reaction
+            startBonds.forEach((startBond, i) => {
+                const endBond = endBonds[i];
+                if (endBond && startBond.order !== endBond.order) {
+                    changes.push({
+                        type: startBond.order > endBond.order ? 'breaking' : 'formation',
+                        bondId: startBond.id || `bond_${i}`,
+                        startOrder: startBond.order,
+                        endOrder: endBond.order,
+                        timeline: [0, progress, 1] // Simple timeline
+                    });
+                }
+            });
+        });
+        return changes;
+    }
+    calculateAtomMovements(transitions, progress) {
+        const movements = [];
+        transitions.forEach(transition => {
+            const startAtoms = transition.startStructure.atoms || [];
+            const endAtoms = transition.endStructure.atoms || [];
+            startAtoms.forEach((startAtom, i) => {
+                const endAtom = endAtoms[i];
+                if (endAtom) {
+                    const startPos = new THREE.Vector3(startAtom.position.x, startAtom.position.y, startAtom.position.z);
+                    const endPos = new THREE.Vector3(endAtom.position.x, endAtom.position.y, endAtom.position.z);
+                    const distance = startPos.distanceTo(endPos);
+                    if (distance > 0.1) { // Only track significant movements
+                        movements.push({
+                            atomId: startAtom.id || `atom_${i}`,
+                            startPosition: startPos,
+                            endPosition: endPos,
+                            trajectory: this.generateAtomTrajectory(startPos, endPos, transition.transitionState),
+                            speed: distance / this.config.duration
+                        });
+                    }
+                }
+            });
+        });
+        return movements;
+    }
+    generateAtomTrajectory(start, end, transitionState) {
+        const trajectory = [];
+        const steps = 20;
+        for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            // Use quadratic Bezier curve through transition state if available
+            if (transitionState?.atoms?.[0]) {
+                const control = new THREE.Vector3(transitionState.atoms[0].position.x, transitionState.atoms[0].position.y, transitionState.atoms[0].position.z);
+                const point = new THREE.Vector3();
+                point.copy(start).multiplyScalar((1 - t) * (1 - t));
+                point.addScaledVector(control, 2 * (1 - t) * t);
+                point.addScaledVector(end, t * t);
+                trajectory.push(point);
+            }
+            else {
+                // Simple linear interpolation
+                const point = new THREE.Vector3();
+                point.lerpVectors(start, end, t);
+                trajectory.push(point);
+            }
+        }
+        return trajectory;
+    }
+    /**
+     * Build 3D molecular geometries for rendering
+     */
+    async buildMolecularGeometries(reactants, products) {
+        // Clear existing geometries
+        this.atomMeshes.clear();
+        this.bondMeshes.clear();
+        // Create atom geometries
+        const allMolecules = [...reactants, ...products];
+        for (const molecule of allMolecules) {
+            if (molecule.atoms) {
+                for (const atom of molecule.atoms) {
+                    await this.createAtomMesh(atom);
+                }
+            }
+            if (molecule.bonds) {
+                for (const bond of molecule.bonds) {
+                    await this.createBondMesh(bond, molecule.atoms || []);
+                }
+            }
+        }
+    }
+    async createAtomMesh(atom) {
+        const geometry = new THREE.SphereGeometry(this.getAtomRadius(atom.element), 16, 12);
+        const material = new THREE.MeshLambertMaterial({
+            color: this.getAtomColor(atom.element),
+            transparent: true,
+            opacity: 0.9
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.set(atom.position.x, atom.position.y, atom.position.z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        const atomId = atom.id || `atom_${atom.element}_${Date.now()}`;
+        this.atomMeshes.set(atomId, mesh);
+        this.scene.add(mesh);
+    }
+    async createBondMesh(bond, atoms) {
+        const atom1 = atoms.find(a => a.id === bond.atom1 || a.element === bond.atom1);
+        const atom2 = atoms.find(a => a.id === bond.atom2 || a.element === bond.atom2);
+        if (!atom1 || !atom2)
+            return;
+        const start = new THREE.Vector3(atom1.position.x, atom1.position.y, atom1.position.z);
+        const end = new THREE.Vector3(atom2.position.x, atom2.position.y, atom2.position.z);
+        const distance = start.distanceTo(end);
+        const geometry = new THREE.CylinderGeometry(0.1, 0.1, distance, 8);
+        const material = new THREE.MeshLambertMaterial({
+            color: this.getBondColor(bond.order),
+            transparent: true,
+            opacity: 0.8
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        // Position and orient the bond
+        const midpoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+        mesh.position.copy(midpoint);
+        mesh.lookAt(end);
+        mesh.rotateX(Math.PI / 2);
+        const bondId = bond.id || `bond_${Date.now()}`;
+        this.bondMeshes.set(bondId, mesh);
+        this.scene.add(mesh);
+    }
+    /**
+     * Create GSAP animation timeline
+     */
+    createAnimationTimeline(transitions) {
+        this.timeline.clear();
+        // Animate each molecular transition
+        transitions.forEach((transition, index) => {
+            this.animateMolecularTransition(transition, index);
+        });
+        // Set total duration
+        this.timeline.duration(this.config.duration);
+    }
+    animateMolecularTransition(transition, index) {
+        const startTime = index * 0.1; // Stagger animations slightly
+        // Animate atom positions
+        transition.startStructure.atoms?.forEach((startAtom, atomIndex) => {
+            const endAtom = transition.endStructure.atoms?.[atomIndex];
+            if (!endAtom)
+                return;
+            const atomId = startAtom.id || `atom_${atomIndex}`;
+            const mesh = this.atomMeshes.get(atomId);
+            if (!mesh)
+                return;
+            this.timeline.to(mesh.position, {
+                duration: this.config.duration * 0.8,
+                x: endAtom.position.x,
+                y: endAtom.position.y,
+                z: endAtom.position.z,
+                ease: this.config.easing
+            }, startTime);
+            // Animate atom scaling based on charge changes
+            if (startAtom.charge !== endAtom.charge) {
+                const scaleChange = 1 + ((endAtom.charge || 0) - (startAtom.charge || 0)) * 0.1;
+                this.timeline.to(mesh.scale, {
+                    duration: this.config.duration * 0.5,
+                    x: scaleChange,
+                    y: scaleChange,
+                    z: scaleChange,
+                    ease: 'elastic.out(1, 0.3)'
+                }, startTime + this.config.duration * 0.25);
+            }
+        });
+        // Animate bond changes
+        if (this.config.showBondTransitions) {
+            this.animateBondTransitions(transition, startTime);
+        }
+    }
+    animateBondTransitions(transition, startTime) {
+        transition.startStructure.bonds?.forEach((startBond, bondIndex) => {
+            const endBond = transition.endStructure.bonds?.[bondIndex];
+            if (!endBond)
+                return;
+            const bondId = startBond.id || `bond_${bondIndex}`;
+            const mesh = this.bondMeshes.get(bondId);
+            if (!mesh)
+                return;
+            // Animate bond order changes through scaling
+            if (startBond.order !== endBond.order) {
+                const scaleChange = endBond.order / startBond.order;
+                if (endBond.order > startBond.order) {
+                    // Bond formation - grow effect
+                    this.timeline.from(mesh.scale, {
+                        duration: this.config.duration * 0.3,
+                        x: 0.1,
+                        y: scaleChange,
+                        z: 0.1,
+                        ease: 'back.out(1.7)'
+                    }, startTime + this.config.duration * 0.3);
+                }
+                else {
+                    // Bond breaking - shrink effect
+                    this.timeline.to(mesh.scale, {
+                        duration: this.config.duration * 0.3,
+                        x: 0.1,
+                        y: scaleChange,
+                        z: 0.1,
+                        ease: 'power2.in'
+                    }, startTime + this.config.duration * 0.5);
+                }
+            }
+        });
+    }
+    /**
+     * Create energy profile visualization
+     */
+    createEnergyProfileVisualization(transitions) {
+        const points = [];
+        const maxBarrier = Math.max(...transitions.map(t => t.energyBarrier));
+        const steps = 100;
+        // Generate energy curve points
+        for (let i = 0; i <= steps; i++) {
+            const progress = i / steps;
+            const energy = this.calculateFrameEnergy(transitions, progress);
+            // Position curve in 3D space
+            const x = (progress - 0.5) * 15; // Spread along x-axis
+            const y = (energy / maxBarrier) * 5 - 7; // Scale and position energy
+            const z = 8; // Position behind molecules
+            points.push(new THREE.Vector3(x, y, z));
+        }
+        // Create line geometry
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const material = new THREE.LineBasicMaterial({
+            color: 0x00ff00,
+            linewidth: 3,
+            transparent: true,
+            opacity: 0.7
+        });
+        this.energyProfileMesh = new THREE.Line(geometry, material);
+        this.scene.add(this.energyProfileMesh);
+    }
+    /**
+     * Create particle effects for bond breaking/formation
+     */
+    createParticleEffects() {
+        const particleCount = 1000;
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        // Initialize particle positions
+        for (let i = 0; i < particleCount; i++) {
+            positions[i * 3] = (Math.random() - 0.5) * 20;
+            positions[i * 3 + 1] = (Math.random() - 0.5) * 20;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * 20;
+        }
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const material = new THREE.PointsMaterial({
+            color: 0x888888,
+            size: 0.1,
+            transparent: true,
+            opacity: 0.6
+        });
+        this.particleSystem = new THREE.Points(geometry, material);
+        this.scene.add(this.particleSystem);
+        // Animate particles
+        this.timeline.to(this.particleSystem.rotation, {
+            duration: this.config.duration,
+            x: Math.PI * 2,
+            y: Math.PI,
+            ease: 'none'
+        }, 0);
+    }
+    /**
+     * Animation control methods
+     */
+    play() {
+        if (!this.isPlaying) {
+            this.isPlaying = true;
+            this.timeline.play();
+            this.startRenderLoop();
+        }
+    }
+    pause() {
+        this.isPlaying = false;
+        this.timeline.pause();
+    }
+    reset() {
+        this.isPlaying = false;
+        this.currentFrame = 0;
+        this.timeline.progress(0);
+        this.timeline.pause();
+    }
+    setProgress(progress) {
+        this.timeline.progress(Math.max(0, Math.min(1, progress)));
+        this.currentFrame = Math.floor(progress * this.totalFrames);
+    }
+    /**
+     * Event handling
+     */
+    onProgressUpdate(callback) {
+        this.onProgress = callback;
+    }
+    onAnimationComplete(callback) {
+        this.onComplete = callback;
+    }
+    onFrameChange(callback) {
+        this.onFrameUpdate = callback;
+    }
+    /**
+     * Utility methods
+     */
+    getAtomColor(element) {
+        const colors = {
+            'H': 0xffffff, // White
+            'C': 0x909090, // Gray
+            'N': 0x3050f8, // Blue
+            'O': 0xff0d0d, // Red
+            'F': 0x90e050, // Green
+            'Cl': 0x1ff01f, // Bright green
+            'Br': 0xa62929, // Brown
+            'I': 0x940094, // Purple
+            'S': 0xffff30, // Yellow
+            'P': 0xff8000, // Orange
+        };
+        return colors[element] || 0xffc0cb; // Default pink
+    }
+    getAtomRadius(element) {
+        const radii = {
+            'H': 0.31,
+            'C': 0.76,
+            'N': 0.71,
+            'O': 0.66,
+            'F': 0.57,
+            'Cl': 1.02,
+            'Br': 1.20,
+            'I': 1.39,
+            'S': 1.05,
+            'P': 1.07,
+        };
+        return (radii[element] || 1.0) * 0.3; // Scale down for visualization
+    }
+    getBondColor(order) {
+        if (order >= 3)
+            return 0xff4444; // Triple bond - red
+        if (order >= 2)
+            return 0x4444ff; // Double bond - blue
+        return 0x888888; // Single bond - gray
+    }
+    onTimelineUpdate() {
+        const progress = this.timeline.progress();
+        const frameIndex = Math.floor(progress * this.totalFrames);
+        if (frameIndex !== this.currentFrame && this.animationData[frameIndex]) {
+            this.currentFrame = frameIndex;
+            if (this.onProgress) {
+                this.onProgress(progress);
+            }
+            if (this.onFrameUpdate) {
+                this.onFrameUpdate(this.animationData[frameIndex]);
+            }
+        }
+    }
+    handleAnimationComplete() {
+        this.isPlaying = false;
+        if (this.onComplete) {
+            this.onComplete();
+        }
+    }
+    startRenderLoop() {
+        const animate = () => {
+            if (this.isPlaying) {
+                requestAnimationFrame(animate);
+            }
+            this.renderer.render(this.scene, this.camera);
+        };
+        animate();
+    }
+    startContinuousRender() {
+        const animate = () => {
+            requestAnimationFrame(animate);
+            this.renderer.render(this.scene, this.camera);
+        };
+        animate();
+        console.log('🎬 Continuous render loop started');
+    }
+    onWindowResize(container) {
+        // Resize Three.js renderer
+        this.camera.aspect = container.clientWidth / container.clientHeight;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(container.clientWidth, container.clientHeight);
+        // Resize 3Dmol.js viewer
+        if (this.mol3dViewer && this.mol3dContainer) {
+            this.mol3dContainer.style.width = container.clientWidth + 'px';
+            this.mol3dContainer.style.height = container.clientHeight + 'px';
+            this.mol3dViewer.resize();
+        }
+    }
+    clearScene() {
+        // Clear Three.js meshes
+        this.atomMeshes.forEach(mesh => {
+            this.scene.remove(mesh);
+            mesh.geometry.dispose();
+            mesh.material.dispose();
+        });
+        this.bondMeshes.forEach(mesh => {
+            this.scene.remove(mesh);
+            mesh.geometry.dispose();
+            mesh.material.dispose();
+        });
+        if (this.energyProfileMesh) {
+            this.scene.remove(this.energyProfileMesh);
+            this.energyProfileMesh.geometry.dispose();
+            this.energyProfileMesh.material.dispose();
+        }
+        if (this.particleSystem) {
+            this.scene.remove(this.particleSystem);
+            this.particleSystem.geometry.dispose();
+            this.particleSystem.material.dispose();
+        }
+        this.atomMeshes.clear();
+        this.bondMeshes.clear();
+        // Clear 3Dmol.js viewer
+        if (this.mol3dViewer) {
+            this.mol3dViewer.clear();
+            this.molecularModels.clear();
+        }
+    }
+    /**
+     * Generate substitution reaction transitions
+     */
+    generateSubstitutionTransitions(reactants, products) {
+        const transitions = [];
+        for (let i = 0; i < Math.min(reactants.length, products.length); i++) {
+            transitions.push({
+                startStructure: reactants[i],
+                endStructure: products[i],
+                transitionType: 'rearrangement',
+                energyBarrier: 25.0, // kcal/mol typical for substitution
+            });
+        }
+        return transitions;
+    }
+    /**
+     * Generate addition reaction transitions
+     */
+    generateAdditionTransitions(reactants, products) {
+        const transitions = [];
+        for (let i = 0; i < Math.min(reactants.length, products.length); i++) {
+            transitions.push({
+                startStructure: reactants[i],
+                endStructure: products[i],
+                transitionType: 'formation',
+                energyBarrier: 15.0, // kcal/mol typical for addition
+            });
+        }
+        return transitions;
+    }
+    /**
+     * Generate elimination reaction transitions
+     */
+    generateEliminationTransitions(reactants, products) {
+        const transitions = [];
+        for (let i = 0; i < Math.min(reactants.length, products.length); i++) {
+            transitions.push({
+                startStructure: reactants[i],
+                endStructure: products[i],
+                transitionType: 'breaking',
+                energyBarrier: 30.0, // kcal/mol typical for elimination
+            });
+        }
+        return transitions;
+    }
+    /**
+     * Generate generic reaction transitions
+     */
+    generateGenericTransitions(reactants, products) {
+        const transitions = [];
+        for (let i = 0; i < Math.min(reactants.length, products.length); i++) {
+            transitions.push({
+                startStructure: reactants[i],
+                endStructure: products[i],
+                transitionType: 'rearrangement',
+                energyBarrier: 20.0, // kcal/mol generic barrier
+            });
+        }
+        return transitions;
+    }
+    /**
+     * Cleanup
+     */
+    dispose() {
+        this.clearScene();
+        this.timeline.kill();
+        this.renderer.dispose();
+    }
+}
 
 /******************************************************************************
 Copyright (c) Microsoft Corporation.
@@ -3422,877 +7214,47 @@ class AsyncMutex {
 }
 
 /**
- * @fileoverview Type definitions for the CREB Validation Pipeline
- *
- * Provides comprehensive type definitions for:
- * - Validation results and errors
- * - Validator interfaces and compositions
- * - Rule definitions and dependencies
- * - Performance metrics and caching
- * - Chemical-specific validation types
- *
- * @version 1.0.0
- * @author CREB Team
- */
-// ============================================================================
-// Core Validation Types
-// ============================================================================
-/**
- * Severity levels for validation errors
- */
-var ValidationSeverity;
-(function (ValidationSeverity) {
-    ValidationSeverity["INFO"] = "info";
-    ValidationSeverity["WARNING"] = "warning";
-    ValidationSeverity["ERROR"] = "error";
-    ValidationSeverity["CRITICAL"] = "critical";
-})(ValidationSeverity || (ValidationSeverity = {}));
-
-/**
- * @fileoverview Base validator classes and validator composition utilities
- *
- * Provides foundation classes for building custom validators:
- * - BaseValidator: Abstract base class with common functionality
- * - CompositeValidator: Combines multiple validators
- * - ValidatorBuilder: Fluent API for building validators
- * - SpecializedValidators: Chemistry-specific validator helpers
- *
- * @version 1.0.0
- * @author CREB Team
- */
-// ============================================================================
-// Base Validator
-// ============================================================================
-/**
- * Abstract base class for all validators
- */
-class BaseValidator {
-    constructor(name, config = {}, dependencies = []) {
-        this.name = name;
-        this.dependencies = dependencies;
-        this.config = {
-            enabled: true,
-            priority: 0,
-            timeout: 5000,
-            cacheable: true,
-            ...config
-        };
-        this.schema = this.createSchema();
-    }
-    /**
-     * Create validation schema - can be overridden by subclasses
-     */
-    createSchema() {
-        return {
-            name: this.name,
-            version: '1.0.0',
-            description: `Schema for ${this.name} validator`,
-            types: ['any'],
-            requiredValidators: [],
-            optionalValidators: [],
-            properties: {}
-        };
-    }
-    /**
-     * Get validation schema
-     */
-    getSchema() {
-        return { ...this.schema };
-    }
-    /**
-     * Create a validation error
-     */
-    createError(code, message, path, severity = ValidationSeverity.ERROR, suggestions = [], context, value) {
-        return {
-            code,
-            message,
-            path,
-            severity,
-            suggestions,
-            context,
-            value
-        };
-    }
-    /**
-     * Create a successful validation result
-     */
-    createSuccessResult(context, warnings = []) {
-        return {
-            isValid: true,
-            errors: [],
-            warnings,
-            metrics: {
-                duration: 0,
-                rulesExecuted: 0,
-                validatorsUsed: 1,
-                cacheStats: { hits: 0, misses: 0, hitRate: 0 }
-            },
-            timestamp: new Date()
-        };
-    }
-    /**
-     * Create a failed validation result
-     */
-    createFailureResult(errors, context, warnings = []) {
-        return {
-            isValid: false,
-            errors,
-            warnings,
-            metrics: {
-                duration: 0,
-                rulesExecuted: 0,
-                validatorsUsed: 1,
-                cacheStats: { hits: 0, misses: 0, hitRate: 0 }
-            },
-            timestamp: new Date()
-        };
-    }
-    /**
-     * Validate configuration
-     */
-    validateConfig() {
-        if (this.config.timeout && this.config.timeout <= 0) {
-            throw new ValidationError('Validator timeout must be positive', { validator: this.name, timeout: this.config.timeout });
-        }
-    }
-}
-// ============================================================================
-// Specialized Validator Helpers
-// ============================================================================
-/**
- * Base class for chemistry-specific validators
- */
-class ChemistryValidator extends BaseValidator {
-    constructor() {
-        super(...arguments);
-        this.elementSymbols = new Set([
-            'H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne',
-            'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar', 'K', 'Ca',
-            'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn',
-            'Ga', 'Ge', 'As', 'Se', 'Br', 'Kr', 'Rb', 'Sr', 'Y', 'Zr',
-            'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 'Sn',
-            'Sb', 'Te', 'I', 'Xe', 'Cs', 'Ba', 'La', 'Ce', 'Pr', 'Nd',
-            'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb',
-            'Lu', 'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg',
-            'Tl', 'Pb', 'Bi', 'Po', 'At', 'Rn', 'Fr', 'Ra', 'Ac', 'Th',
-            'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk', 'Cf', 'Es', 'Fm',
-            'Md', 'No', 'Lr', 'Rf', 'Db', 'Sg', 'Bh', 'Hs', 'Mt', 'Ds',
-            'Rg', 'Cn', 'Nh', 'Fl', 'Mc', 'Lv', 'Ts', 'Og'
-        ]);
-    }
-    /**
-     * Validate element symbol
-     */
-    isValidElement(symbol) {
-        return this.elementSymbols.has(symbol);
-    }
-    /**
-     * Parse chemical formula into elements and counts
-     */
-    parseFormula(formula) {
-        const elements = new Map();
-        const regex = /([A-Z][a-z]?)(\d*)/g;
-        let match;
-        while ((match = regex.exec(formula)) !== null) {
-            const element = match[1];
-            const count = parseInt(match[2] || '1', 10);
-            if (!this.isValidElement(element)) {
-                throw new ValidationError(`Invalid element symbol: ${element}`, { element, formula });
-            }
-            elements.set(element, (elements.get(element) || 0) + count);
-        }
-        return elements;
-    }
-    /**
-     * Calculate molecular weight from formula
-     */
-    calculateMolecularWeight(elements) {
-        // Simplified atomic weights (should be imported from constants)
-        const atomicWeights = {
-            'H': 1.008, 'C': 12.011, 'N': 14.007, 'O': 15.999,
-            'F': 18.998, 'P': 30.974, 'S': 32.06, 'Cl': 35.45,
-            'K': 39.098, 'Ca': 40.078, 'Fe': 55.845, 'Cu': 63.546,
-            'Zn': 65.38, 'Br': 79.904, 'Ag': 107.868, 'I': 126.90
-            // Add more as needed
-        };
-        let totalWeight = 0;
-        for (const [element, count] of elements) {
-            const weight = atomicWeights[element];
-            if (weight === undefined) {
-                throw new ValidationError(`Atomic weight not available for element: ${element}`, { element });
-            }
-            totalWeight += weight * count;
-        }
-        return totalWeight;
-    }
-}
-
-/**
- * @fileoverview Chemical Formula Validator
- *
- * Validates chemical formulas with support for:
- * - Basic chemical formulas (H2O, C6H12O6)
- * - Isotope notation (13C, 2H)
- * - Charge notation (+, -, 2+, 3-)
- * - Complex notation ([Cu(NH3)4]2+)
- * - Radical notation (•)
- *
- * @version 1.0.0
- * @author CREB Team
+ * Browser-compatible chemical formula validation
+ * Simplified version that doesn't depend on ValidationPipeline or events
  */
 /**
- * Validator for chemical formulas
+ * Simple chemical formula validator for browser use
  */
-class ChemicalFormulaValidator extends ChemistryValidator {
-    constructor(config = {}, formulaConfig = {}) {
-        super('chemical-formula', config);
-        this.formulaConfig = {
-            allowIsotopes: true,
-            allowRadicals: false,
-            allowCharges: true,
-            allowComplexes: true,
-            maxAtoms: 1000,
-            allowedElements: [], // Empty = all elements allowed
-            ...formulaConfig
-        };
+function validateChemicalFormula(formula) {
+    const errors = [];
+    const warnings = [];
+    // Basic validation rules
+    if (!formula || typeof formula !== 'string') {
+        errors.push('Formula must be a non-empty string');
+        return { isValid: false, errors, warnings };
     }
-    /**
-     * Check if validator can handle the given value
-     */
-    canValidate(value) {
-        return typeof value === 'string' && value.trim().length > 0;
+    if (formula.trim().length === 0) {
+        errors.push('Formula cannot be empty');
+        return { isValid: false, errors, warnings };
     }
-    /**
-     * Validate chemical formula
-     */
-    async validate(value, context) {
-        const startTime = Date.now();
-        const errors = [];
-        const warnings = [];
-        try {
-            const formula = value.trim();
-            // Basic format validation
-            if (!this.hasValidFormat(formula)) {
-                // Check for specific types of invalid format
-                const invalidCharPattern = /[^A-Za-z0-9\(\)\[\]\+\-\s\•]/;
-                const unicodePattern = /[₀-₉⁰-⁹]/;
-                let errorMessage = `Invalid chemical formula format: ${formula}`;
-                let suggestions = [
-                    'Use standard chemical notation (e.g., H2O, CaCl2)',
-                    'Ensure element symbols start with uppercase letter',
-                    'Use numbers for atom counts, not letters'
-                ];
-                if (invalidCharPattern.test(formula)) {
-                    errorMessage = `Formula contains invalid character(s): ${formula}`;
-                    suggestions = [
-                        'Remove special characters like !, @, #, $, %, etc.',
-                        'Use only letters, numbers, parentheses, brackets, and +/- signs'
-                    ];
-                }
-                else if (unicodePattern.test(formula)) {
-                    errorMessage = `Formula contains invalid character(s) (Unicode subscripts/superscripts): ${formula}`;
-                    suggestions = [
-                        'Use regular numbers instead of subscript/superscript characters',
-                        'Example: Use H2O instead of H₂O'
-                    ];
-                }
-                errors.push(this.createError('INVALID_FORMULA_FORMAT', errorMessage, context.path, ValidationSeverity.ERROR, suggestions, { formula }, value));
-            }
-            else {
-                // Detailed validation
-                const validationResults = this.validateFormulaComponents(formula, context.path);
-                errors.push(...validationResults.errors);
-                warnings.push(...validationResults.warnings);
-            }
-            const duration = Date.now() - startTime;
-            const isValid = errors.length === 0;
-            return {
-                isValid,
-                errors,
-                warnings,
-                metrics: {
-                    duration,
-                    rulesExecuted: 1,
-                    validatorsUsed: 1,
-                    cacheStats: { hits: 0, misses: 1, hitRate: 0 }
-                },
-                timestamp: new Date()
-            };
-        }
-        catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            return this.createFailureResult([
-                this.createError('FORMULA_VALIDATION_ERROR', `Formula validation failed: ${errorMessage}`, context.path, ValidationSeverity.ERROR, ['Check formula syntax', 'Verify element symbols'], { error: errorMessage }, value)
-            ], context);
+    // Check for valid chemical formula pattern
+    const formulaPattern = /^[A-Z][a-z]?(\d+)?(\([A-Z][a-z]?(\d+)?\)\d*)*$/;
+    if (!formulaPattern.test(formula.replace(/\s+/g, ''))) {
+        // More lenient check for complex formulas
+        const basicElementPattern = /^[A-Z][a-z]?\d*$/;
+        const complexPattern = /^([A-Z][a-z]?\d*)+(\([A-Z][a-z]?\d*\)\d*)*$/;
+        const cleanFormula = formula.replace(/\s+/g, '');
+        if (!basicElementPattern.test(cleanFormula) && !complexPattern.test(cleanFormula)) {
+            warnings.push('Formula may not follow standard chemical notation');
         }
     }
-    /**
-     * Basic format validation
-     */
-    hasValidFormat(formula) {
-        // Check for invalid characters first
-        const invalidCharPattern = /[^A-Za-z0-9\(\)\[\]\+\-\s\•]/;
-        if (invalidCharPattern.test(formula)) {
-            return false;
-        }
-        // Check for Unicode subscript/superscript characters
-        const unicodePattern = /[₀-₉⁰-⁹]/;
-        if (unicodePattern.test(formula)) {
-            return false;
-        }
-        // Basic regex for chemical formula validation
-        // Allows: Element symbols, numbers, brackets, charges, isotopes
-        const basicPattern = /^[A-Z][a-z]?(\d*[A-Z][a-z]?\d*)*(\[.*\])?[+-]?\d*[+-]?$/;
-        return basicPattern.test(formula.replace(/[\(\)\[\]]/g, ''));
+    // Check for common issues
+    if (formula.includes('..')) {
+        errors.push('Formula contains invalid character sequence (..)');
     }
-    /**
-     * Detailed component validation
-     */
-    validateFormulaComponents(formula, path) {
-        const errors = [];
-        const warnings = [];
-        try {
-            // Handle complex formulas with brackets
-            if (this.hasComplexNotation(formula)) {
-                if (!this.formulaConfig.allowComplexes) {
-                    errors.push(this.createError('COMPLEX_NOTATION_NOT_ALLOWED', 'Complex notation with brackets is not allowed', path, ValidationSeverity.ERROR, ['Use simple formula notation without brackets'], { formula }));
-                    return { errors, warnings };
-                }
-                return this.validateComplexFormula(formula, path);
-            }
-            // Handle charged formulas
-            if (this.hasChargeNotation(formula)) {
-                if (!this.formulaConfig.allowCharges) {
-                    errors.push(this.createError('CHARGE_NOTATION_NOT_ALLOWED', 'Charge notation is not allowed', path, ValidationSeverity.ERROR, ['Remove charge notation from formula'], { formula }));
-                    return { errors, warnings };
-                }
-                return this.validateChargedFormula(formula, path);
-            }
-            // Validate simple formula
-            return this.validateSimpleFormula(formula, path);
-        }
-        catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            errors.push(this.createError('COMPONENT_VALIDATION_ERROR', `Component validation failed: ${errorMessage}`, path, ValidationSeverity.ERROR, ['Check formula structure'], { error: errorMessage }));
-            return { errors, warnings };
-        }
+    if (formula.match(/\d{4,}/)) {
+        warnings.push('Formula contains unusually large numbers');
     }
-    /**
-     * Validate simple chemical formula
-     */
-    validateSimpleFormula(formula, path) {
-        const errors = [];
-        const warnings = [];
-        // Extract elements and counts
-        const elementPattern = /([A-Z][a-z]?)(\d*)/g;
-        const elements = new Map();
-        let totalAtoms = 0;
-        let match;
-        while ((match = elementPattern.exec(formula)) !== null) {
-            const element = match[1];
-            const count = parseInt(match[2] || '1', 10);
-            // Validate element symbol
-            if (!this.isValidElement(element)) {
-                errors.push(this.createError('INVALID_ELEMENT', `Invalid element symbol: ${element}`, path, ValidationSeverity.ERROR, [
-                    'Check periodic table for correct element symbols',
-                    'Ensure proper capitalization (first letter uppercase, second lowercase)'
-                ], { element, formula }));
-            }
-            // Check if element is allowed
-            if (this.formulaConfig.allowedElements.length > 0 &&
-                !this.formulaConfig.allowedElements.includes(element)) {
-                errors.push(this.createError('ELEMENT_NOT_ALLOWED', `Element ${element} is not allowed`, path, ValidationSeverity.ERROR, [`Use only allowed elements: ${this.formulaConfig.allowedElements.join(', ')}`], { element, allowedElements: this.formulaConfig.allowedElements }));
-            }
-            // Check for isotope notation
-            if (/^\d+[A-Z]/.test(element)) {
-                if (!this.formulaConfig.allowIsotopes) {
-                    errors.push(this.createError('ISOTOPE_NOTATION_NOT_ALLOWED', 'Isotope notation is not allowed', path, ValidationSeverity.ERROR, ['Remove isotope numbers from element symbols'], { element, formula }));
-                }
-            }
-            elements.set(element, count);
-            totalAtoms += count;
-        }
-        // Check maximum atoms limit
-        if (totalAtoms > this.formulaConfig.maxAtoms) {
-            errors.push(this.createError('TOO_MANY_ATOMS', `Formula contains ${totalAtoms} atoms, maximum allowed is ${this.formulaConfig.maxAtoms}`, path, ValidationSeverity.ERROR, ['Simplify the formula', 'Use smaller atom counts'], { totalAtoms, maxAtoms: this.formulaConfig.maxAtoms }));
-        }
-        // Warnings for unusual patterns
-        if (totalAtoms > 100) {
-            warnings.push(this.createError('LARGE_MOLECULE', `Formula contains ${totalAtoms} atoms, which is unusually large`, path, ValidationSeverity.WARNING, ['Verify the formula is correct', 'Consider if this represents a polymer unit'], { totalAtoms }));
-        }
-        return { errors, warnings };
-    }
-    /**
-     * Validate charged formula
-     */
-    validateChargedFormula(formula, path) {
-        const errors = [];
-        const warnings = [];
-        // Extract charge part
-        const chargeMatch = formula.match(/([+-]\d*|\d*[+-])$/);
-        if (!chargeMatch) {
-            errors.push(this.createError('INVALID_CHARGE_FORMAT', 'Invalid charge notation format', path, ValidationSeverity.ERROR, ['Use format like +, -, 2+, 3- for charges'], { formula }));
-            return { errors, warnings };
-        }
-        const charge = chargeMatch[1];
-        const neutralFormula = formula.replace(chargeMatch[0], '');
-        // Validate the neutral part
-        const neutralResults = this.validateSimpleFormula(neutralFormula, path);
-        errors.push(...neutralResults.errors);
-        warnings.push(...neutralResults.warnings);
-        // Validate charge format
-        if (!/^[+-]\d*$|^\d*[+-]$/.test(charge)) {
-            errors.push(this.createError('INVALID_CHARGE_VALUE', `Invalid charge value: ${charge}`, path, ValidationSeverity.ERROR, ['Use valid charge notation (e.g., +, -, 2+, 3-)'], { charge, formula }));
-        }
-        return { errors, warnings };
-    }
-    /**
-     * Validate complex formula with brackets
-     */
-    validateComplexFormula(formula, path) {
-        const errors = [];
-        const warnings = [];
-        // Check bracket balance
-        if (!this.areBracketsBalanced(formula)) {
-            errors.push(this.createError('UNBALANCED_BRACKETS', 'Unbalanced brackets in complex formula', path, ValidationSeverity.ERROR, ['Ensure all brackets are properly paired', 'Check for missing opening or closing brackets'], { formula }));
-            return { errors, warnings };
-        }
-        // For complex formulas, we would need more sophisticated parsing
-        // This is a simplified validation
-        warnings.push(this.createError('COMPLEX_FORMULA_LIMITED_VALIDATION', 'Limited validation for complex formulas', path, ValidationSeverity.WARNING, ['Complex formulas receive basic validation only'], { formula }));
-        return { errors, warnings };
-    }
-    /**
-     * Check if formula has complex notation
-     */
-    hasComplexNotation(formula) {
-        return /[\[\]]/.test(formula);
-    }
-    /**
-     * Check if formula has charge notation
-     */
-    hasChargeNotation(formula) {
-        return /[+-]\d*$|\d*[+-]$/.test(formula);
-    }
-    /**
-     * Check if brackets are balanced
-     */
-    areBracketsBalanced(formula) {
-        const stack = [];
-        const pairs = { '[': ']', '(': ')' };
-        for (const char of formula) {
-            if (char in pairs) {
-                stack.push(char);
-            }
-            else if (Object.values(pairs).includes(char)) {
-                const last = stack.pop();
-                if (!last || pairs[last] !== char) {
-                    return false;
-                }
-            }
-        }
-        return stack.length === 0;
-    }
-    /**
-     * Create validation schema
-     */
-    createSchema() {
-        return {
-            name: this.name,
-            version: '1.0.0',
-            description: 'Chemical formula validation schema',
-            types: ['string'],
-            requiredValidators: [],
-            optionalValidators: [],
-            properties: {
-                config: this.formulaConfig,
-                examples: ['H2O', 'CaCl2', 'C6H12O6', '[Cu(NH3)4]2+'],
-                patterns: [
-                    'Simple formulas: ElementCount (e.g., H2O)',
-                    'Charged formulas: Formula+/- (e.g., Ca2+)',
-                    'Complex formulas: [Formula]Charge (e.g., [Cu(NH3)4]2+)'
-                ]
-            }
-        };
-    }
-}
-
-/**
- * @fileoverview Validation Metrics Dashboard and Performance Monitoring
- *
- * Provides comprehensive performance monitoring and metrics collection
- * for the validation pipeline with real-time dashboard capabilities.
- */
-/**
- * Validation Metrics Dashboard
- *
- * Provides real-time monitoring and analytics for validation performance
- */
-class ValidationMetricsDashboard extends EventEmitter$1 {
-    constructor(config = {}) {
-        super();
-        this.validationTimes = [];
-        this.recentValidations = [];
-        this.memorySnapshots = [];
-        this.config = {
-            updateInterval: 1000,
-            maxTimeSeriesPoints: 100,
-            realTimeUpdates: true,
-            memoryMonitoring: true,
-            percentileTracking: true,
-            ...config
-        };
-        this.startTime = new Date();
-        this.metrics = this.initializeMetrics();
-        if (this.config.realTimeUpdates) {
-            this.startRealTimeUpdates();
-        }
-    }
-    /**
-     * Record a validation result for metrics tracking
-     */
-    recordValidation(result) {
-        const now = new Date();
-        const success = result.isValid;
-        const duration = result.metrics.duration;
-        // Update basic counters
-        this.metrics.totalValidations++;
-        if (success) {
-            this.metrics.successfulValidations++;
-        }
-        else {
-            this.metrics.failedValidations++;
-        }
-        // Update timing metrics
-        this.validationTimes.push(duration);
-        this.recentValidations.push({ timestamp: now, duration, success });
-        // Update min/max/average times
-        this.updateTimingMetrics(duration);
-        // Update cache metrics
-        if (result.fromCache) {
-            this.updateCacheMetrics();
-        }
-        // Record error distribution
-        if (!success) {
-            this.recordErrors(result.errors);
-        }
-        // Update validator-specific metrics
-        this.updateValidatorMetrics(result);
-        // Memory monitoring
-        if (this.config.memoryMonitoring) {
-            this.recordMemoryUsage();
-        }
-        // Cleanup old data
-        this.cleanupOldData();
-        // Emit update event
-        this.emit('metrics:updated', this.metrics);
-    }
-    /**
-     * Get current performance metrics
-     */
-    getMetrics() {
-        this.updateDerivedMetrics();
-        return { ...this.metrics };
-    }
-    /**
-     * Get metrics for a specific time range
-     */
-    getMetricsForTimeRange(startTime, endTime) {
-        const filteredValidations = this.recentValidations.filter(v => v.timestamp >= startTime && v.timestamp <= endTime);
-        const rangeMetrics = this.calculateMetricsForValidations(filteredValidations);
-        return rangeMetrics;
-    }
-    /**
-     * Get real-time dashboard data formatted for display
-     */
-    getDashboardData() {
-        const current = this.getMetrics();
-        return {
-            summary: {
-                total: current.totalValidations,
-                successful: current.successfulValidations,
-                failed: current.failedValidations,
-                successRate: this.calculateSuccessRate(),
-                avgTime: current.averageValidationTime,
-                cacheHitRate: current.cacheHitRate
-            },
-            performance: {
-                currentRate: current.validationsPerSecond,
-                avgTime: current.averageValidationTime,
-                peakTime: current.peakValidationTime,
-                minTime: current.minValidationTime,
-                percentiles: current.percentiles
-            },
-            memory: current.memoryUsage,
-            validators: Array.from(current.validatorMetrics.values()),
-            timeSeries: current.timeSeries.slice(-20), // Last 20 data points
-            errors: this.getTopErrors(10)
-        };
-    }
-    /**
-     * Reset all metrics
-     */
-    reset() {
-        this.metrics = this.initializeMetrics();
-        this.validationTimes = [];
-        this.recentValidations = [];
-        this.memorySnapshots = [];
-        this.startTime = new Date();
-        this.emit('metrics:reset');
-    }
-    /**
-     * Export metrics to JSON
-     */
-    exportMetrics() {
-        return JSON.stringify({
-            metrics: this.getMetrics(),
-            metadata: {
-                exportTime: new Date(),
-                uptime: Date.now() - this.startTime.getTime(),
-                config: this.config
-            }
-        }, null, 2);
-    }
-    /**
-     * Stop the dashboard and cleanup resources
-     */
-    stop() {
-        if (this.updateTimer) {
-            clearInterval(this.updateTimer);
-            this.updateTimer = undefined;
-        }
-        this.removeAllListeners();
-    }
-    // ============================================================================
-    // Private Methods
-    // ============================================================================
-    initializeMetrics() {
-        return {
-            totalValidations: 0,
-            successfulValidations: 0,
-            failedValidations: 0,
-            averageValidationTime: 0,
-            peakValidationTime: 0,
-            minValidationTime: Infinity,
-            validationsPerSecond: 0,
-            cacheHitRate: 0,
-            memoryUsage: {
-                current: 0,
-                peak: 0,
-                average: 0,
-                allocationRate: 0
-            },
-            errorDistribution: new Map(),
-            percentiles: {
-                p50: 0,
-                p75: 0,
-                p90: 0,
-                p95: 0,
-                p99: 0
-            },
-            validatorMetrics: new Map(),
-            timeSeries: []
-        };
-    }
-    startRealTimeUpdates() {
-        this.updateTimer = setInterval(() => {
-            this.updateDerivedMetrics();
-            this.addTimeSeriesPoint();
-            this.emit('metrics:realtime', this.metrics);
-        }, this.config.updateInterval);
-    }
-    updateTimingMetrics(duration) {
-        this.metrics.peakValidationTime = Math.max(this.metrics.peakValidationTime, duration);
-        this.metrics.minValidationTime = Math.min(this.metrics.minValidationTime, duration);
-        // Calculate rolling average
-        const sum = this.validationTimes.reduce((a, b) => a + b, 0);
-        this.metrics.averageValidationTime = sum / this.validationTimes.length;
-    }
-    updateCacheMetrics() {
-        // Cache hit rate calculation would be based on cache-specific logic
-        // This is a simplified version
-        const totalWithCache = this.recentValidations.length;
-        const cacheHits = this.recentValidations.filter(v => v.duration < this.metrics.averageValidationTime * 0.1).length;
-        this.metrics.cacheHitRate = totalWithCache > 0 ? (cacheHits / totalWithCache) * 100 : 0;
-    }
-    recordErrors(errors) {
-        errors.forEach(error => {
-            const errorType = error.code || 'UNKNOWN_ERROR';
-            const current = this.metrics.errorDistribution.get(errorType) || 0;
-            this.metrics.errorDistribution.set(errorType, current + 1);
-        });
-    }
-    updateValidatorMetrics(result) {
-        // This would be updated based on which validators were used
-        // For now, we'll create a generic entry
-        const validatorName = 'default-validator';
-        let validatorMetrics = this.metrics.validatorMetrics.get(validatorName);
-        if (!validatorMetrics) {
-            validatorMetrics = {
-                name: validatorName,
-                executions: 0,
-                averageTime: 0,
-                successRate: 0,
-                errorCount: 0,
-                cacheHitRate: 0
-            };
-            this.metrics.validatorMetrics.set(validatorName, validatorMetrics);
-        }
-        validatorMetrics.executions++;
-        validatorMetrics.averageTime =
-            (validatorMetrics.averageTime * (validatorMetrics.executions - 1) + result.metrics.duration) /
-                validatorMetrics.executions;
-        if (!result.isValid) {
-            validatorMetrics.errorCount++;
-        }
-        validatorMetrics.successRate =
-            ((validatorMetrics.executions - validatorMetrics.errorCount) / validatorMetrics.executions) * 100;
-    }
-    recordMemoryUsage() {
-        if (typeof process !== 'undefined' && process.memoryUsage) {
-            const memUsage = process.memoryUsage();
-            const currentMB = memUsage.heapUsed / 1024 / 1024;
-            this.metrics.memoryUsage.current = currentMB;
-            this.metrics.memoryUsage.peak = Math.max(this.metrics.memoryUsage.peak, currentMB);
-            this.memorySnapshots.push({ timestamp: new Date(), usage: currentMB });
-            // Calculate average
-            const sum = this.memorySnapshots.reduce((a, b) => a + b.usage, 0);
-            this.metrics.memoryUsage.average = sum / this.memorySnapshots.length;
-        }
-    }
-    updateDerivedMetrics() {
-        // Update validations per second
-        const oneSecondAgo = new Date(Date.now() - 1000);
-        const recentCount = this.recentValidations.filter(v => v.timestamp > oneSecondAgo).length;
-        this.metrics.validationsPerSecond = recentCount;
-        // Update percentiles if enabled
-        if (this.config.percentileTracking && this.validationTimes.length > 0) {
-            this.calculatePercentiles();
-        }
-    }
-    calculatePercentiles() {
-        const sorted = [...this.validationTimes].sort((a, b) => a - b);
-        sorted.length;
-        this.metrics.percentiles = {
-            p50: this.getPercentile(sorted, 0.5),
-            p75: this.getPercentile(sorted, 0.75),
-            p90: this.getPercentile(sorted, 0.9),
-            p95: this.getPercentile(sorted, 0.95),
-            p99: this.getPercentile(sorted, 0.99)
-        };
-    }
-    getPercentile(sortedArray, percentile) {
-        const index = Math.ceil(sortedArray.length * percentile) - 1;
-        return sortedArray[Math.max(0, index)] || 0;
-    }
-    addTimeSeriesPoint() {
-        const now = new Date();
-        const oneMinuteAgo = new Date(now.getTime() - 60000);
-        const recentValidations = this.recentValidations.filter(v => v.timestamp > oneMinuteAgo);
-        const errorCount = recentValidations.filter(v => !v.success).length;
-        const errorRate = recentValidations.length > 0 ? (errorCount / recentValidations.length) * 100 : 0;
-        const point = {
-            timestamp: now,
-            validationsPerSecond: this.metrics.validationsPerSecond,
-            averageResponseTime: this.metrics.averageValidationTime,
-            errorRate,
-            memoryUsage: this.metrics.memoryUsage.current
-        };
-        this.metrics.timeSeries.push(point);
-        // Keep only the last N points
-        if (this.metrics.timeSeries.length > this.config.maxTimeSeriesPoints) {
-            this.metrics.timeSeries = this.metrics.timeSeries.slice(-this.config.maxTimeSeriesPoints);
-        }
-    }
-    cleanupOldData() {
-        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-        // Keep only recent validations (last 5 minutes)
-        this.recentValidations = this.recentValidations.filter(v => v.timestamp > fiveMinutesAgo);
-        // Keep only recent memory snapshots
-        this.memorySnapshots = this.memorySnapshots.filter(s => s.timestamp > fiveMinutesAgo);
-        // Keep only recent validation times (last 1000 entries)
-        if (this.validationTimes.length > 1000) {
-            this.validationTimes = this.validationTimes.slice(-1e3);
-        }
-    }
-    calculateSuccessRate() {
-        return this.metrics.totalValidations > 0 ?
-            (this.metrics.successfulValidations / this.metrics.totalValidations) * 100 : 0;
-    }
-    getTopErrors(count) {
-        const totalErrors = Array.from(this.metrics.errorDistribution.values()).reduce((a, b) => a + b, 0);
-        return Array.from(this.metrics.errorDistribution.entries())
-            .map(([type, count]) => ({
-            type,
-            count,
-            percentage: totalErrors > 0 ? (count / totalErrors) * 100 : 0
-        }))
-            .sort((a, b) => b.count - a.count)
-            .slice(0, count);
-    }
-    calculateMetricsForValidations(validations) {
-        // Implementation for calculating metrics for a specific set of validations
-        // This is a simplified version - full implementation would calculate all metrics
-        const total = validations.length;
-        const successful = validations.filter(v => v.success).length;
-        const failed = total - successful;
-        const durations = validations.map(v => v.duration);
-        const avgTime = durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : 0;
-        return {
-            ...this.initializeMetrics(),
-            totalValidations: total,
-            successfulValidations: successful,
-            failedValidations: failed,
-            averageValidationTime: avgTime,
-            peakValidationTime: Math.max(...durations, 0),
-            minValidationTime: Math.min(...durations, Infinity)
-        };
-    }
-}
-/**
- * Global metrics dashboard instance
- */
-new ValidationMetricsDashboard();
-
-/**
- * CREB Data Validation Module
- *
- * Provides comprehensive validation capabilities for chemistry data:
- * - Composable validator architecture
- * - Async validation support with dependency management
- * - Performance optimization with caching and parallelization
- * - Chemical-specific validation capabilities
- *
- * @version 1.0.0
- * @author CREB Team
- */
-// Core Pipeline and Types
-/**
- * Quick validation for chemical formulas
- */
-async function validateChemicalFormula(formula, config) {
-    const validator = new ChemicalFormulaValidator(undefined, config);
-    const context = {
-        path: ['formula'],
-        root: { formula },
-        config: {
-            enabled: true,
-            priority: 1,
-            cacheable: true
-        },
-        shared: new Map(),
-        metrics: {
-            duration: 0,
-            rulesExecuted: 0,
-            validatorsUsed: 1,
-            cacheStats: {
-                hits: 0,
-                misses: 0,
-                hitRate: 0
-            }
-        }
+    return {
+        isValid: errors.length === 0,
+        errors,
+        warnings
     };
-    return validator.validate(formula, context);
 }
 
 /**
@@ -4644,13 +7606,13 @@ let EnhancedChemicalEquationBalancer = class EnhancedChemicalEquationBalancer ex
         };
         // Get all unique species from the equation
         const allSpecies = [...new Set([...balanced.reactants, ...balanced.products])];
-        // Validate chemical formulas using the validation pipeline
+        // Validate chemical formulas using the browser validation
         for (const species of allSpecies) {
             try {
-                const formulaValidation = await validateChemicalFormula(species);
+                const formulaValidation = validateChemicalFormula(species);
                 enhanced.validation.formulaValidation[species] = formulaValidation;
                 if (!formulaValidation.isValid) {
-                    enhanced.validation.warnings.push(`Invalid formula ${species}: ${formulaValidation.errors.map(e => e.message).join(', ')}`);
+                    enhanced.validation.warnings.push(`Invalid formula ${species}: ${formulaValidation.errors.join(', ')}`);
                 }
             }
             catch (error) {
@@ -6385,2079 +9347,10 @@ class MolecularVisualization {
 }
 
 /**
- * RDKit.js Wrapper for CREB Molecular Visualization
- * Provides unified API for advanced molecular structure processing and generation
- *
- * Features:
- * - SMILES/SMARTS parsing and validation
- * - 2D coordinate generation with RDKit algorithms
- * - Molecular descriptors and properties calculation
- * - Substructure searching and matching
- * - Chemical transformation operations
- * - SVG generation with RDKit's advanced rendering
- */
-/**
- * RDKit.js Wrapper Class
- * Provides simplified access to RDKit functionality within CREB
- */
-class RDKitWrapper {
-    constructor(config = {}) {
-        this.rdkit = null;
-        this.initialized = false;
-        this.config = {
-            kekulize: true,
-            addCoords: true,
-            removeHs: true,
-            sanitize: true,
-            useCoordGen: true,
-            width: 600,
-            height: 400,
-            offsetx: 0,
-            offsety: 0,
-            ...config
-        };
-    }
-    /**
-     * Initialize RDKit.js library using the official pattern
-     */
-    async initialize() {
-        if (this.initialized)
-            return;
-        try {
-            // Browser environment - use official initRDKitModule
-            if (typeof window !== 'undefined') {
-                // Check if initRDKitModule is available globally (official method)
-                if (typeof window.initRDKitModule === 'function') {
-                    console.log('Initializing RDKit using official initRDKitModule...');
-                    this.rdkit = await window.initRDKitModule();
-                    this.initialized = true;
-                    console.log('RDKit initialized successfully, version:', this.rdkit.version());
-                    return;
-                }
-                // Fallback: check if RDKit is already available globally
-                if (window.RDKit) {
-                    console.log('Using pre-loaded RDKit instance...');
-                    this.rdkit = window.RDKit;
-                    this.initialized = true;
-                    return;
-                }
-                // Try dynamic import as last resort
-                try {
-                    // Use string-based import to avoid build-time type checking
-                    const rdkitModule = await import('@' + 'rdkit' + '/' + 'rdkit');
-                    this.rdkit = await rdkitModule.initRDKitModule();
-                    this.initialized = true;
-                    return;
-                }
-                catch (importError) {
-                    console.warn('Dynamic import failed:', importError);
-                }
-                throw new Error('RDKit.js not available - please ensure RDKit.js is loaded via script tag');
-            }
-            else {
-                // Node.js environment
-                console.warn('RDKit.js not available in Node.js environment. Using fallback implementations.');
-                this.rdkit = this.createFallbackRDKit();
-                this.initialized = true;
-            }
-            this.initialized = true;
-        }
-        catch (error) {
-            console.warn('RDKit.js initialization failed:', error);
-            this.rdkit = this.createFallbackRDKit();
-            this.initialized = true;
-        }
-    }
-    /**
-     * Parse SMILES string and generate molecule object
-     */
-    async parseSMILES(smiles) {
-        await this.initialize();
-        try {
-            if (!this.rdkit.get_mol) {
-                return this.fallbackParseSMILES(smiles);
-            }
-            const mol = this.rdkit.get_mol(smiles);
-            if (!mol || !mol.is_valid()) {
-                throw new Error(`Invalid SMILES: ${smiles}`);
-            }
-            // Generate 2D coordinates
-            if (this.config.addCoords) {
-                mol.generate_2d_coords();
-            }
-            // Extract molecule data
-            const molData = this.extractMoleculeData(mol);
-            // Cleanup RDKit object
-            mol.delete();
-            return molData;
-        }
-        catch (error) {
-            console.error('SMILES parsing failed:', error);
-            return null;
-        }
-    }
-    /**
-     * Generate SVG representation of molecule
-     */
-    async generateSVG(smiles, options = {}) {
-        await this.initialize();
-        const config = { ...this.config, ...options };
-        try {
-            if (!this.rdkit.get_mol) {
-                return this.fallbackGenerateSVG(smiles, config);
-            }
-            const mol = this.rdkit.get_mol(smiles);
-            if (!mol || !mol.is_valid()) {
-                throw new Error(`Invalid SMILES: ${smiles}`);
-            }
-            // Generate SVG
-            const svg = mol.get_svg_with_highlights(JSON.stringify({
-                width: config.width,
-                height: config.height,
-                offsetx: config.offsetx,
-                offsety: config.offsety
-            }));
-            mol.delete();
-            return svg;
-        }
-        catch (error) {
-            console.error('SVG generation failed:', error);
-            return this.fallbackGenerateSVG(smiles, config);
-        }
-    }
-    /**
-     * Calculate molecular descriptors
-     */
-    async calculateDescriptors(smiles) {
-        await this.initialize();
-        try {
-            if (!this.rdkit.get_mol) {
-                return this.fallbackCalculateDescriptors(smiles);
-            }
-            const mol = this.rdkit.get_mol(smiles);
-            if (!mol || !mol.is_valid()) {
-                throw new Error(`Invalid SMILES: ${smiles}`);
-            }
-            const descriptors = JSON.parse(mol.get_descriptors());
-            const properties = {
-                molecularWeight: descriptors.amw || 0,
-                logP: descriptors.clogp || 0,
-                tpsa: descriptors.tpsa || 0,
-                hbd: descriptors.lipinskiHBD || 0,
-                hba: descriptors.lipinskiHBA || 0,
-                rotatableBonds: descriptors.NumRotatableBonds || 0,
-                aromaticRings: descriptors.NumAromaticRings || 0,
-                aliphaticRings: descriptors.NumAliphaticRings || 0,
-                formula: mol.get_molformula() || '',
-                inchi: mol.get_inchi() || '',
-                inchiKey: mol.get_inchi_key() || ''
-            };
-            mol.delete();
-            return properties;
-        }
-        catch (error) {
-            console.error('Descriptor calculation failed:', error);
-            return this.fallbackCalculateDescriptors(smiles);
-        }
-    }
-    /**
-     * Perform substructure search
-     */
-    async findSubstructure(moleculeSmiles, querySmarts) {
-        await this.initialize();
-        try {
-            if (!this.rdkit.get_mol) {
-                return this.fallbackFindSubstructure(moleculeSmiles, querySmarts);
-            }
-            const mol = this.rdkit.get_mol(moleculeSmiles);
-            const query = this.rdkit.get_qmol(querySmarts);
-            if (!mol || !mol.is_valid() || !query || !query.is_valid()) {
-                throw new Error('Invalid molecule or query structure');
-            }
-            const matches = JSON.parse(mol.get_substruct_matches(query));
-            mol.delete();
-            query.delete();
-            return matches.map((match) => ({
-                atomIds: match.atoms || [],
-                bondIds: match.bonds || [],
-                matched: true
-            }));
-        }
-        catch (error) {
-            console.error('Substructure search failed:', error);
-            return [];
-        }
-    }
-    /**
-     * Apply chemical transformation
-     */
-    async applyTransformation(smiles, reactionSmarts) {
-        await this.initialize();
-        try {
-            if (!this.rdkit.get_mol) {
-                return this.fallbackApplyTransformation(smiles, reactionSmarts);
-            }
-            const mol = this.rdkit.get_mol(smiles);
-            const rxn = this.rdkit.get_rxn(reactionSmarts);
-            if (!mol || !mol.is_valid() || !rxn || !rxn.is_valid()) {
-                throw new Error('Invalid molecule or reaction');
-            }
-            const products = JSON.parse(rxn.run_reactants([mol]));
-            mol.delete();
-            rxn.delete();
-            return products.map((product) => product.smiles || '');
-        }
-        catch (error) {
-            console.error('Chemical transformation failed:', error);
-            return [];
-        }
-    }
-    /**
-     * Validate SMILES string
-     */
-    async validateSMILES(smiles) {
-        await this.initialize();
-        try {
-            if (!this.rdkit.get_mol) {
-                return this.fallbackValidateSMILES(smiles);
-            }
-            const mol = this.rdkit.get_mol(smiles);
-            const isValid = mol && mol.is_valid();
-            if (mol)
-                mol.delete();
-            return isValid;
-        }
-        catch (error) {
-            return false;
-        }
-    }
-    /**
-     * Extract detailed molecule data from RDKit molecule object
-     */
-    extractMoleculeData(mol) {
-        const molblock = mol.get_molblock();
-        const smiles = mol.get_smiles();
-        // Get atom and bond information
-        const atoms = [];
-        const bonds = [];
-        try {
-            const molData = JSON.parse(mol.get_json());
-            // Extract atoms
-            if (molData.atoms) {
-                molData.atoms.forEach((atom, index) => {
-                    atoms.push({
-                        atomicNum: atom.z || 0,
-                        symbol: atom.l || 'C',
-                        x: atom.x || 0,
-                        y: atom.y || 0,
-                        z: atom.z || 0,
-                        charge: atom.c || 0,
-                        hybridization: atom.h || 'sp3',
-                        aromantic: atom.a || false,
-                        inRing: atom.r || false
-                    });
-                });
-            }
-            // Extract bonds
-            if (molData.bonds) {
-                molData.bonds.forEach((bond) => {
-                    bonds.push({
-                        beginAtomIdx: bond.b || 0,
-                        endAtomIdx: bond.e || 0,
-                        bondType: this.mapBondType(bond.o || 1),
-                        isInRing: bond.r || false,
-                        isConjugated: bond.c || false
-                    });
-                });
-            }
-        }
-        catch (error) {
-            console.warn('Failed to extract detailed molecule data:', error);
-        }
-        return {
-            smiles,
-            molblock,
-            atoms,
-            bonds,
-            properties: {
-                molecularWeight: 0,
-                logP: 0,
-                tpsa: 0,
-                hbd: 0,
-                hba: 0,
-                rotatableBonds: 0,
-                aromaticRings: 0,
-                aliphaticRings: 0,
-                formula: mol.get_molformula() || '',
-                inchi: mol.get_inchi() || '',
-                inchiKey: mol.get_inchi_key() || ''
-            }
-        };
-    }
-    /**
-     * Map RDKit bond order to bond type
-     */
-    mapBondType(order) {
-        switch (order) {
-            case 1: return 'SINGLE';
-            case 2: return 'DOUBLE';
-            case 3: return 'TRIPLE';
-            case 12: return 'AROMATIC';
-            default: return 'SINGLE';
-        }
-    }
-    /**
-     * Create fallback RDKit implementation for environments where RDKit.js is not available
-     */
-    createFallbackRDKit() {
-        return {
-            get_mol: null,
-            get_qmol: null,
-            get_rxn: null
-        };
-    }
-    /**
-     * Fallback implementations for when RDKit.js is not available
-     */
-    fallbackParseSMILES(smiles) {
-        // Simple SMILES parsing fallback
-        const atomCount = smiles.length; // Simplified
-        return {
-            smiles,
-            atoms: [],
-            bonds: [],
-            properties: {
-                molecularWeight: atomCount * 12, // Rough estimate
-                logP: 0,
-                tpsa: 0,
-                hbd: 0,
-                hba: 0,
-                rotatableBonds: 0,
-                aromaticRings: 0,
-                aliphaticRings: 0,
-                formula: smiles,
-                inchi: '',
-                inchiKey: ''
-            }
-        };
-    }
-    fallbackGenerateSVG(smiles, config) {
-        return `<svg width="${config.width}" height="${config.height}" xmlns="http://www.w3.org/2000/svg">
-      <rect width="100%" height="100%" fill="white"/>
-      <text x="${config.width / 2}" y="${config.height / 2}" text-anchor="middle" font-family="Arial" font-size="16">
-        ${smiles}
-      </text>
-      <text x="${config.width / 2}" y="${config.height / 2 + 25}" text-anchor="middle" font-family="Arial" font-size="12" fill="#666">
-        (RDKit.js not available - showing SMILES)
-      </text>
-    </svg>`;
-    }
-    fallbackCalculateDescriptors(smiles) {
-        return {
-            molecularWeight: smiles.length * 12, // Very rough estimate
-            logP: 0,
-            tpsa: 0,
-            hbd: 0,
-            hba: 0,
-            rotatableBonds: 0,
-            aromaticRings: 0,
-            aliphaticRings: 0,
-            formula: smiles,
-            inchi: '',
-            inchiKey: ''
-        };
-    }
-    fallbackFindSubstructure(moleculeSmiles, querySmarts) {
-        // Simple substring search as fallback
-        const matched = moleculeSmiles.includes(querySmarts);
-        return matched ? [{ atomIds: [], bondIds: [], matched: true }] : [];
-    }
-    fallbackApplyTransformation(smiles, reactionSmarts) {
-        // No transformation capability in fallback
-        return [smiles];
-    }
-    fallbackValidateSMILES(smiles) {
-        // Basic validation - check for common SMILES characters
-        const smilesPattern = /^[A-Za-z0-9@+\-\[\]()=#:/\\%*.]+$/;
-        return smilesPattern.test(smiles) && smiles.length > 0;
-    }
-    /**
-     * Cleanup resources
-     */
-    dispose() {
-        // RDKit.js cleanup if needed
-        this.initialized = false;
-    }
-}
-
-/**
- * 3Dmol.js Wrapper for CREB Molecular Visualization
- * Provides unified API for advanced 3D molecular structure visualization
- *
- * Features:
- * - Interactive 3D molecular visualization with WebGL
- * - Multiple rendering styles (ball-and-stick, space-filling, cartoon, etc.)
- * - Animation and transition effects
- * - Chemical property visualization (electrostatic, hydrophobic surfaces)
- * - Multi-molecule scene management
- * - Export capabilities (PNG, WebM, molecular formats)
- * - Event handling for molecular interactions
- */
-/**
- * 3Dmol.js Wrapper Class
- * Provides simplified access to 3Dmol.js functionality within CREB
- */
-class Mol3DWrapper {
-    constructor(container, config = {}) {
-        this.viewer = null;
-        this.container = null;
-        this.initialized = false;
-        this.molecules = new Map();
-        this.eventHandlers = new Map();
-        this.container = typeof container === 'string'
-            ? document.getElementById(container)
-            : container;
-        this.config = {
-            backgroundColor: '#ffffff',
-            width: 600,
-            height: 400,
-            antialias: true,
-            alpha: false,
-            preserveDrawingBuffer: true,
-            premultipliedAlpha: false,
-            camera: {
-                fov: 45,
-                near: 0.1,
-                far: 1000,
-                position: { x: 0, y: 0, z: 50 },
-                target: { x: 0, y: 0, z: 0 },
-                up: { x: 0, y: 1, z: 0 }
-            },
-            lighting: {
-                ambient: '#404040',
-                directional: [
-                    {
-                        color: '#ffffff',
-                        intensity: 1.0,
-                        position: { x: 1, y: 1, z: 1 }
-                    }
-                ]
-            },
-            fog: {
-                enabled: false,
-                color: '#ffffff',
-                near: 50,
-                far: 100
-            },
-            ...config
-        };
-    }
-    /**
-     * Initialize 3Dmol.js viewer
-     */
-    async initialize() {
-        if (this.initialized || !this.container)
-            return;
-        try {
-            // Dynamic import for 3Dmol.js
-            let $3Dmol;
-            if (typeof window !== 'undefined') {
-                // Browser environment - try different import methods
-                try {
-                    // Use string-based import to avoid build-time type checking
-                    $3Dmol = await import('3' + 'dmol');
-                }
-                catch {
-                    // Fallback to global $3Dmol if module import fails
-                    $3Dmol = window.$3Dmol;
-                }
-            }
-            if (!$3Dmol) {
-                console.warn('3Dmol.js not available. Using fallback implementation.');
-                this.viewer = this.createFallbackViewer();
-            }
-            else {
-                // Create 3Dmol viewer
-                this.viewer = $3Dmol.createViewer(this.container, {
-                    backgroundColor: this.config.backgroundColor,
-                    antialias: this.config.antialias,
-                    alpha: this.config.alpha,
-                    preserveDrawingBuffer: this.config.preserveDrawingBuffer,
-                    premultipliedAlpha: this.config.premultipliedAlpha
-                });
-                // Configure camera
-                this.viewer.setCameraParameters({
-                    fov: this.config.camera.fov,
-                    near: this.config.camera.near,
-                    far: this.config.camera.far
-                });
-                // Set initial camera position
-                this.viewer.setViewStyle({
-                    style: 'outline',
-                    color: 'black',
-                    width: 0.1
-                });
-            }
-            this.initialized = true;
-            this.setupEventHandlers();
-        }
-        catch (error) {
-            console.warn('3Dmol.js initialization failed:', error);
-            this.viewer = this.createFallbackViewer();
-            this.initialized = true;
-        }
-    }
-    /**
-     * Get the 3Dmol viewer instance
-     */
-    getViewer() {
-        return this.viewer;
-    }
-    /**
-     * Add molecule to the scene
-     */
-    async addMolecule(id, moleculeData, format = 'pdb') {
-        await this.initialize();
-        try {
-            let molecule;
-            if (typeof moleculeData === 'string') {
-                // Parse molecule data
-                molecule = this.parseMoleculeData(moleculeData, format);
-                if (this.viewer.addModel) {
-                    this.viewer.addModel(moleculeData, format);
-                }
-            }
-            else {
-                molecule = moleculeData;
-                if (this.viewer.addModel && molecule.data) {
-                    this.viewer.addModel(molecule.data, molecule.format || format);
-                }
-            }
-            this.molecules.set(id, molecule);
-            this.render();
-        }
-        catch (error) {
-            console.error('Failed to add molecule:', error);
-        }
-    }
-    /**
-     * Remove molecule from the scene
-     */
-    removeMolecule(id) {
-        if (this.molecules.has(id)) {
-            this.molecules.delete(id);
-            // Remove from 3Dmol viewer
-            if (this.viewer.removeAllModels) {
-                this.viewer.removeAllModels();
-                // Re-add remaining molecules
-                this.molecules.forEach((molecule, moleculeId) => {
-                    if (molecule.data && moleculeId !== id) {
-                        this.viewer.addModel(molecule.data, molecule.format || 'pdb');
-                    }
-                });
-            }
-            this.render();
-        }
-    }
-    /**
-     * Set visualization style for molecules
-     */
-    setStyle(style, selector) {
-        if (!this.viewer.setStyle) {
-            console.warn('Style setting not available in fallback mode');
-            return;
-        }
-        try {
-            this.viewer.setStyle(selector || {}, style);
-            this.render();
-        }
-        catch (error) {
-            console.error('Failed to set style:', error);
-        }
-    }
-    /**
-     * Add surface to molecule
-     */
-    addSurface(surfaceType = 'VDW', style = {}, selector) {
-        if (!this.viewer.addSurface) {
-            console.warn('Surface rendering not available in fallback mode');
-            return;
-        }
-        try {
-            this.viewer.addSurface(surfaceType, style, selector);
-            this.render();
-        }
-        catch (error) {
-            console.error('Failed to add surface:', error);
-        }
-    }
-    /**
-     * Animate camera movement
-     */
-    animateCamera(targetPosition, options = { duration: 1000 }) {
-        return new Promise((resolve) => {
-            if (!this.viewer.animate) {
-                console.warn('Animation not available in fallback mode');
-                resolve();
-                return;
-            }
-            try {
-                this.viewer.animate({
-                    camera: targetPosition,
-                    duration: options.duration,
-                    easing: options.easing || 'ease'
-                });
-                setTimeout(resolve, options.duration);
-            }
-            catch (error) {
-                console.error('Camera animation failed:', error);
-                resolve();
-            }
-        });
-    }
-    /**
-     * Animate molecular properties
-     */
-    animateMolecule(properties, options = { duration: 1000 }) {
-        return new Promise((resolve) => {
-            if (!this.viewer.animate) {
-                console.warn('Animation not available in fallback mode');
-                resolve();
-                return;
-            }
-            try {
-                this.viewer.animate({
-                    ...properties,
-                    duration: options.duration,
-                    easing: options.easing || 'ease'
-                });
-                setTimeout(resolve, options.duration);
-            }
-            catch (error) {
-                console.error('Molecule animation failed:', error);
-                resolve();
-            }
-        });
-    }
-    /**
-     * Export scene as image or animation
-     */
-    async exportScene(options) {
-        if (!this.viewer) {
-            throw new Error('Viewer not initialized');
-        }
-        switch (options.format) {
-            case 'png':
-                return this.exportPNG(options);
-            case 'webm':
-                return this.exportWebM(options);
-            case 'pdb':
-            case 'sdf':
-            case 'mol2':
-                return this.exportMoleculeData(options.format);
-            default:
-                throw new Error(`Unsupported export format: ${options.format}`);
-        }
-    }
-    /**
-     * Add event listener for molecular interactions
-     */
-    addEventListener(event, handler) {
-        if (!this.eventHandlers.has(event)) {
-            this.eventHandlers.set(event, []);
-        }
-        this.eventHandlers.get(event).push(handler);
-    }
-    /**
-     * Remove event listener
-     */
-    removeEventListener(event, handler) {
-        const handlers = this.eventHandlers.get(event);
-        if (handlers) {
-            const index = handlers.indexOf(handler);
-            if (index > -1) {
-                handlers.splice(index, 1);
-            }
-        }
-    }
-    /**
-     * Center and fit all molecules in view
-     */
-    zoomToFit() {
-        if (this.viewer.zoomTo) {
-            this.viewer.zoomTo();
-            this.render();
-        }
-    }
-    /**
-     * Set camera position
-     */
-    setCameraPosition(position) {
-        if (this.viewer.setCameraPosition) {
-            this.viewer.setCameraPosition(position);
-            this.render();
-        }
-    }
-    /**
-     * Get current camera position
-     */
-    getCameraPosition() {
-        if (this.viewer.getCameraPosition) {
-            return this.viewer.getCameraPosition();
-        }
-        return { x: 0, y: 0, z: 50 };
-    }
-    /**
-     * Clear all molecules from scene
-     */
-    clear() {
-        this.molecules.clear();
-        if (this.viewer.removeAllModels) {
-            this.viewer.removeAllModels();
-            this.render();
-        }
-    }
-    /**
-     * Render the scene
-     */
-    render() {
-        if (this.viewer.render) {
-            this.viewer.render();
-        }
-    }
-    /**
-     * Resize viewer
-     */
-    resize(width, height) {
-        if (width)
-            this.config.width = width;
-        if (height)
-            this.config.height = height;
-        if (this.viewer.resize) {
-            this.viewer.resize();
-        }
-    }
-    /**
-     * Parse molecule data string into structured format
-     */
-    parseMoleculeData(data, format) {
-        const atoms = [];
-        try {
-            switch (format.toLowerCase()) {
-                case 'pdb':
-                    return this.parsePDB(data);
-                case 'sdf':
-                case 'mol':
-                    return this.parseSDF(data);
-                case 'xyz':
-                    return this.parseXYZ(data);
-                default:
-                    console.warn(`Unsupported format: ${format}`);
-                    break;
-            }
-        }
-        catch (error) {
-            console.error('Failed to parse molecule data:', error);
-        }
-        return {
-            atoms,
-            format: format,
-            data
-        };
-    }
-    /**
-     * Parse PDB format
-     */
-    parsePDB(data) {
-        const atoms = [];
-        const lines = data.split('\n');
-        for (const line of lines) {
-            if (line.startsWith('ATOM') || line.startsWith('HETATM')) {
-                const atom = {
-                    elem: line.substring(76, 78).trim() || line.substring(12, 16).trim().charAt(0),
-                    x: parseFloat(line.substring(30, 38)),
-                    y: parseFloat(line.substring(38, 46)),
-                    z: parseFloat(line.substring(46, 54)),
-                    serial: parseInt(line.substring(6, 11)),
-                    atom: line.substring(12, 16).trim(),
-                    resn: line.substring(17, 20).trim(),
-                    chain: line.substring(21, 22),
-                    resi: parseInt(line.substring(22, 26)),
-                    b: parseFloat(line.substring(60, 66)),
-                    pdbline: line
-                };
-                atoms.push(atom);
-            }
-        }
-        return {
-            atoms,
-            format: 'pdb',
-            data
-        };
-    }
-    /**
-     * Parse SDF format
-     */
-    parseSDF(data) {
-        const atoms = [];
-        const lines = data.split('\n');
-        // Find the counts line (typically line 3)
-        const countsLine = lines[3];
-        if (countsLine) {
-            const atomCount = parseInt(countsLine.substring(0, 3));
-            // Parse atom block (starts at line 4)
-            for (let i = 4; i < 4 + atomCount && i < lines.length; i++) {
-                const line = lines[i];
-                const parts = line.trim().split(/\s+/);
-                if (parts.length >= 4) {
-                    atoms.push({
-                        elem: parts[3],
-                        x: parseFloat(parts[0]),
-                        y: parseFloat(parts[1]),
-                        z: parseFloat(parts[2])
-                    });
-                }
-            }
-        }
-        return {
-            atoms,
-            format: 'sdf',
-            data
-        };
-    }
-    /**
-     * Parse XYZ format
-     */
-    parseXYZ(data) {
-        const atoms = [];
-        const lines = data.split('\n');
-        if (lines.length < 2)
-            return { atoms, format: 'xyz', data };
-        const atomCount = parseInt(lines[0]);
-        // Parse atoms (start from line 2)
-        for (let i = 2; i < 2 + atomCount && i < lines.length; i++) {
-            const parts = lines[i].trim().split(/\s+/);
-            if (parts.length >= 4) {
-                atoms.push({
-                    elem: parts[0],
-                    x: parseFloat(parts[1]),
-                    y: parseFloat(parts[2]),
-                    z: parseFloat(parts[3])
-                });
-            }
-        }
-        return {
-            atoms,
-            format: 'xyz',
-            data
-        };
-    }
-    /**
-     * Setup event handlers for viewer interactions
-     */
-    setupEventHandlers() {
-        if (!this.viewer.setClickCallback)
-            return;
-        // Click events
-        this.viewer.setClickCallback((event) => {
-            const handlers = this.eventHandlers.get('click');
-            if (handlers) {
-                const interactionEvent = {
-                    type: 'click',
-                    atom: event.atom,
-                    position: event.position || { x: 0, y: 0, z: 0 },
-                    screenPosition: event.screenPosition || { x: 0, y: 0 }
-                };
-                handlers.forEach(handler => handler(interactionEvent));
-            }
-        });
-        // Hover events
-        this.viewer.setHoverCallback((event) => {
-            const handlers = this.eventHandlers.get('hover');
-            if (handlers) {
-                const interactionEvent = {
-                    type: 'hover',
-                    atom: event.atom,
-                    position: event.position || { x: 0, y: 0, z: 0 },
-                    screenPosition: event.screenPosition || { x: 0, y: 0 }
-                };
-                handlers.forEach(handler => handler(interactionEvent));
-            }
-        });
-    }
-    /**
-     * Export as PNG image
-     */
-    exportPNG(options) {
-        return new Promise((resolve, reject) => {
-            if (!this.viewer.pngURI) {
-                reject(new Error('PNG export not available in fallback mode'));
-                return;
-            }
-            try {
-                const uri = this.viewer.pngURI({
-                    width: options.width || this.config.width,
-                    height: options.height || this.config.height
-                });
-                resolve(uri);
-            }
-            catch (error) {
-                reject(error);
-            }
-        });
-    }
-    /**
-     * Export as WebM animation
-     */
-    exportWebM(options) {
-        return new Promise((resolve, reject) => {
-            // WebM export would require additional implementation
-            reject(new Error('WebM export not yet implemented'));
-        });
-    }
-    /**
-     * Export molecule data in specified format
-     */
-    exportMoleculeData(format) {
-        const molecules = Array.from(this.molecules.values());
-        if (molecules.length === 0) {
-            return '';
-        }
-        // Return the first molecule's data or convert to requested format
-        const molecule = molecules[0];
-        return molecule.data || this.convertMoleculeFormat(molecule, format);
-    }
-    /**
-     * Convert molecule to different format
-     */
-    convertMoleculeFormat(molecule, targetFormat) {
-        // Basic format conversion (would need more sophisticated implementation)
-        switch (targetFormat.toLowerCase()) {
-            case 'xyz':
-                return this.moleculeToXYZ(molecule);
-            case 'pdb':
-                return this.moleculeToPDB(molecule);
-            default:
-                return molecule.data || '';
-        }
-    }
-    /**
-     * Convert molecule to XYZ format
-     */
-    moleculeToXYZ(molecule) {
-        const lines = [
-            molecule.atoms.length.toString(),
-            molecule.title || 'Generated by CREB'
-        ];
-        molecule.atoms.forEach(atom => {
-            lines.push(`${atom.elem} ${atom.x.toFixed(6)} ${atom.y.toFixed(6)} ${atom.z.toFixed(6)}`);
-        });
-        return lines.join('\n');
-    }
-    /**
-     * Convert molecule to PDB format
-     */
-    moleculeToPDB(molecule) {
-        const lines = [];
-        molecule.atoms.forEach((atom, index) => {
-            const line = [
-                'ATOM  ',
-                (index + 1).toString().padStart(5),
-                '  ',
-                atom.atom?.padEnd(4) || atom.elem.padEnd(4),
-                ' ',
-                'UNK',
-                ' ',
-                'A',
-                '   1    ',
-                atom.x.toFixed(3).padStart(8),
-                atom.y.toFixed(3).padStart(8),
-                atom.z.toFixed(3).padStart(8),
-                '  1.00',
-                '  0.00',
-                '          ',
-                atom.elem.padStart(2)
-            ].join('');
-            lines.push(line);
-        });
-        lines.push('END');
-        return lines.join('\n');
-    }
-    /**
-     * Create fallback viewer for environments where 3Dmol.js is not available
-     */
-    createFallbackViewer() {
-        return {
-            addModel: () => console.warn('3Dmol.js not available - addModel disabled'),
-            removeAllModels: () => console.warn('3Dmol.js not available - removeAllModels disabled'),
-            setStyle: () => console.warn('3Dmol.js not available - setStyle disabled'),
-            addSurface: () => console.warn('3Dmol.js not available - addSurface disabled'),
-            render: () => console.warn('3Dmol.js not available - render disabled'),
-            zoomTo: () => console.warn('3Dmol.js not available - zoomTo disabled'),
-            resize: () => console.warn('3Dmol.js not available - resize disabled'),
-            animate: () => console.warn('3Dmol.js not available - animate disabled'),
-            pngURI: () => { throw new Error('PNG export not available without 3Dmol.js'); }
-        };
-    }
-    /**
-     * Cleanup resources
-     */
-    dispose() {
-        this.clear();
-        this.eventHandlers.clear();
-        if (this.viewer && this.viewer.removeAllModels) {
-            this.viewer.removeAllModels();
-        }
-        this.initialized = false;
-    }
-}
-
-/**
- * PubChem Integration Module for CREB Molecular Visualization
- * Connects PubChem database with RDKit.js and 3Dmol.js visualization pipeline
- */
-/**
- * PubChem Integration Class
- * Provides unified access to PubChem database for molecular visualization
- */
-class PubChemIntegration {
-    constructor() {
-        this.baseUrl = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug';
-        this.requestDelay = 200; // Rate limiting: 5 requests per second
-        this.lastRequestTime = 0;
-        // Initialize with default settings
-    }
-    /**
-     * Search for compounds by various criteria
-     */
-    async searchCompounds(query, options = { searchType: 'name' }) {
-        try {
-            await this.enforceRateLimit();
-            let searchUrl = '';
-            const limit = options.limit || options.maxResults || 10;
-            switch (options.searchType) {
-                case 'name':
-                    searchUrl = `${this.baseUrl}/compound/name/${encodeURIComponent(query)}/cids/JSON?cids_type=flat`;
-                    break;
-                case 'cid':
-                    searchUrl = `${this.baseUrl}/compound/cid/${query}/cids/JSON`;
-                    break;
-                case 'smiles':
-                    searchUrl = `${this.baseUrl}/compound/smiles/${encodeURIComponent(query)}/cids/JSON`;
-                    break;
-                case 'formula':
-                    searchUrl = `${this.baseUrl}/compound/formula/${encodeURIComponent(query)}/cids/JSON`;
-                    break;
-                case 'inchi':
-                    searchUrl = `${this.baseUrl}/compound/inchi/${encodeURIComponent(query)}/cids/JSON`;
-                    break;
-            }
-            const response = await fetch(searchUrl);
-            if (!response.ok) {
-                throw new Error(`PubChem search failed: ${response.statusText}`);
-            }
-            const data = await response.json();
-            const cids = data.IdentifierList?.CID || [];
-            if (cids.length === 0) {
-                return {
-                    success: true,
-                    compounds: [],
-                    totalFound: 0,
-                    source: 'pubchem',
-                    timestamp: new Date()
-                };
-            }
-            // Get detailed compound information for found CIDs
-            const limitedCids = cids.slice(0, limit);
-            const compounds = await this.getCompoundDetails(limitedCids, options);
-            return {
-                success: true,
-                compounds,
-                totalFound: cids.length,
-                source: 'pubchem',
-                timestamp: new Date()
-            };
-        }
-        catch (error) {
-            return {
-                success: false,
-                compounds: [],
-                totalFound: 0,
-                source: 'pubchem',
-                timestamp: new Date(),
-                error: error instanceof Error ? error.message : 'Unknown error'
-            };
-        }
-    }
-    /**
-     * Get detailed compound information by CID
-     */
-    async getCompoundByCid(cid, options = { searchType: 'cid' }) {
-        try {
-            await this.enforceRateLimit();
-            const propertiesUrl = `${this.baseUrl}/compound/cid/${cid}/property/MolecularFormula,MolecularWeight,CanonicalSMILES,InChI,InChIKey/JSON`;
-            const response = await fetch(propertiesUrl);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch compound ${cid}: ${response.statusText}`);
-            }
-            const data = await response.json();
-            const properties = data.PropertyTable?.Properties?.[0];
-            if (!properties) {
-                return null;
-            }
-            const compound = {
-                cid,
-                name: `CID ${cid}`, // Will be updated if synonyms are requested
-                molecularFormula: properties.MolecularFormula || '',
-                molecularWeight: properties.MolecularWeight || 0,
-                smiles: properties.CanonicalSMILES || '',
-                inchi: properties.InChI || '',
-                inchiKey: properties.InChIKey || '',
-                properties: properties
-            };
-            // Get synonyms if requested
-            if (options.includeSynonyms) {
-                const synonyms = await this.getCompoundSynonyms(cid);
-                if (synonyms.length > 0) {
-                    compound.name = synonyms[0]; // Use first synonym as primary name
-                    compound.synonyms = synonyms;
-                }
-            }
-            return compound;
-        }
-        catch (error) {
-            console.error(`Error fetching compound ${cid}:`, error);
-            return null;
-        }
-    }
-    /**
-     * Get molecular structure data (2D/3D SDF)
-     */
-    async getMolecularData(cid, include3D = false) {
-        try {
-            const compound = await this.getCompoundByCid(cid, { searchType: 'cid', includeSynonyms: true });
-            if (!compound) {
-                return null;
-            }
-            await this.enforceRateLimit();
-            // Get 2D SDF structure
-            const sdf2DUrl = `${this.baseUrl}/compound/cid/${cid}/SDF`;
-            const sdf2DResponse = await fetch(sdf2DUrl);
-            const structure2D = sdf2DResponse.ok ? await sdf2DResponse.text() : undefined;
-            let structure3D;
-            let conformers;
-            if (include3D) {
-                await this.enforceRateLimit();
-                // Get 3D SDF structure
-                const sdf3DUrl = `${this.baseUrl}/compound/cid/${cid}/SDF?record_type=3d`;
-                const sdf3DResponse = await fetch(sdf3DUrl);
-                structure3D = sdf3DResponse.ok ? await sdf3DResponse.text() : undefined;
-                // Get conformer data if available
-                await this.enforceRateLimit();
-                try {
-                    const conformerUrl = `${this.baseUrl}/compound/cid/${cid}/conformers/JSON`;
-                    const conformerResponse = await fetch(conformerUrl);
-                    if (conformerResponse.ok) {
-                        const conformerData = await conformerResponse.json();
-                        conformers = this.parseConformerData(conformerData);
-                    }
-                }
-                catch (error) {
-                    // Conformer data not available for all compounds
-                    console.warn(`Conformer data not available for CID ${cid}`);
-                }
-            }
-            return {
-                compound,
-                structure2D,
-                structure3D,
-                conformers
-            };
-        }
-        catch (error) {
-            console.error(`Error fetching molecular data for CID ${cid}:`, error);
-            return null;
-        }
-    }
-    /**
-     * Search and get the best matching compound with full molecular data
-     */
-    async searchAndGetMolecularData(query, options = { searchType: 'name' }) {
-        const searchResult = await this.searchCompounds(query, { ...options, limit: 1 });
-        if (!searchResult.success || searchResult.compounds.length === 0) {
-            return null;
-        }
-        const compound = searchResult.compounds[0];
-        return this.getMolecularData(compound.cid, options.include3D);
-    }
-    /**
-     * Get compound synonyms
-     */
-    async getCompoundSynonyms(cid) {
-        try {
-            await this.enforceRateLimit();
-            const synonymsUrl = `${this.baseUrl}/compound/cid/${cid}/synonyms/JSON`;
-            const response = await fetch(synonymsUrl);
-            if (!response.ok) {
-                return [];
-            }
-            const data = await response.json();
-            return data.InformationList?.Information?.[0]?.Synonym || [];
-        }
-        catch (error) {
-            return [];
-        }
-    }
-    /**
-     * Get detailed compound information for multiple CIDs
-     */
-    async getCompoundDetails(cids, options) {
-        const compounds = [];
-        // Process in batches to respect rate limits
-        const batchSize = 5;
-        for (let i = 0; i < cids.length; i += batchSize) {
-            const batch = cids.slice(i, i + batchSize);
-            const batchPromises = batch.map(cid => this.getCompoundByCid(cid, options));
-            const batchResults = await Promise.all(batchPromises);
-            compounds.push(...batchResults.filter(compound => compound !== null));
-            // Add delay between batches
-            if (i + batchSize < cids.length) {
-                await new Promise(resolve => setTimeout(resolve, this.requestDelay * batch.length));
-            }
-        }
-        return compounds;
-    }
-    /**
-     * Parse conformer data from PubChem response
-     */
-    parseConformerData(conformerData) {
-        // Implementation would parse the conformer JSON structure
-        // This is a simplified version
-        return [];
-    }
-    /**
-     * Enforce rate limiting for PubChem API
-     */
-    async enforceRateLimit() {
-        const now = Date.now();
-        const timeSinceLastRequest = now - this.lastRequestTime;
-        if (timeSinceLastRequest < this.requestDelay) {
-            const waitTime = this.requestDelay - timeSinceLastRequest;
-            await new Promise(resolve => setTimeout(resolve, waitTime));
-        }
-        this.lastRequestTime = Date.now();
-    }
-    /**
-     * Convert PubChem compound to SMILES for RDKit processing
-     */
-    getCompoundSMILES(compound) {
-        return compound.smiles || null;
-    }
-    /**
-     * Get compound 3D structure in SDF format for 3Dmol.js
-     */
-    async getCompound3DSDF(cid) {
-        const molecularData = await this.getMolecularData(cid, true);
-        return molecularData?.structure3D || molecularData?.structure2D || null;
-    }
-    /**
-     * Validate if PubChem API is accessible
-     */
-    async validateConnection() {
-        try {
-            await this.enforceRateLimit();
-            const testUrl = `${this.baseUrl}/compound/cid/2244/property/MolecularFormula/JSON`; // Aspirin
-            const response = await fetch(testUrl);
-            return response.ok;
-        }
-        catch (error) {
-            return false;
-        }
-    }
-}
-
-/**
- * Reaction Animation System
- * Implements animated bond formation/breaking visualization for chemical reactions
- * Part of CREB-JS v1.7.0 - Complete Reaction Animation Feature
- *
- * Integrates with:
- * - RDKit.js for molecular structure processing and SMILES parsing
- * - 3Dmol.js for advanced 3D visualization and animation
- * - PubChem API for compound data retrieval
- */
-/**
- * Main class for creating and managing reaction animations
- * Integrates RDKit.js for molecular processing and 3Dmol.js for 3D visualization
- */
-class ReactionAnimator {
-    constructor(config = {}) {
-        this.currentAnimation = [];
-        this.isPlaying = false;
-        this.currentFrame = 0;
-        this.animationId = null;
-        this.canvas = null;
-        this.context = null;
-        this.energyProfile = null;
-        this.mol3dWrapper = null;
-        this.viewer3D = null; // 3Dmol viewer instance
-        this.moleculeCache = new Map();
-        this.config = {
-            duration: 5000,
-            fps: 30,
-            easing: 'ease-in-out',
-            showEnergyProfile: true,
-            showBondOrders: true,
-            showCharges: false,
-            style: 'smooth',
-            bondColorScheme: 'energy-based',
-            ...config
-        };
-        // Initialize RDKit wrapper for molecular processing
-        this.rdkitWrapper = new RDKitWrapper({
-            addCoords: true,
-            sanitize: true,
-            useCoordGen: true,
-            width: 400,
-            height: 300
-        });
-    }
-    /**
-     * Initialize 3D visualization system
-     */
-    async initialize3DViewer(container) {
-        try {
-            this.mol3dWrapper = new Mol3DWrapper(container, {
-                backgroundColor: 'white',
-                width: container.clientWidth || 600,
-                height: container.clientHeight || 400,
-                antialias: true,
-                alpha: true,
-                preserveDrawingBuffer: false,
-                premultipliedAlpha: false,
-                camera: {
-                    fov: 45,
-                    near: 0.1,
-                    far: 1000,
-                    position: { x: 0, y: 0, z: 10 },
-                    target: { x: 0, y: 0, z: 0 },
-                    up: { x: 0, y: 1, z: 0 }
-                },
-                lighting: {
-                    ambient: '#404040',
-                    directional: [{
-                            color: '#ffffff',
-                            intensity: 1.0,
-                            position: { x: 1, y: 1, z: 1 }
-                        }]
-                },
-                fog: {
-                    enabled: false,
-                    color: '#ffffff',
-                    near: 10,
-                    far: 100
-                }
-            });
-            await this.mol3dWrapper.initialize();
-            this.viewer3D = this.mol3dWrapper.getViewer();
-            console.log('✅ 3D viewer initialized for reaction animation');
-        }
-        catch (error) {
-            console.error('❌ Failed to initialize 3D viewer:', error);
-            throw new Error(`3D viewer initialization failed: ${error}`);
-        }
-    }
-    /**
-     * Parse molecule from SMILES using RDKit
-     */
-    async parseSMILES(smiles) {
-        if (!this.rdkitWrapper) {
-            throw new Error('RDKit wrapper not initialized. Call initializeRDKit() first.');
-        }
-        try {
-            const mol = await this.rdkitWrapper.parseSMILES(smiles);
-            if (!mol) {
-                throw new Error(`Failed to parse SMILES: ${smiles}`);
-            }
-            return mol;
-        }
-        catch (error) {
-            console.error('❌ SMILES parsing failed:', error);
-            throw error;
-        }
-    }
-    /**
-     * Generate 3D coordinates for a molecule using PubChem SDF data
-     */
-    async generate3DCoordinates(molecule) {
-        if (!this.rdkitWrapper) {
-            throw new Error('RDKit wrapper not initialized');
-        }
-        try {
-            // If molecule has a CID, get real 3D structure from PubChem
-            if (molecule.cid) {
-                console.log(`🔬 Fetching real 3D structure from PubChem for CID: ${molecule.cid}`);
-                const pubchem = new PubChemIntegration();
-                const sdf3D = await pubchem.getCompound3DSDF(molecule.cid);
-                if (sdf3D) {
-                    console.log('✅ Retrieved real 3D SDF structure from PubChem');
-                    return { molblock: sdf3D, format: 'sdf', source: 'PubChem_3D' };
-                }
-            }
-            // If molecule has SMILES, try to get PubChem data by name/SMILES lookup
-            if (molecule.smiles || molecule.name) {
-                console.log(`🔍 Looking up ${molecule.name || molecule.smiles} in PubChem`);
-                const pubchem = new PubChemIntegration();
-                try {
-                    const searchTerm = molecule.name || molecule.smiles;
-                    const searchResult = await pubchem.searchCompounds(searchTerm, { searchType: 'name', limit: 1 });
-                    if (searchResult.success && searchResult.compounds.length > 0) {
-                        const compound = searchResult.compounds[0];
-                        const sdf3D = await pubchem.getCompound3DSDF(compound.cid);
-                        if (sdf3D) {
-                            console.log(`✅ Found PubChem 3D structure for ${searchTerm} (CID: ${compound.cid})`);
-                            return { molblock: sdf3D, format: 'sdf', source: 'PubChem_3D' };
-                        }
-                    }
-                }
-                catch (searchError) {
-                    console.warn(`⚠️ PubChem lookup failed for ${molecule.name || molecule.smiles}:`, searchError);
-                }
-            }
-            // Fallback: use RDKit for basic 2D structure (but warn about it)
-            console.warn('⚠️ Using 2D fallback - no PubChem 3D data available');
-            return { molblock: molecule.molblock || '', format: 'mol', source: 'RDKit_2D' };
-        }
-        catch (error) {
-            console.error('❌ 3D coordinate generation failed:', error);
-            throw error;
-        }
-    }
-    /**
-     * Add molecule to 3D scene for animation
-     */
-    async addMoleculeToScene(smiles, moleculeId) {
-        if (!this.mol3dWrapper) {
-            throw new Error('3D viewer not initialized. Call initialize3DViewer() first.');
-        }
-        try {
-            // Parse SMILES with RDKit
-            const molecule = await this.parseSMILES(smiles);
-            // Generate 3D coordinates using PubChem integration
-            const mol3D = await this.generate3DCoordinates(molecule);
-            // Get molecular data
-            let molData;
-            let format = 'sdf';
-            if (mol3D && mol3D.molblock) {
-                molData = mol3D.molblock;
-                format = mol3D.format === 'sdf' ? 'sdf' : 'pdb'; // Use PDB as fallback format
-                console.log(`🔬 Using ${mol3D.source} data for ${moleculeId}`);
-            }
-            else {
-                // Fallback: create simple MOL format from SMILES (convert to PDB format)
-                console.warn(`⚠️ No 3D data available for ${smiles}, using 2D fallback`);
-                molData = await this.createMolBlockFromSMILES(smiles);
-                format = 'pdb';
-            }
-            // Add to 3D scene with correct format
-            await this.mol3dWrapper.addMolecule(moleculeId, molData, format);
-            // Apply default styling (fix setStyle signature)
-            this.mol3dWrapper.setStyle({
-                stick: { radius: 0.15 },
-                sphere: { scale: 0.25 }
-            });
-            console.log(`✅ Added molecule ${moleculeId} to 3D scene`);
-        }
-        catch (error) {
-            console.error(`❌ Failed to add molecule ${moleculeId} to scene:`, error);
-            throw error;
-        }
-    }
-    /**
-     * Create a simple MOL block from SMILES (fallback method)
-     */
-    async createMolBlockFromSMILES(smiles) {
-        // This is a simplified MOL block for basic visualization
-        // In a real implementation, this would use RDKit's molblock generation
-        return `
-  RDKit          2D
-
-  1  0  0  0  0  0  0  0  0  0999 V2000
-    0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0
-M  END
-$$$$
-`;
-    }
-    /**
-     * Animate molecular transformation using real 3D structures
-     */
-    async animateMolecularTransformation(reactantSMILES, productSMILES, duration = 2000) {
-        if (!this.mol3dWrapper) {
-            throw new Error('3D viewer not initialized');
-        }
-        try {
-            console.log('🔄 Starting molecular transformation animation...');
-            // Clear existing molecules
-            this.mol3dWrapper.clear();
-            // Add reactants
-            for (let i = 0; i < reactantSMILES.length; i++) {
-                await this.addMoleculeToScene(reactantSMILES[i], `reactant_${i}`);
-                // Position reactants on the left (styling applied in addMoleculeToScene)
-            }
-            // Render initial state
-            this.mol3dWrapper.render();
-            // Wait for half duration
-            await new Promise(resolve => setTimeout(resolve, duration / 2));
-            // Transition: fade out reactants, fade in products
-            console.log('🔄 Transitioning to products...');
-            // Clear and add products
-            this.mol3dWrapper.clear();
-            for (let i = 0; i < productSMILES.length; i++) {
-                await this.addMoleculeToScene(productSMILES[i], `product_${i}`);
-                // Products will have green styling applied in addMoleculeToScene
-            }
-            // Final render
-            this.mol3dWrapper.render();
-            console.log('✅ Molecular transformation animation complete');
-        }
-        catch (error) {
-            console.error('❌ Molecular transformation animation failed:', error);
-            throw error;
-        }
-    }
-    /**
-     * Calculate and display molecular properties during animation
-     */
-    async showMolecularProperties(smiles) {
-        if (!this.rdkitWrapper) {
-            throw new Error('RDKit wrapper not initialized');
-        }
-        try {
-            // Use the correct method name from RDKitWrapper
-            const properties = await this.rdkitWrapper.calculateDescriptors(smiles);
-            // Display properties in UI (can be customized)
-            console.log('📊 Molecular Properties:', {
-                formula: properties.formula,
-                molecularWeight: properties.molecularWeight,
-                logP: properties.logP,
-                tpsa: properties.tpsa,
-                rotatableBonds: properties.rotatableBonds,
-                hbd: properties.hbd,
-                hba: properties.hba,
-                aromaticRings: properties.aromaticRings,
-                aliphaticRings: properties.aliphaticRings
-            });
-            return properties;
-        }
-        catch (error) {
-            console.error('❌ Failed to calculate molecular properties:', error);
-            throw error;
-        }
-    }
-    /**
-     * Create animation from balanced equation and energy profile
-     */
-    async createAnimationFromEquation(equation, energyProfile, transitionStates) {
-        this.energyProfile = energyProfile;
-        // Parse reactants and products
-        const reactantStructures = await this.generateMolecularStructures(equation.reactants);
-        const productStructures = await this.generateMolecularStructures(equation.products);
-        // Create transition path
-        const transitionPath = this.createTransitionPath(reactantStructures, productStructures, energyProfile, transitionStates);
-        // Generate animation frames
-        this.currentAnimation = this.generateAnimationFrames(transitionPath);
-        return this.currentAnimation;
-    }
-    /**
-     * Create animation from custom molecular structures
-     */
-    createCustomAnimation(reactants, products, bondChanges) {
-        const transitionPath = this.createCustomTransitionPath(reactants, products, bondChanges);
-        this.currentAnimation = this.generateAnimationFrames(transitionPath);
-        return this.currentAnimation;
-    }
-    /**
-     * Play the animation on a canvas
-     */
-    async playAnimation(canvas, onFrameUpdate) {
-        if (this.currentAnimation.length === 0) {
-            throw new Error('No animation loaded. Call createAnimation first.');
-        }
-        this.canvas = canvas;
-        this.context = canvas.getContext('2d');
-        if (!this.context) {
-            throw new Error('Could not get 2D context from canvas');
-        }
-        this.isPlaying = true;
-        this.currentFrame = 0;
-        const frameInterval = 1000 / this.config.fps;
-        return new Promise((resolve) => {
-            const animate = () => {
-                if (!this.isPlaying || this.currentFrame >= this.currentAnimation.length) {
-                    this.isPlaying = false;
-                    resolve();
-                    return;
-                }
-                const frame = this.currentAnimation[this.currentFrame];
-                this.renderFrame(frame);
-                if (onFrameUpdate) {
-                    onFrameUpdate(frame);
-                }
-                this.currentFrame++;
-                this.animationId = setTimeout(animate, frameInterval);
-            };
-            animate();
-        });
-    }
-    /**
-     * Pause the animation
-     */
-    pauseAnimation() {
-        this.isPlaying = false;
-        if (this.animationId) {
-            clearTimeout(this.animationId);
-            this.animationId = null;
-        }
-    }
-    /**
-     * Resume the animation
-     */
-    resumeAnimation() {
-        if (!this.isPlaying && this.currentFrame < this.currentAnimation.length) {
-            this.isPlaying = true;
-            this.playAnimation(this.canvas);
-        }
-    }
-    /**
-     * Reset animation to beginning
-     */
-    resetAnimation() {
-        this.pauseAnimation();
-        this.currentFrame = 0;
-    }
-    /**
-     * Export animation as video data
-     */
-    exportAnimation(format = 'gif') {
-        // Implementation would depend on the specific video encoding library
-        // For now, return a mock blob
-        return Promise.resolve(new Blob(['animation data'], { type: `video/${format}` }));
-    }
-    /**
-     * Generate molecular structures from species names
-     */
-    async generateMolecularStructures(species) {
-        const structures = [];
-        for (const molecule of species) {
-            const structure = await this.generateStructureFromName(molecule);
-            structures.push(structure);
-        }
-        return structures;
-    }
-    /**
-     * Generate a molecular structure from a molecule name
-     */
-    async generateStructureFromName(moleculeName) {
-        // This would integrate with molecular database or SMILES parser
-        // For now, return mock structures for common molecules
-        const mockStructures = {
-            'H2O': {
-                atoms: [
-                    { element: 'O', position: { x: 0, y: 0, z: 0 }, charge: -0.34 },
-                    { element: 'H', position: { x: 0.757, y: 0.587, z: 0 }, charge: 0.17 },
-                    { element: 'H', position: { x: -0.757, y: 0.587, z: 0 }, charge: 0.17 }
-                ],
-                bonds: [
-                    { atom1: 0, atom2: 1, order: 1, length: 0.96 },
-                    { atom1: 0, atom2: 2, order: 1, length: 0.96 }
-                ],
-                properties: { totalEnergy: 0, charge: 0 }
-            },
-            'CH4': {
-                atoms: [
-                    { element: 'C', position: { x: 0, y: 0, z: 0 }, charge: -0.4 },
-                    { element: 'H', position: { x: 1.089, y: 0, z: 0 }, charge: 0.1 },
-                    { element: 'H', position: { x: -0.363, y: 1.027, z: 0 }, charge: 0.1 },
-                    { element: 'H', position: { x: -0.363, y: -0.513, z: 0.889 }, charge: 0.1 },
-                    { element: 'H', position: { x: -0.363, y: -0.513, z: -0.889 }, charge: 0.1 }
-                ],
-                bonds: [
-                    { atom1: 0, atom2: 1, order: 1, length: 1.089 },
-                    { atom1: 0, atom2: 2, order: 1, length: 1.089 },
-                    { atom1: 0, atom2: 3, order: 1, length: 1.089 },
-                    { atom1: 0, atom2: 4, order: 1, length: 1.089 }
-                ],
-                properties: { totalEnergy: 0, charge: 0 }
-            },
-            'O2': {
-                atoms: [
-                    { element: 'O', position: { x: -0.6, y: 0, z: 0 }, charge: 0 },
-                    { element: 'O', position: { x: 0.6, y: 0, z: 0 }, charge: 0 }
-                ],
-                bonds: [
-                    { atom1: 0, atom2: 1, order: 2, length: 1.21 }
-                ],
-                properties: { totalEnergy: 0, charge: 0 }
-            },
-            'CO2': {
-                atoms: [
-                    { element: 'C', position: { x: 0, y: 0, z: 0 }, charge: 0.4 },
-                    { element: 'O', position: { x: -1.16, y: 0, z: 0 }, charge: -0.2 },
-                    { element: 'O', position: { x: 1.16, y: 0, z: 0 }, charge: -0.2 }
-                ],
-                bonds: [
-                    { atom1: 0, atom2: 1, order: 2, length: 1.16 },
-                    { atom1: 0, atom2: 2, order: 2, length: 1.16 }
-                ],
-                properties: { totalEnergy: 0, charge: 0 }
-            }
-        };
-        return mockStructures[moleculeName] || mockStructures['H2O'];
-    }
-    /**
-     * Create transition path between reactants and products
-     */
-    createTransitionPath(reactants, products, energyProfile, transitionStates) {
-        const steps = [];
-        // Create steps based on energy profile points
-        for (let i = 0; i < energyProfile.points.length - 1; i++) {
-            const currentPoint = energyProfile.points[i];
-            const nextPoint = energyProfile.points[i + 1];
-            const step = {
-                stepNumber: i,
-                description: `${currentPoint.label} → ${nextPoint.label}`,
-                energyChange: nextPoint.energy - currentPoint.energy,
-                bondChanges: this.inferBondChanges(currentPoint, nextPoint),
-                duration: 1 / (energyProfile.points.length - 1),
-                intermediates: this.generateIntermediateStructures(currentPoint, nextPoint)
-            };
-            steps.push(step);
-        }
-        return steps;
-    }
-    /**
-     * Create custom transition path from bond changes
-     */
-    createCustomTransitionPath(reactants, products, bondChanges) {
-        const steps = [];
-        // Group bond changes by type
-        const breakingBonds = bondChanges.filter(bc => bc.type === 'breaking');
-        const formingBonds = bondChanges.filter(bc => bc.type === 'forming');
-        // Create breaking step
-        if (breakingBonds.length > 0) {
-            steps.push({
-                stepNumber: 0,
-                description: 'Bond breaking',
-                energyChange: breakingBonds.reduce((sum, bc) => sum + bc.energyContribution, 0),
-                bondChanges: breakingBonds,
-                duration: 0.4
-            });
-        }
-        // Create transition state step
-        steps.push({
-            stepNumber: steps.length,
-            description: 'Transition state',
-            energyChange: 50, // Estimated activation energy
-            bondChanges: [],
-            duration: 0.2
-        });
-        // Create forming step
-        if (formingBonds.length > 0) {
-            steps.push({
-                stepNumber: steps.length,
-                description: 'Bond forming',
-                energyChange: formingBonds.reduce((sum, bc) => sum + bc.energyContribution, 0),
-                bondChanges: formingBonds,
-                duration: 0.4
-            });
-        }
-        return steps;
-    }
-    /**
-     * Generate animation frames from reaction steps
-     */
-    generateAnimationFrames(steps) {
-        const frames = [];
-        const totalFrames = Math.floor(this.config.duration * this.config.fps / 1000);
-        let currentFrameIndex = 0;
-        for (const step of steps) {
-            const stepFrames = Math.floor(totalFrames * step.duration);
-            for (let i = 0; i < stepFrames; i++) {
-                const stepProgress = i / (stepFrames - 1);
-                const totalProgress = currentFrameIndex / totalFrames;
-                const frame = {
-                    frameNumber: currentFrameIndex,
-                    time: totalProgress,
-                    structure: this.interpolateStructure(step, stepProgress),
-                    energy: this.interpolateEnergy(step, stepProgress),
-                    bonds: this.generateAnimatedBonds(step, stepProgress),
-                    atoms: this.generateAnimatedAtoms(step, stepProgress)
-                };
-                frames.push(frame);
-                currentFrameIndex++;
-            }
-        }
-        return frames;
-    }
-    /**
-     * Interpolate molecular structure during a reaction step
-     */
-    interpolateStructure(step, progress) {
-        // Apply easing function
-        this.applyEasing(progress);
-        // For now, return a simple interpolated structure
-        return {
-            atoms: [
-                { element: 'C', position: { x: 0, y: 0, z: 0 } }
-            ],
-            bonds: [],
-            properties: { totalEnergy: 0, charge: 0 }
-        };
-    }
-    /**
-     * Interpolate energy during a reaction step
-     */
-    interpolateEnergy(step, progress) {
-        const easedProgress = this.applyEasing(progress);
-        return step.energyChange * easedProgress;
-    }
-    /**
-     * Generate animated bonds for a frame
-     */
-    generateAnimatedBonds(step, progress) {
-        const bonds = [];
-        for (const bondChange of step.bondChanges) {
-            const easedProgress = this.applyEasing(progress);
-            const bond = {
-                atom1: 0, // Would be determined from bond change
-                atom2: 1,
-                order: this.interpolateBondOrder(bondChange, easedProgress),
-                targetOrder: bondChange.bondOrderChange,
-                state: bondChange.type === 'breaking' ? 'breaking' : 'forming',
-                color: this.getBondColor(bondChange, easedProgress),
-                opacity: this.getBondOpacity(bondChange, easedProgress)
-            };
-            bonds.push(bond);
-        }
-        return bonds;
-    }
-    /**
-     * Generate animated atoms for a frame
-     */
-    generateAnimatedAtoms(step, progress) {
-        const atoms = [];
-        // This would generate atoms based on the molecular structure
-        // For now, return empty array
-        return atoms;
-    }
-    /**
-     * Render a single animation frame
-     */
-    renderFrame(frame) {
-        if (!this.context || !this.canvas)
-            return;
-        // Clear canvas
-        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        // Set up coordinate system
-        this.context.save();
-        this.context.translate(this.canvas.width / 2, this.canvas.height / 2);
-        this.context.scale(100, -100); // Scale and flip Y axis for chemistry coordinates
-        // Render atoms
-        this.renderAtoms(frame.atoms);
-        // Render bonds
-        this.renderBonds(frame.bonds);
-        // Render energy indicator
-        if (this.config.showEnergyProfile) {
-            this.renderEnergyIndicator(frame.energy);
-        }
-        this.context.restore();
-        // Render frame information
-        this.renderFrameInfo(frame);
-    }
-    /**
-     * Render atoms in the current frame
-     */
-    renderAtoms(atoms) {
-        if (!this.context)
-            return;
-        for (const atom of atoms) {
-            this.context.save();
-            // Set atom color
-            this.context.fillStyle = atom.color;
-            this.context.globalAlpha = atom.opacity;
-            // Draw atom
-            this.context.beginPath();
-            this.context.arc(atom.position.x, atom.position.y, atom.radius, 0, 2 * Math.PI);
-            this.context.fill();
-            // Draw element label
-            this.context.fillStyle = 'white';
-            this.context.font = '0.3px Arial';
-            this.context.textAlign = 'center';
-            this.context.fillText(atom.element, atom.position.x, atom.position.y + 0.1);
-            this.context.restore();
-        }
-    }
-    /**
-     * Render bonds in the current frame
-     */
-    renderBonds(bonds) {
-        if (!this.context)
-            return;
-        for (const bond of bonds) {
-            this.context.save();
-            // Set bond style
-            this.context.strokeStyle = bond.color;
-            this.context.globalAlpha = bond.opacity;
-            this.context.lineWidth = 0.1 * bond.order;
-            if (bond.dashPattern) {
-                this.context.setLineDash(bond.dashPattern);
-            }
-            // Draw bond (simplified - would need atom positions)
-            this.context.beginPath();
-            this.context.moveTo(-1, 0);
-            this.context.lineTo(1, 0);
-            this.context.stroke();
-            this.context.restore();
-        }
-    }
-    /**
-     * Render energy indicator
-     */
-    renderEnergyIndicator(energy) {
-        if (!this.context || !this.canvas)
-            return;
-        this.context.save();
-        // Reset transform for consistent positioning
-        this.context.setTransform(1, 0, 0, 1, 0, 0);
-        // Draw energy bar
-        const barWidth = 20;
-        const barHeight = 200;
-        const barX = this.canvas.width - 40;
-        const barY = 50;
-        // Background
-        this.context.fillStyle = '#f0f0f0';
-        this.context.fillRect(barX, barY, barWidth, barHeight);
-        // Energy level
-        const energyHeight = Math.max(0, Math.min(barHeight, (energy / 100) * barHeight));
-        this.context.fillStyle = energy > 0 ? '#ff6b6b' : '#51cf66';
-        this.context.fillRect(barX, barY + barHeight - energyHeight, barWidth, energyHeight);
-        // Label
-        this.context.fillStyle = 'black';
-        this.context.font = '12px Arial';
-        this.context.textAlign = 'center';
-        this.context.fillText(`${energy.toFixed(1)} kJ/mol`, barX + barWidth / 2, barY + barHeight + 20);
-        this.context.restore();
-    }
-    /**
-     * Render frame information
-     */
-    renderFrameInfo(frame) {
-        if (!this.context)
-            return;
-        this.context.save();
-        this.context.setTransform(1, 0, 0, 1, 0, 0);
-        this.context.fillStyle = 'black';
-        this.context.font = '14px Arial';
-        this.context.fillText(`Frame: ${frame.frameNumber}`, 10, 20);
-        this.context.fillText(`Time: ${(frame.time * 100).toFixed(1)}%`, 10, 40);
-        this.context.restore();
-    }
-    /**
-     * Apply easing function to animation progress
-     */
-    applyEasing(progress) {
-        switch (this.config.easing) {
-            case 'linear':
-                return progress;
-            case 'ease-in':
-                return progress * progress;
-            case 'ease-out':
-                return 1 - (1 - progress) * (1 - progress);
-            case 'ease-in-out':
-                return progress < 0.5
-                    ? 2 * progress * progress
-                    : 1 - 2 * (1 - progress) * (1 - progress);
-            default:
-                return progress;
-        }
-    }
-    /**
-     * Infer bond changes between energy profile points
-     */
-    inferBondChanges(current, next) {
-        // This would analyze the chemical structures to determine bond changes
-        // For now, return empty array
-        return [];
-    }
-    /**
-     * Generate intermediate structures between energy points
-     */
-    generateIntermediateStructures(current, next) {
-        // This would generate molecular structures at intermediate points
-        // For now, return empty array
-        return [];
-    }
-    /**
-     * Interpolate bond order during animation
-     */
-    interpolateBondOrder(bondChange, progress) {
-        if (bondChange.type === 'breaking') {
-            return Math.max(0, 1 - progress);
-        }
-        else if (bondChange.type === 'forming') {
-            return progress;
-        }
-        return 1;
-    }
-    /**
-     * Get bond color based on bond change and progress
-     */
-    getBondColor(bondChange, progress) {
-        switch (this.config.bondColorScheme) {
-            case 'energy-based':
-                const energy = Math.abs(bondChange.energyContribution);
-                return energy > 500 ? '#ff4757' : energy > 300 ? '#ffa502' : energy > 150 ? '#ffb347' : '#2ed573';
-            case 'order-based':
-                return bondChange.bondOrderChange > 0 ? '#2ed573' : '#ff4757';
-            default:
-                // Use energy-based coloring as default
-                const defaultEnergy = Math.abs(bondChange.energyContribution);
-                return defaultEnergy > 500 ? '#ff4757' : defaultEnergy > 300 ? '#ffa502' : '#2ed573';
-        }
-    }
-    /**
-     * Get bond opacity based on bond change and progress
-     */
-    getBondOpacity(bondChange, progress) {
-        if (bondChange.type === 'breaking') {
-            return 1 - progress;
-        }
-        else if (bondChange.type === 'forming') {
-            return progress;
-        }
-        return 1;
-    }
-}
-
-/**
  * Browser-compatible CREB-JS entry point
- * This file exclu// Reaction Animation System (browser-compatible)
-export { ReactionAnimator } from './visualization/ReactionAnimation';
-
-// Phase 2: Advanced Animation Engine (NEW)
-export { ReactionAnimationEngine } from './animation/ReactionAnimationEngine';
-
-// Phase 3: AI and Physics Integration (NEW)
-export { ReactionClassifier } from './ai/ReactionClassifier';
-export { MolecularPhysicsEngine } from './physics/MolecularPhysicsEngine';
-export { IntelligentCacheManager } from './caching/IntelligentCacheManager';
-
-// 3D Visualization System (browser-compatible)
-export { Mol3DWrapper } from './visualization/Mol3DWrapper';
-export { PubChemIntegration } from './visualization/PubChemIntegration';
-export { RDKitWrapper } from './visualization/RDKitWrapper';s Node.js-specific functionality to ensure browser compatibility
+ * This file excludes Node.js-specific functionality to ensure browser compatibility
  */
-// Core chemistry functionality (browser-compatible)
+// Reaction Animation System (browser-compatible)
 function convertMoleculeToVisualization(molecule) {
     const atoms = molecule.elements.map((element, index) => ({
         element,
@@ -8519,5 +9412,5 @@ class EventEmitter {
     }
 }
 
-export { Canvas2DRenderer, ChemicalEquationBalancer, ChemicalFormulaError, ELEMENTS_LIST, ElementCounter, EnhancedBalancer, EnhancedChemicalEquationBalancer, EquationBalancingError, EquationParser, EventEmitter, MolecularVisualization, PARAMETER_SYMBOLS, PERIODIC_TABLE, ReactionAnimator, SVGRenderer, Stoichiometry, calculateMolarWeight, convertMoleculeToVisualization, createChemicalFormula, createElementSymbol, createMolecularVisualization, isBalancedEquation, isChemicalFormula, isElementSymbol, parseFormula };
+export { Canvas2DRenderer, ChemicalEquationBalancer, ChemicalFormulaError, ELEMENTS_LIST, ElementCounter, EnhancedBalancer, EnhancedChemicalEquationBalancer, EquationBalancingError, EquationParser, EventEmitter, SimplifiedCacheManager as IntelligentCacheManager, Mol3DWrapper, SimplifiedPhysicsEngine as MolecularPhysicsEngine, MolecularVisualization, PARAMETER_SYMBOLS, PERIODIC_TABLE, PubChemIntegration, RDKitWrapper, ReactionAnimationEngine, ReactionAnimator, ReactionClassifier, SVGRenderer, Stoichiometry, calculateMolarWeight, convertMoleculeToVisualization, createChemicalFormula, createElementSymbol, createMolecularVisualization, isBalancedEquation, isChemicalFormula, isElementSymbol, parseFormula };
 //# sourceMappingURL=index.browser.js.map

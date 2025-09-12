@@ -7,9 +7,9 @@
 
 import { gsap } from 'gsap';
 import * as THREE from 'three';
-import { ReactionClassifier } from '../ai/ReactionClassifier';
-import { MolecularPhysicsEngine } from '../physics/MolecularPhysicsEngine';
-import { IntelligentCacheManager } from '../caching/IntelligentCacheManager';
+import { ReactionClassifier } from '../ai/SimplifiedReactionClassifier';
+import { SimplifiedPhysicsEngine as MolecularPhysicsEngine } from '../physics/SimplifiedPhysicsEngine';
+import { SimplifiedCacheManager as IntelligentCacheManager } from '../caching/SimplifiedCacheManager';
 
 export interface AnimationConfig {
   duration: number;
@@ -91,6 +91,11 @@ export class ReactionAnimationEngine {
   private physicsEngine: MolecularPhysicsEngine;
   private cacheManager: IntelligentCacheManager;
   
+  // 3Dmol.js Integration
+  private mol3dViewer: any = null;
+  private mol3dContainer: HTMLElement | null = null;
+  private molecularModels: Map<string, any> = new Map();
+  
   // Animation state
   private isPlaying: boolean = false;
   private currentFrame: number = 0;
@@ -125,7 +130,11 @@ export class ReactionAnimationEngine {
     this.cacheManager = new IntelligentCacheManager();
 
     this.initializeThreeJS(container);
+    this.initialize3Dmol(container);
     this.initializeGSAP();
+    
+    // Start rendering immediately to show test geometry
+    this.startContinuousRender();
   }
 
   private initializeThreeJS(container: HTMLElement): void {
@@ -158,6 +167,9 @@ export class ReactionAnimationEngine {
     // Lighting setup
     this.setupLighting();
 
+    // Add test geometry to verify renderer is working
+    this.addTestGeometry();
+
     // Handle resize
     window.addEventListener('resize', () => this.onWindowResize(container));
   }
@@ -185,13 +197,204 @@ export class ReactionAnimationEngine {
     this.scene.add(pointLight2);
   }
 
+  private initialize3Dmol(container: HTMLElement): void {
+    try {
+      // Check if 3Dmol.js is available
+      const $3Dmol = (globalThis as any).$3Dmol;
+      if (!$3Dmol) {
+        console.warn('3Dmol.js not available, using fallback rendering');
+        this.addTestGeometry();
+        return;
+      }
+
+      // Create a separate container for 3Dmol.js viewer
+      this.mol3dContainer = document.createElement('div');
+      this.mol3dContainer.style.position = 'absolute';
+      this.mol3dContainer.style.top = '0';
+      this.mol3dContainer.style.left = '0';
+      this.mol3dContainer.style.width = '100%';
+      this.mol3dContainer.style.height = '100%';
+      this.mol3dContainer.style.pointerEvents = 'none'; // Allow Three.js to handle interactions
+      container.appendChild(this.mol3dContainer);
+
+      // Initialize 3Dmol.js viewer
+      this.mol3dViewer = $3Dmol.createViewer(this.mol3dContainer, {
+        defaultcolors: $3Dmol.elementColors.defaultColors,
+        backgroundColor: 'rgba(0,0,0,0)' // Transparent background
+      });
+
+      // Add initial demo molecules to show that 3Dmol.js is working
+      this.addDemo3DMolecules();
+      
+      console.log('🧬 3Dmol.js viewer initialized');
+    } catch (error) {
+      console.error('Failed to initialize 3Dmol.js:', error);
+      this.addTestGeometry();
+    }
+  }
+
+  private addTestGeometry(): void {
+    // Add a visible test cube to verify the renderer is working
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const material = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+    const cube = new THREE.Mesh(geometry, material);
+    cube.position.set(0, 0, 0);
+    this.scene.add(cube);
+    
+    // Add rotation animation to make it obvious
+    gsap.to(cube.rotation, { 
+      duration: 2, 
+      y: Math.PI * 2, 
+      repeat: -1, 
+      ease: "none" 
+    });
+    
+    console.log('🟢 Test geometry added to scene');
+  }
+
+  private addDemo3DMolecules(): void {
+    if (!this.mol3dViewer) return;
+
+    // Add a water molecule as demo
+    const waterXYZ = '3\nWater molecule\nO 0.000 0.000 0.000\nH 0.757 0.586 0.000\nH -0.757 0.586 0.000\n';
+    
+    try {
+      const model = this.mol3dViewer.addModel(waterXYZ, 'xyz');
+      model.setStyle({}, { 
+        stick: { radius: 0.1 }, 
+        sphere: { scale: 0.3 } 
+      });
+      
+      this.mol3dViewer.zoomTo();
+      this.mol3dViewer.render();
+      
+      console.log('🧬 Demo water molecule added');
+    } catch (error) {
+      console.error('Failed to add demo molecule:', error);
+    }
+  }
+
   private initializeGSAP(): void {
     gsap.registerPlugin();
     this.timeline = gsap.timeline({
       paused: true,
       onUpdate: () => this.onTimelineUpdate(),
-      onComplete: () => this.onAnimationComplete()
+      onComplete: () => this.handleAnimationComplete()
     });
+  }
+
+  /**
+   * Create 3Dmol.js molecular models from molecular data
+   */
+  private async createMolecularModels(molecules: MolecularData[]): Promise<void> {
+    if (!this.mol3dViewer) {
+      console.warn('3Dmol.js viewer not available');
+      return;
+    }
+
+    try {
+      this.mol3dViewer.clear();
+      this.molecularModels.clear();
+
+      for (const molecule of molecules) {
+        const modelId = `mol_${molecule.formula}`;
+        
+        // Convert molecular data to 3Dmol.js format
+        const mol3dData = this.convertToMol3DFormat(molecule);
+        
+        // Add model to viewer
+        const model = this.mol3dViewer.addModel(mol3dData, 'xyz');
+        model.setStyle({}, { stick: {}, sphere: { scale: 0.3 } });
+        
+        this.molecularModels.set(modelId, model);
+        console.log(`🧬 Added molecular model: ${molecule.formula}`);
+      }
+
+      this.mol3dViewer.zoomTo();
+      this.mol3dViewer.render();
+    } catch (error) {
+      console.error('Failed to create molecular models:', error);
+    }
+  }
+
+  /**
+   * Convert CREB molecular data to 3Dmol.js XYZ format
+   */
+  private convertToMol3DFormat(molecule: MolecularData): string {
+    if (!molecule.atoms || molecule.atoms.length === 0) {
+      return this.generateFallbackXYZ(molecule.formula || 'C');
+    }
+
+    let xyzData = `${molecule.atoms.length}\n`;
+    xyzData += `${molecule.formula || 'Molecule'}\n`;
+    
+    for (const atom of molecule.atoms) {
+      const pos = atom.position || { x: 0, y: 0, z: 0 };
+      xyzData += `${atom.element} ${pos.x.toFixed(3)} ${pos.y.toFixed(3)} ${pos.z.toFixed(3)}\n`;
+    }
+    
+    return xyzData;
+  }
+
+  /**
+   * Generate fallback XYZ data for simple molecules
+   */
+  private generateFallbackXYZ(formula: string): string {
+    const moleculeTemplates: { [key: string]: string } = {
+      'H2O': '3\nWater\nO 0.000 0.000 0.000\nH 0.757 0.586 0.000\nH -0.757 0.586 0.000\n',
+      'H2': '2\nHydrogen\nH 0.000 0.000 0.000\nH 0.740 0.000 0.000\n',
+      'O2': '2\nOxygen\nO 0.000 0.000 0.000\nO 1.210 0.000 0.000\n',
+      'CO2': '3\nCarbon Dioxide\nC 0.000 0.000 0.000\nO 1.160 0.000 0.000\nO -1.160 0.000 0.000\n',
+      'CH4': '5\nMethane\nC 0.000 0.000 0.000\nH 1.089 0.000 0.000\nH -0.363 1.027 0.000\nH -0.363 -0.513 0.889\nH -0.363 -0.513 -0.889\n'
+    };
+
+    return moleculeTemplates[formula] || `1\n${formula}\nC 0.000 0.000 0.000\n`;
+  }
+
+  /**
+   * Animate molecular transformations using both 3Dmol.js and Three.js
+   */
+  private animateMolecularTransformation(
+    reactants: MolecularData[],
+    products: MolecularData[],
+    duration: number
+  ): void {
+    if (!this.mol3dViewer) {
+      console.warn('3Dmol.js not available for animation');
+      return;
+    }
+
+    // Create GSAP timeline for coordinated animation
+    const tl = gsap.timeline();
+
+    // Phase 1: Show reactants
+    tl.call(() => {
+      this.createMolecularModels(reactants);
+    });
+
+    // Phase 2: Transition animation (use Three.js for effects)
+    tl.to({}, { 
+      duration: duration * 0.6,
+      onUpdate: () => {
+        // Add transition effects using Three.js
+        this.renderTransitionEffects();
+      }
+    });
+
+    // Phase 3: Show products
+    tl.call(() => {
+      this.createMolecularModels(products);
+    });
+
+    tl.play();
+  }
+
+  /**
+   * Render transition effects using Three.js
+   */
+  private renderTransitionEffects(): void {
+    // Add particle effects, energy visualization, etc. using Three.js
+    // This complements the 3Dmol.js molecular rendering
   }
 
   /**
@@ -232,14 +435,25 @@ export class ReactionAnimationEngine {
 
       this.physicsEngine.configure(physicsConfig);
 
-      // Step 4: Generate physics-based animation frames
+      // Step 4: Create molecular models using 3Dmol.js
+      await this.createMolecularModels(reactants);
+      console.log('🧬 Initial molecular models created with 3Dmol.js');
+
+      // Step 5: Generate physics-based animation frames
       const transitions = this.generateMolecularTransitions(reactants, products, reactionType);
       const animationFrames = await this.physicsEngine.simulateReactionPathway(
         transitions,
         optimizedParams.duration || this.config.duration
       );
 
-      // Step 5: Cache the generated animation
+      // Step 6: Set up coordinated animation using both systems
+      this.animateMolecularTransformation(
+        reactants, 
+        products, 
+        optimizedParams.duration || this.config.duration
+      );
+
+      // Step 7: Cache the generated animation
       await this.cacheManager.set(cacheKey, animationFrames);
 
       this.animationData = animationFrames;
@@ -294,6 +508,10 @@ export class ReactionAnimationEngine {
       this.clearScene();
       this.timeline.clear();
       
+      // Create initial molecular models with 3Dmol.js
+      await this.createMolecularModels(reactants);
+      console.log('🧬 Reactant models loaded with 3Dmol.js');
+      
       // Generate transition data
       const transitions = await this.calculateMolecularTransitions(reactants, products);
       
@@ -321,7 +539,7 @@ export class ReactionAnimationEngine {
       
     } catch (error) {
       console.error('❌ Animation creation failed:', error);
-      throw new Error(`Animation creation failed: ${error.message}`);
+      throw new Error(`Animation creation failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -398,9 +616,9 @@ export class ReactionAnimationEngine {
       atoms: reactant.atoms.map((atom, i) => ({
         ...atom,
         position: {
-          x: (atom.position.x + (product.atoms[i]?.position.x || atom.position.x)) / 2,
-          y: (atom.position.y + (product.atoms[i]?.position.y || atom.position.y)) / 2,
-          z: (atom.position.z + (product.atoms[i]?.position.z || atom.position.z)) / 2
+          x: (atom.position.x + (product.atoms?.[i]?.position.x || atom.position.x)) / 2,
+          y: (atom.position.y + (product.atoms?.[i]?.position.y || atom.position.y)) / 2,
+          z: (atom.position.z + (product.atoms?.[i]?.position.z || atom.position.z)) / 2
         }
       }))
     };
@@ -473,7 +691,7 @@ export class ReactionAnimationEngine {
         ),
         charge: THREE.MathUtils.lerp(startAtom.charge || 0, endAtom.charge || 0, easedProgress),
         hybridization: startAtom.hybridization || 'sp3',
-        color: this.getAtomColor(startAtom.element),
+        color: `#${this.getAtomColor(startAtom.element).toString(16).padStart(6, '0')}`,
         radius: this.getAtomRadius(startAtom.element)
       };
     }) || [];
@@ -489,7 +707,7 @@ export class ReactionAnimationEngine {
         order: THREE.MathUtils.lerp(startBond.order, endBond.order, easedProgress),
         length: THREE.MathUtils.lerp(startBond.length || 1.5, endBond.length || 1.5, easedProgress),
         strength: THREE.MathUtils.lerp(startBond.strength || 1, endBond.strength || 1, easedProgress),
-        color: this.getBondColor(startBond.order)
+        color: `#${this.getBondColor(startBond.order).toString(16).padStart(6, '0')}`
       };
     }) || [];
     
@@ -733,7 +951,7 @@ export class ReactionAnimationEngine {
       
       // Animate atom scaling based on charge changes
       if (startAtom.charge !== endAtom.charge) {
-        const scaleChange = 1 + (endAtom.charge - startAtom.charge) * 0.1;
+        const scaleChange = 1 + ((endAtom.charge || 0) - (startAtom.charge || 0)) * 0.1;
         this.timeline.to(mesh.scale, {
           duration: this.config.duration * 0.5,
           x: scaleChange,
@@ -957,7 +1175,7 @@ export class ReactionAnimationEngine {
     }
   }
 
-  private onAnimationComplete(): void {
+  private handleAnimationComplete(): void {
     this.isPlaying = false;
     
     if (this.onComplete) {
@@ -975,14 +1193,31 @@ export class ReactionAnimationEngine {
     animate();
   }
 
+  private startContinuousRender(): void {
+    const animate = () => {
+      requestAnimationFrame(animate);
+      this.renderer.render(this.scene, this.camera);
+    };
+    animate();
+    console.log('🎬 Continuous render loop started');
+  }
+
   private onWindowResize(container: HTMLElement): void {
+    // Resize Three.js renderer
     this.camera.aspect = container.clientWidth / container.clientHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(container.clientWidth, container.clientHeight);
+    
+    // Resize 3Dmol.js viewer
+    if (this.mol3dViewer && this.mol3dContainer) {
+      this.mol3dContainer.style.width = container.clientWidth + 'px';
+      this.mol3dContainer.style.height = container.clientHeight + 'px';
+      this.mol3dViewer.resize();
+    }
   }
 
   private clearScene(): void {
-    // Remove all meshes
+    // Clear Three.js meshes
     this.atomMeshes.forEach(mesh => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
@@ -1009,6 +1244,12 @@ export class ReactionAnimationEngine {
     
     this.atomMeshes.clear();
     this.bondMeshes.clear();
+    
+    // Clear 3Dmol.js viewer
+    if (this.mol3dViewer) {
+      this.mol3dViewer.clear();
+      this.molecularModels.clear();
+    }
   }
 
   /**
@@ -1107,6 +1348,7 @@ export class ReactionAnimationEngine {
 
 // Type definitions for external molecular data
 interface MolecularData {
+  formula?: string; // Chemical formula (e.g., "H2O", "CH4")
   atoms?: Array<{
     id?: string;
     element: string;

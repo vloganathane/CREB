@@ -4,7 +4,7 @@
  */
 import { ChemicalEquationBalancer } from './balancer';
 import { BalancedEquation } from './types';
-import { ValidationResult } from './data/validation';
+import { ValidationResult } from './validation/browserValidation';
 interface PubChemCompound {
     cid: number;
     molecularWeight: number | null;

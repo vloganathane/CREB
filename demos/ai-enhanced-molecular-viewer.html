@@ -399,11 +399,15 @@
                     
                     if (mode === 'ai-enhanced') {
                         // Use AI-enhanced animation
+                        console.log('🎬 Creating AI-enhanced animation with data:', { reactants, products, equation: this.currentReactionData.equation });
+                        
                         await this.animationEngine.createAIEnhancedAnimation(
                             reactants, 
                             products, 
                             this.currentReactionData.equation
                         );
+                        
+                        console.log('✅ AI-enhanced animation created');
                         
                         // Update cache status
                         const cacheKey = `animation:${this.currentReactionData.equation}`;
@@ -442,11 +446,22 @@
             async playAnimation() {
                 try {
                     this.updateAIStatus('Processing', 'Playing animation...');
+                    console.log('▶️ Starting animation playback...');
+                    
+                    // Check if animation data exists
+                    if (this.animationEngine.totalFrames === 0) {
+                        console.warn('⚠️ No animation frames available');
+                        this.updateAIStatus('Warning', 'No animation data available');
+                        return;
+                    }
+                    
+                    console.log(`🎬 Playing animation with ${this.animationEngine.totalFrames} frames`);
                     
                     // Play the animation
-                    await this.animationEngine.play();
+                    this.animationEngine.play();
                     
-                    this.updateAIStatus('Ready', 'Animation completed');
+                    this.updateAIStatus('Ready', 'Animation playing...');
+                    console.log('✅ Animation started');
                     
                 } catch (error) {
                     console.error('Playback failed:', error);

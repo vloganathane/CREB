@@ -74,6 +74,9 @@ export declare class ReactionAnimationEngine {
     private aiClassifier;
     private physicsEngine;
     private cacheManager;
+    private mol3dViewer;
+    private mol3dContainer;
+    private molecularModels;
     private isPlaying;
     private currentFrame;
     private totalFrames;
@@ -88,7 +91,30 @@ export declare class ReactionAnimationEngine {
     constructor(container: HTMLElement, config?: Partial<AnimationConfig>);
     private initializeThreeJS;
     private setupLighting;
+    private initialize3Dmol;
+    private addTestGeometry;
+    private addDemo3DMolecules;
     private initializeGSAP;
+    /**
+     * Create 3Dmol.js molecular models from molecular data
+     */
+    private createMolecularModels;
+    /**
+     * Convert CREB molecular data to 3Dmol.js XYZ format
+     */
+    private convertToMol3DFormat;
+    /**
+     * Generate fallback XYZ data for simple molecules
+     */
+    private generateFallbackXYZ;
+    /**
+     * Animate molecular transformations using both 3Dmol.js and Three.js
+     */
+    private animateMolecularTransformation;
+    /**
+     * Render transition effects using Three.js
+     */
+    private renderTransitionEffects;
     /**
      * Phase 3: AI-Enhanced Animation Creation
      * Uses machine learning to optimize animation parameters
@@ -149,6 +175,7 @@ export declare class ReactionAnimationEngine {
      * Event handling
      */
     onProgressUpdate(callback: (progress: number) => void): void;
+    onAnimationComplete(callback: () => void): void;
     onFrameChange(callback: (frame: AnimationFrame) => void): void;
     /**
      * Utility methods
@@ -157,7 +184,9 @@ export declare class ReactionAnimationEngine {
     private getAtomRadius;
     private getBondColor;
     private onTimelineUpdate;
+    private handleAnimationComplete;
     private startRenderLoop;
+    private startContinuousRender;
     private onWindowResize;
     private clearScene;
     /**
@@ -182,6 +211,7 @@ export declare class ReactionAnimationEngine {
     dispose(): void;
 }
 interface MolecularData {
+    formula?: string;
     atoms?: Array<{
         id?: string;
         element: string;

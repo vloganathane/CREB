@@ -45,7 +45,13 @@ export default [
       'better-sqlite3',
       'reflect-metadata',
       '3dmol',
-      '@rdkit/rdkit'
+      '@rdkit/rdkit',
+      '@tensorflow/tfjs',
+      'cannon-es',
+      'three',
+      'gsap',
+      'idb',
+      'web-vitals'
     ]
   },
   
@@ -72,7 +78,14 @@ export default [
         declaration: false, check: false
       })
     ],
-    external: []
+    external: [
+      '@tensorflow/tfjs',
+      'cannon-es', 
+      'three',
+      'gsap',
+      'idb',
+      'web-vitals'
+    ]
   },
 
   // UMD build for CDN usage
