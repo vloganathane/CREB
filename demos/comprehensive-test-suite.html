@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CREB Comprehensive Enhancement Test Suite</title>
+    
+    <!-- Required Dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://3dmol.csb.pitt.edu/build/3Dmol-min.js"></script>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #333;
+            border-radius: 10px;
+            background: #2a2a2a;
+        }
+        
+        .test-title {
+            color: #4CAF50;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        
+        .test-results {
+            margin: 15px 0;
+            padding: 15px;
+            border-radius: 8px;
+            background: #1e1e1e;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .test-pass { color: #4CAF50; }
+        .test-fail { color: #f44336; }
+        .test-warn { color: #ff9800; }
+        .test-info { color: #2196F3; }
+        
+        .test-controls {
+            margin: 15px 0;
+        }
+        
+        .test-button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px 10px 5px 0;
+            font-size: 0.9em;
+        }
+        
+        .test-button:hover {
+            background: #45a049;
+        }
+        
+        .test-button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        .viewer-container {
+            width: 100%;
+            height: 400px;
+            border: 2px solid #333;
+            border-radius: 10px;
+            margin: 15px 0;
+            background: #000;
+            position: relative;
+        }
+        
+        .summary {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 250px;
+            background: rgba(0,0,0,0.9);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #333;
+        }
+        
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 CREB Enhanced System - Comprehensive Test Suite</h1>
+        <p>Testing all enhanced features: Animation, Rendering, Performance, UI/UX, Browser Compatibility, and Features</p>
+        
+        <!-- Test Summary -->
+        <div class="summary">
+            <h3>Test Summary</h3>
+            <div class="summary-item">
+                <span>Total Tests:</span>
+                <span id="totalTests">0</span>
+            </div>
+            <div class="summary-item">
+                <span>Passed:</span>
+                <span id="passedTests" class="test-pass">0</span>
+            </div>
+            <div class="summary-item">
+                <span>Failed:</span>
+                <span id="failedTests" class="test-fail">0</span>
+            </div>
+            <div class="summary-item">
+                <span>Warnings:</span>
+                <span id="warningTests" class="test-warn">0</span>
+            </div>
+        </div>
+
+        <!-- 1. Core System Tests -->
+        <div class="test-section">
+            <div class="test-title">1. 🔧 Core System Initialization Tests</div>
+            <div class="test-controls">
+                <button class="test-button" onclick="runCoreTests()">Run Core Tests</button>
+                <button class="test-button" onclick="clearResults('core-results')">Clear</button>
+            </div>
+            <div id="core-results" class="test-results"></div>
+        </div>
+
+        <!-- 2. Enhanced Animation Controller Tests -->
+        <div class="test-section">
+            <div class="test-title">2. 🎬 Enhanced Animation Controller Tests</div>
+            <div class="test-controls">
+                <button class="test-button" onclick="runAnimationTests()">Run Animation Tests</button>
+                <button class="test-button" onclick="clearResults('animation-results')">Clear</button>
+            </div>
+            <div id="animation-results" class="test-results"></div>
+            <div id="animation-viewer" class="viewer-container"></div>
+        </div>
+
+        <!-- 3. Enhanced Molecular Renderer Tests -->
+        <div class="test-section">
+            <div class="test-title">3. 🧬 Enhanced Molecular Renderer Tests</div>
+            <div class="test-controls">
+                <button class="test-button" onclick="runRenderingTests()">Run Rendering Tests</button>
+                <button class="test-button" onclick="clearResults('rendering-results')">Clear</button>
+            </div>
+            <div id="rendering-results" class="test-results"></div>
+            <div id="rendering-viewer" class="viewer-container"></div>
+        </div>
+
+        <!-- 4. Performance Manager Tests -->
+        <div class="test-section">
+            <div class="test-title">4. ⚡ Performance Manager Tests</div>
+            <div class="test-controls">
+                <button class="test-button" onclick="runPerformanceTests()">Run Performance Tests</button>
+                <button class="test-button" onclick="clearResults('performance-results')">Clear</button>
+            </div>
+            <div id="performance-results" class="test-results"></div>
+        </div>
+
+        <!-- 5. Enhanced UI Tests -->
+        <div class="test-section">
+            <div class="test-title">5. 🎨 Enhanced UI/UX Tests</div>
+            <div class="test-controls">
+                <button class="test-button" onclick="runUITests()">Run UI Tests</button>
+                <button class="test-button" onclick="clearResults('ui-results')">Clear</button>
+            </div>
+            <div id="ui-results" class="test-results"></div>
+            <div id="ui-viewer" class="viewer-container"></div>
+        </div>
+
+        <!-- 6. Browser Compatibility Tests -->
+        <div class="test-section">
+            <div class="test-title">6. 🌐 Browser Compatibility Tests</div>
+            <div class="test-controls">
+                <button class="test-button" onclick="runCompatibilityTests()">Run Compatibility Tests</button>
+                <button class="test-button" onclick="clearResults('compatibility-results')">Clear</button>
+            </div>
+            <div id="compatibility-results" class="test-results"></div>
+        </div>
+
+        <!-- 7. Enhanced Features System Tests -->
+        <div class="test-section">
+            <div class="test-title">7. 🚀 Enhanced Features System Tests</div>
+            <div class="test-controls">
+                <button class="test-button" onclick="runFeaturesTests()">Run Features Tests</button>
+                <button class="test-button" onclick="clearResults('features-results')">Clear</button>
+            </div>
+            <div id="features-results" class="test-results"></div>
+        </div>
+
+        <!-- 8. Integration Tests -->
+        <div class="test-section">
+            <div class="test-title">8. 🔗 End-to-End Integration Tests</div>
+            <div class="test-controls">
+                <button class="test-button" onclick="runIntegrationTests()">Run Integration Tests</button>
+                <button class="test-button" onclick="clearResults('integration-results')">Clear</button>
+            </div>
+            <div id="integration-results" class="test-results"></div>
+            <div id="integration-viewer" class="viewer-container"></div>
+        </div>
+
+        <!-- Run All Tests -->
+        <div class="test-section">
+            <div class="test-title">🏃‍♂️ Run All Tests</div>
+            <div class="test-controls">
+                <button class="test-button" onclick="runAllTests()" style="background: #2196F3;">Run Complete Test Suite</button>
+                <button class="test-button" onclick="clearAllResults()">Clear All Results</button>
+                <button class="test-button" onclick="exportResults()">Export Results</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CREB Enhanced System -->
+    <script src="../dist/index.umd.js"></script>
+    <script>
+        // Test Framework
+        class CREBTestFramework {
+            constructor() {
+                this.tests = {
+                    total: 0,
+                    passed: 0,
+                    failed: 0,
+                    warnings: 0
+                };
+                this.enhancedSystem = null;
+                this.testResults = {};
+            }
+
+            log(resultId, type, message, details = null) {
+                const resultDiv = document.getElementById(resultId);
+                const timestamp = new Date().toLocaleTimeString();
+                
+                let className = '';
+                switch (type) {
+                    case 'pass': className = 'test-pass'; this.tests.passed++; break;
+                    case 'fail': className = 'test-fail'; this.tests.failed++; break;
+                    case 'warn': className = 'test-warn'; this.tests.warnings++; break;
+                    case 'info': className = 'test-info'; break;
+                }
+                
+                if (type !== 'info') this.tests.total++;
+                
+                const logEntry = document.createElement('div');
+                logEntry.className = className;
+                logEntry.innerHTML = `[${timestamp}] ${message}`;
+                
+                if (details) {
+                    const detailsDiv = document.createElement('div');
+                    detailsDiv.style.marginLeft = '20px';
+                    detailsDiv.style.fontSize = '0.8em';
+                    detailsDiv.style.color = '#aaa';
+                    detailsDiv.textContent = JSON.stringify(details, null, 2);
+                    logEntry.appendChild(detailsDiv);
+                }
+                
+                resultDiv.appendChild(logEntry);
+                resultDiv.scrollTop = resultDiv.scrollHeight;
+                
+                this.updateSummary();
+            }
+
+            updateSummary() {
+                document.getElementById('totalTests').textContent = this.tests.total;
+                document.getElementById('passedTests').textContent = this.tests.passed;
+                document.getElementById('failedTests').textContent = this.tests.failed;
+                document.getElementById('warningTests').textContent = this.tests.warnings;
+            }
+
+            async initializeSystem(containerId = 'test-container') {
+                try {
+                    let container = document.getElementById(containerId);
+                    if (!container) {
+                        container = document.createElement('div');
+                        container.id = containerId;
+                        container.style.width = '100%';
+                        container.style.height = '400px';
+                        document.body.appendChild(container);
+                    }
+                    
+                    this.enhancedSystem = CREB.createEnhancedCREB(container, {
+                        animation: { duration: 2000, qualityLevel: 'medium' },
+                        rendering: { useExperimentalData: false },
+                        ui: { theme: 'dark', compactMode: true },
+                        compatibility: { autoOptimize: true }
+                    });
+                    
+                    // Wait for initialization
+                    let attempts = 0;
+                    while (!this.enhancedSystem.isReady() && attempts < 50) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        attempts++;
+                    }
+                    
+                    return this.enhancedSystem.isReady();
+                } catch (error) {
+                    console.error('System initialization failed:', error);
+                    return false;
+                }
+            }
+        }
+
+        const testFramework = new CREBTestFramework();
+
+        // Test Functions
+        async function runCoreTests() {
+            testFramework.log('core-results', 'info', '🔧 Starting Core System Tests...');
+            
+            // Test 1: CREB Global Availability
+            try {
+                if (typeof CREB !== 'undefined') {
+                    testFramework.log('core-results', 'pass', '✅ CREB global object available');
+                } else {
+                    testFramework.log('core-results', 'fail', '❌ CREB global object not found');
+                    return;
+                }
+            } catch (error) {
+                testFramework.log('core-results', 'fail', '❌ Error checking CREB availability', error.message);
+                return;
+            }
+
+            // Test 2: Enhanced System Creation
+            try {
+                const createFunc = CREB.createEnhancedCREB;
+                if (typeof createFunc === 'function') {
+                    testFramework.log('core-results', 'pass', '✅ createEnhancedCREB function available');
+                } else {
+                    testFramework.log('core-results', 'fail', '❌ createEnhancedCREB function not found');
+                    return;
+                }
+            } catch (error) {
+                testFramework.log('core-results', 'fail', '❌ Error checking createEnhancedCREB', error.message);
+                return;
+            }
+
+            // Test 3: Dependencies Availability
+            const dependencies = [
+                { name: 'THREE.js', global: 'THREE' },
+                { name: 'GSAP', global: 'gsap' },
+                { name: '3Dmol.js', global: '$3Dmol' }
+            ];
+
+            dependencies.forEach(dep => {
+                try {
+                    if (typeof window[dep.global] !== 'undefined') {
+                        testFramework.log('core-results', 'pass', `✅ ${dep.name} dependency loaded`);
+                    } else {
+                        testFramework.log('core-results', 'warn', `⚠️ ${dep.name} dependency not available (fallback mode will be used)`);
+                    }
+                } catch (error) {
+                    testFramework.log('core-results', 'warn', `⚠️ Error checking ${dep.name}`, error.message);
+                }
+            });
+
+            // Test 4: System Initialization
+            try {
+                const initialized = await testFramework.initializeSystem('core-test-container');
+                if (initialized) {
+                    testFramework.log('core-results', 'pass', '✅ Enhanced system initialized successfully');
+                } else {
+                    testFramework.log('core-results', 'fail', '❌ Enhanced system failed to initialize within timeout');
+                }
+            } catch (error) {
+                testFramework.log('core-results', 'fail', '❌ System initialization error', error.message);
+            }
+
+            // Test 5: System Status Check
+            if (testFramework.enhancedSystem) {
+                try {
+                    const status = testFramework.enhancedSystem.getSystemStatus();
+                    const capabilities = testFramework.enhancedSystem.getCapabilities();
+                    
+                    testFramework.log('core-results', 'info', '📊 System Status', status);
+                    testFramework.log('core-results', 'info', '🔍 Browser Capabilities', capabilities);
+                    
+                    if (status.overall === 'ready') {
+                        testFramework.log('core-results', 'pass', '✅ System status: Ready');
+                    } else {
+                        testFramework.log('core-results', 'warn', `⚠️ System status: ${status.overall}`);
+                    }
+                } catch (error) {
+                    testFramework.log('core-results', 'fail', '❌ Error getting system status', error.message);
+                }
+            }
+
+            testFramework.log('core-results', 'info', '🏁 Core System Tests Completed');
+        }
+
+        async function runAnimationTests() {
+            testFramework.log('animation-results', 'info', '🎬 Starting Animation Tests...');
+            
+            if (!testFramework.enhancedSystem) {
+                await testFramework.initializeSystem('animation-viewer');
+            }
+
+            if (!testFramework.enhancedSystem || !testFramework.enhancedSystem.isReady()) {
+                testFramework.log('animation-results', 'fail', '❌ Enhanced system not available for animation testing');
+                return;
+            }
+
+            // Test 1: Basic Animation Request
+            try {
+                const result = await testFramework.enhancedSystem.animateReaction({
+                    equation: 'H2 + O2 → H2O',
+                    options: { duration: 1000, quality: 'low', effects: false }
+                });
+
+                if (result.success) {
+                    testFramework.log('animation-results', 'pass', '✅ Basic animation request successful', result);
+                } else {
+                    testFramework.log('animation-results', 'fail', '❌ Basic animation request failed', result.errors);
+                }
+            } catch (error) {
+                testFramework.log('animation-results', 'fail', '❌ Animation request threw error', error.message);
+            }
+
+            // Test 2: Animation with Effects
+            try {
+                const result = await testFramework.enhancedSystem.animateReaction({
+                    equation: 'CH4 + O2 → CO2 + H2O',
+                    options: { duration: 2000, quality: 'medium', effects: true }
+                });
+
+                if (result.success) {
+                    testFramework.log('animation-results', 'pass', '✅ Animation with effects successful', result);
+                } else {
+                    testFramework.log('animation-results', 'fail', '❌ Animation with effects failed', result.errors);
+                }
+            } catch (error) {
+                testFramework.log('animation-results', 'fail', '❌ Animation with effects threw error', error.message);
+            }
+
+            // Test 3: Performance Metrics
+            try {
+                // Simulate multiple animations to test performance
+                const startTime = performance.now();
+                
+                for (let i = 0; i < 3; i++) {
+                    await testFramework.enhancedSystem.animateReaction({
+                        equation: `Test${i}: H2 + Cl2 → HCl`,
+                        options: { duration: 500, quality: 'low' }
+                    });
+                }
+                
+                const totalTime = performance.now() - startTime;
+                testFramework.log('animation-results', 'info', `⏱️ Performance: 3 animations in ${totalTime.toFixed(2)}ms`);
+                
+                if (totalTime < 5000) {
+                    testFramework.log('animation-results', 'pass', '✅ Animation performance within acceptable range');
+                } else {
+                    testFramework.log('animation-results', 'warn', '⚠️ Animation performance slower than expected');
+                }
+            } catch (error) {
+                testFramework.log('animation-results', 'fail', '❌ Performance testing error', error.message);
+            }
+
+            testFramework.log('animation-results', 'info', '🏁 Animation Tests Completed');
+        }
+
+        async function runRenderingTests() {
+            testFramework.log('rendering-results', 'info', '🧬 Starting Molecular Renderer Tests...');
+            
+            // Test individual renderer components
+            try {
+                const renderer = new CREB.EnhancedMolecularRenderer(
+                    document.getElementById('rendering-viewer'),
+                    { useExperimentalData: false, materialQuality: 'medium' }
+                );
+                
+                testFramework.log('rendering-results', 'pass', '✅ Enhanced Molecular Renderer created');
+                
+                // Test structure loading capabilities
+                if (typeof renderer.isViewerReady === 'function') {
+                    if (renderer.isViewerReady()) {
+                        testFramework.log('rendering-results', 'pass', '✅ 3D Viewer ready for rendering');
+                    } else {
+                        testFramework.log('rendering-results', 'warn', '⚠️ 3D Viewer not ready (fallback mode)');
+                    }
+                }
+                
+            } catch (error) {
+                testFramework.log('rendering-results', 'fail', '❌ Molecular Renderer creation failed', error.message);
+            }
+
+            testFramework.log('rendering-results', 'info', '🏁 Molecular Renderer Tests Completed');
+        }
+
+        async function runPerformanceTests() {
+            testFramework.log('performance-results', 'info', '⚡ Starting Performance Tests...');
+            
+            // Test 1: Memory Usage
+            const memoryTest = () => {
+                if (performance.memory) {
+                    const memory = {
+                        used: Math.round(performance.memory.usedJSHeapSize / 1048576),
+                        total: Math.round(performance.memory.totalJSHeapSize / 1048576),
+                        limit: Math.round(performance.memory.jsHeapSizeLimit / 1048576)
+                    };
+                    
+                    testFramework.log('performance-results', 'info', `💾 Memory Usage: ${memory.used}MB / ${memory.total}MB (Limit: ${memory.limit}MB)`);
+                    
+                    if (memory.used < 100) {
+                        testFramework.log('performance-results', 'pass', '✅ Memory usage within normal range');
+                    } else {
+                        testFramework.log('performance-results', 'warn', '⚠️ High memory usage detected');
+                    }
+                } else {
+                    testFramework.log('performance-results', 'warn', '⚠️ Memory API not available');
+                }
+            };
+
+            // Test 2: Frame Rate
+            const frameRateTest = () => {
+                let frames = 0;
+                const startTime = performance.now();
+                
+                const countFrames = () => {
+                    frames++;
+                    if (frames < 60) {
+                        requestAnimationFrame(countFrames);
+                    } else {
+                        const fps = Math.round(60000 / (performance.now() - startTime));
+                        testFramework.log('performance-results', 'info', `🎯 Estimated FPS: ${fps}`);
+                        
+                        if (fps >= 30) {
+                            testFramework.log('performance-results', 'pass', '✅ Frame rate within acceptable range');
+                        } else {
+                            testFramework.log('performance-results', 'warn', '⚠️ Low frame rate detected');
+                        }
+                    }
+                };
+                
+                requestAnimationFrame(countFrames);
+            };
+
+            memoryTest();
+            frameRateTest();
+
+            testFramework.log('performance-results', 'info', '🏁 Performance Tests Completed');
+        }
+
+        async function runUITests() {
+            testFramework.log('ui-results', 'info', '🎨 Starting UI/UX Tests...');
+            
+            // Test UI component creation
+            try {
+                const uiContainer = document.getElementById('ui-viewer');
+                const ui = new CREB.EnhancedUI(uiContainer, {
+                    theme: 'dark',
+                    touchOptimized: true,
+                    compactMode: true
+                });
+                
+                testFramework.log('ui-results', 'pass', '✅ Enhanced UI created successfully');
+                
+                // Test accessibility features
+                const hasAriaLabels = uiContainer.querySelector('[aria-label]') !== null;
+                if (hasAriaLabels) {
+                    testFramework.log('ui-results', 'pass', '✅ Accessibility labels detected');
+                } else {
+                    testFramework.log('ui-results', 'warn', '⚠️ No accessibility labels found');
+                }
+                
+            } catch (error) {
+                testFramework.log('ui-results', 'fail', '❌ UI creation failed', error.message);
+            }
+
+            testFramework.log('ui-results', 'info', '🏁 UI/UX Tests Completed');
+        }
+
+        async function runCompatibilityTests() {
+            testFramework.log('compatibility-results', 'info', '🌐 Starting Browser Compatibility Tests...');
+            
+            // Test browser capabilities
+            const capabilities = {
+                webgl: !!window.WebGLRenderingContext,
+                webgl2: !!window.WebGL2RenderingContext,
+                webWorkers: !!window.Worker,
+                indexedDB: !!window.indexedDB,
+                webAssembly: !!window.WebAssembly,
+                intersectionObserver: !!window.IntersectionObserver,
+                resizeObserver: !!window.ResizeObserver,
+                offscreenCanvas: !!window.OffscreenCanvas,
+                gpu: !!navigator.gpu,
+                touchEvents: 'ontouchstart' in window,
+                pointerEvents: !!window.PointerEvent,
+                gamepad: !!navigator.getGamepads
+            };
+
+            Object.entries(capabilities).forEach(([feature, supported]) => {
+                if (supported) {
+                    testFramework.log('compatibility-results', 'pass', `✅ ${feature} supported`);
+                } else {
+                    testFramework.log('compatibility-results', 'warn', `⚠️ ${feature} not supported`);
+                }
+            });
+
+            // Test enhanced compatibility manager
+            try {
+                const compatManager = new CREB.BrowserCompatibilityManager({});
+                const browserSupport = compatManager.checkBrowserSupport();
+                
+                if (browserSupport.supported) {
+                    testFramework.log('compatibility-results', 'pass', '✅ Browser compatibility check passed');
+                } else {
+                    testFramework.log('compatibility-results', 'warn', '⚠️ Browser compatibility issues detected', browserSupport.issues);
+                }
+            } catch (error) {
+                testFramework.log('compatibility-results', 'fail', '❌ Compatibility manager error', error.message);
+            }
+
+            testFramework.log('compatibility-results', 'info', '🏁 Browser Compatibility Tests Completed');
+        }
+
+        async function runFeaturesTests() {
+            testFramework.log('features-results', 'info', '🚀 Starting Enhanced Features Tests...');
+            
+            try {
+                const features = new CREB.EnhancedFeaturesSystem({});
+                
+                // Test equation parsing
+                const equations = ['H2 + O2 → H2O', 'CH4 + 2O2 → CO2 + 2H2O', 'Invalid equation'];
+                
+                for (const eq of equations) {
+                    try {
+                        const parseResult = await features.parseEquation(eq);
+                        if (parseResult.isValid) {
+                            testFramework.log('features-results', 'pass', `✅ Equation parsed: ${eq}`, parseResult);
+                        } else {
+                            testFramework.log('features-results', 'warn', `⚠️ Invalid equation: ${eq}`, parseResult.errors);
+                        }
+                    } catch (error) {
+                        testFramework.log('features-results', 'fail', `❌ Parse error for ${eq}`, error.message);
+                    }
+                }
+                
+            } catch (error) {
+                testFramework.log('features-results', 'fail', '❌ Features system error', error.message);
+            }
+
+            testFramework.log('features-results', 'info', '🏁 Enhanced Features Tests Completed');
+        }
+
+        async function runIntegrationTests() {
+            testFramework.log('integration-results', 'info', '🔗 Starting Integration Tests...');
+            
+            // Test complete workflow
+            try {
+                if (!testFramework.enhancedSystem) {
+                    await testFramework.initializeSystem('integration-viewer');
+                }
+                
+                if (testFramework.enhancedSystem && testFramework.enhancedSystem.isReady()) {
+                    // Test complete equation-to-animation workflow
+                    const testEquations = ['H2 + Cl2 → 2HCl', 'N2 + 3H2 → 2NH3'];
+                    
+                    for (const equation of testEquations) {
+                        try {
+                            const result = await testFramework.enhancedSystem.animateReaction({
+                                equation: equation,
+                                options: { duration: 1500, quality: 'medium', effects: true }
+                            });
+                            
+                            if (result.success) {
+                                testFramework.log('integration-results', 'pass', `✅ Full workflow success: ${equation}`, {
+                                    duration: result.duration,
+                                    fps: result.performance.fps,
+                                    quality: result.quality
+                                });
+                            } else {
+                                testFramework.log('integration-results', 'fail', `❌ Full workflow failed: ${equation}`, result.errors);
+                            }
+                        } catch (error) {
+                            testFramework.log('integration-results', 'fail', `❌ Integration error for ${equation}`, error.message);
+                        }
+                    }
+                } else {
+                    testFramework.log('integration-results', 'fail', '❌ Enhanced system not available for integration testing');
+                }
+            } catch (error) {
+                testFramework.log('integration-results', 'fail', '❌ Integration testing setup failed', error.message);
+            }
+
+            testFramework.log('integration-results', 'info', '🏁 Integration Tests Completed');
+        }
+
+        // Utility Functions
+        function clearResults(resultId) {
+            document.getElementById(resultId).innerHTML = '';
+        }
+
+        function clearAllResults() {
+            const resultDivs = document.querySelectorAll('.test-results');
+            resultDivs.forEach(div => div.innerHTML = '');
+            testFramework.tests = { total: 0, passed: 0, failed: 0, warnings: 0 };
+            testFramework.updateSummary();
+        }
+
+        async function runAllTests() {
+            clearAllResults();
+            testFramework.log('core-results', 'info', '🚀 Starting Complete Test Suite...');
+            
+            await runCoreTests();
+            await runAnimationTests();
+            await runRenderingTests();
+            await runPerformanceTests();
+            await runUITests();
+            await runCompatibilityTests();
+            await runFeaturesTests();
+            await runIntegrationTests();
+            
+            testFramework.log('integration-results', 'info', '🎉 Complete Test Suite Finished!');
+        }
+
+        function exportResults() {
+            const results = {};
+            const resultDivs = document.querySelectorAll('.test-results');
+            resultDivs.forEach(div => {
+                results[div.id] = div.textContent;
+            });
+            
+            const dataStr = JSON.stringify({
+                timestamp: new Date().toISOString(),
+                summary: testFramework.tests,
+                results: results
+            }, null, 2);
+            
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `creb-test-results-${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+        }
+
+        // Auto-run core tests on load
+        window.addEventListener('load', () => {
+            setTimeout(runCoreTests, 1000);
+        });
+    </script>
+</body>
+</html>
